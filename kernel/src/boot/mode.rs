@@ -5,6 +5,10 @@ pub enum BootMode {
     Ok,
     Panic,
     Hang,
+    Exception,
+    GeneralProtection,
+    DoubleFault,
+    TimerStall,
 }
 
 impl BootMode {
@@ -14,6 +18,10 @@ impl BootMode {
             b"mode=ok" => Some(Self::Ok),
             b"mode=panic" => Some(Self::Panic),
             b"mode=hang" => Some(Self::Hang),
+            b"mode=exception" => Some(Self::Exception),
+            b"mode=gp" => Some(Self::GeneralProtection),
+            b"mode=doublefault" => Some(Self::DoubleFault),
+            b"mode=timer-stall" => Some(Self::TimerStall),
             _ => None,
         }
     }

@@ -10,6 +10,7 @@ import tarfile
 import tempfile
 
 import environment
+from .scenarios import MODES
 
 ROOT = environment.ROOT
 OUTPUT = ROOT / "artifacts/boot"
@@ -18,6 +19,7 @@ OUTPUT = ROOT / "artifacts/boot"
 def source_id():
     digest = hashlib.sha256()
     paths = sorted((ROOT / "kernel").rglob("*.rs"))
+    paths += sorted((ROOT / "kernel").rglob("*.S"))
     paths += [ROOT / name for name in ("kernel/linker.ld", "Cargo.toml", "Cargo.lock", "kernel/Cargo.toml", "rust-toolchain.toml", ".cargo/config.toml")]
     for path in paths:
         digest.update(str(path.relative_to(ROOT)).encode())
@@ -27,7 +29,7 @@ def source_id():
 
 
 def build(mode):
-    if mode not in ("ok", "panic", "hang", "invalid"):
+    if mode not in MODES:
         raise ValueError("unsupported fixture")
     environment.verify()
     environment.fetch_bootloader()
@@ -50,7 +52,7 @@ def build(mode):
 
 def package(kernel, mode, build_id, provenance):
     """Package a prebuilt ELF using trusted reference files, without compiling."""
-    if mode not in ("ok", "panic", "hang", "invalid"):
+    if mode not in MODES:
         raise ValueError("unsupported fixture")
     directory = OUTPUT / mode
     directory.mkdir(parents=True, exist_ok=True)

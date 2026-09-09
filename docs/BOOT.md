@@ -35,16 +35,20 @@ python3 tools/boot.py test --timeout 30
 | panic | PANIC tras validar mapa | 35 | 1 |
 | hang | HANG antes de detener CPU | Terminado por el ejecutor al agotar plazo | 124 |
 | invalid | FATAL por modo desconocido | 37 | 1 |
+| exception | #UD, vector 6 y error 0 | 39 | 1 |
+| gp | #GP, vector 13 y error 0xfff8 | 39 | 1 |
+| doublefault | #DF, vector 8, error 0 y pila de emergencia | 39 | 1 |
+| timer-stall | Espera con IRQ0 enmascarada tras verificar un tick | Terminado por timeout | 124 |
 
-El dispositivo isa-debug-exit transforma el valor escrito por el kernel en (valor × 2) + 1; estos códigos son exclusivos de la prueba R0. Cualquier combinación inesperada devuelve 2. La suite completa devuelve 0 solo si los cuatro casos coinciden con sus resultados esperados. Un timeout de firmware sin haber llegado a HANG no pasa la prueba de bloqueo.
+El dispositivo isa-debug-exit transforma el valor escrito por el kernel en (valor × 2) + 1; estos códigos son exclusivos de la prueba R0. Cualquier combinación inesperada devuelve 2. La suite completa devuelve 0 solo si los ocho casos coinciden con sus resultados y marcadores esperados. Un timeout de firmware sin alcanzar el fixture no pasa la prueba de bloqueo. `ok` comprueba también [interrupciones y esperas](INTERRUPTS.md) antes de SUCCESS.
 
 30 segundos es el presupuesto local inicial, con arranques positivos observados en torno a 4 segundos; CI usa 45 segundos para absorber variación de runner. No constituye un objetivo de rendimiento universal. El anfitrión mata únicamente el proceso QEMU creado por esa ejecución y espera su salida; también lo retira ante interrupción del ejecutor.
 
 ## Evidencia
 
-Cada directorio de fixture conserva image.json (versiones/configuración, commit y estado del checkout, identificador de fuentes y hashes), kernel.elf, rustic-os.img, serial.log, qemu.log y result.json (comando, duración, timeout y estado). suite.json se escribe únicamente al completar los cuatro casos. Los logs se reinician por ejecución; no se reutiliza un éxito previo.
+Cada directorio de fixture conserva image.json (versiones/configuración, commit y estado del checkout, identificador de fuentes y hashes), kernel.elf, rustic-os.img, serial.log, qemu.log y result.json (comando, duración, timeout y estado). suite.json se escribe únicamente al completar los ocho casos. Los logs se reinician por ejecución; no se reutiliza un éxito previo.
 
-El build id identifica los archivos Rust del kernel y su configuración de compilación; no reemplaza el hash SHA-256 del ELF o de la imagen. La imagen contiene fechas del filesystem FAT: no se promete identidad binaria entre reconstrucciones. El entorno tampoco es hermético por la base Ubuntu y sus dependencias transitivas.
+El build id directo identifica los archivos Rust y ensamblador del kernel y su configuración de compilación; en el ejecutor aislado identifica el commit candidato. No reemplaza el hash SHA-256 del ELF o de la imagen. La imagen contiene fechas del filesystem FAT: no se promete identidad binaria entre reconstrucciones. El entorno tampoco es hermético por la base Ubuntu y sus dependencias transitivas.
 
 ## Responsabilidades y confianza
 
@@ -59,6 +63,6 @@ Bindings limine 0.5.0 con base revision 3, cargador Limine 12.8.0, stack solicit
 
 El bootloader y sus punteros son de confianza: los bindings dependen de su validez y duración. Se comprueba disponibilidad de respuestas, revisión, rangos no vacíos/sin overflow, orden/no solapamiento, límite de 4096 entradas y presencia de memoria usable. Esto no protege de un cargador malicioso ni configura tablas de páginas propias.
 
-El kernel entra sin IDT propia ni interrupciones habilitadas, en un único CPU; no reclama memoria del cargador ni crea allocator. Los segmentos del ELF separan escritura y ejecución. La prueba usa disco de solo lectura, variables OVMF desechables y ningún disco o directorio personal.
+El kernel entra con interrupciones deshabilitadas, valida el arranque e instala GDT/TSS/IDT y PIC/PIT propios antes de habilitar IRQ0, en una CPU. No reclama memoria del cargador ni crea allocator. Los segmentos del ELF separan escritura y ejecución. La prueba usa disco de solo lectura, variables OVMF desechables y ningún disco o directorio personal.
 
-Las licencias de Limine, los bindings, bitflags y Rust se incluyen en la imagen. OVMF y QEMU permanecen externos. Véase [inventario de componentes](dependencies.md). El desarrollo de memoria, interrupciones y procesos continúa en #9/#33/#10.
+Las licencias de Limine, los bindings, bitflags y Rust se incluyen en la imagen. OVMF y QEMU permanecen externos. Véase [inventario de componentes](dependencies.md). #33 añade [excepciones y tiempo](INTERRUPTS.md); memoria y procesos continúan en #9/#10.

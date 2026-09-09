@@ -36,7 +36,11 @@ pub(crate) fn run() -> ! {
         );
         serial.flush();
     }
+    let Some(mut interrupts) = arch::interrupts::initialize() else {
+        diagnostic::fatal("interrupts_already_initialized")
+    };
     match mode {
+        BootMode::TimerStall => interrupts.stall(),
         BootMode::Panic => panic!("deliberate boot test"),
         BootMode::Hang => {
             if let Some(mut serial) = Serial::take() {
@@ -46,6 +50,7 @@ pub(crate) fn run() -> ! {
             arch::halt()
         }
         BootMode::Ok => {
+            interrupts.verify();
             if let Some(mut serial) = Serial::take() {
                 let _ = writeln!(
                     serial,
@@ -55,6 +60,9 @@ pub(crate) fn run() -> ! {
                 serial.flush();
             }
             arch::test_exit(0x10)
+        }
+        BootMode::Exception | BootMode::GeneralProtection | BootMode::DoubleFault => {
+            interrupts.fault(mode)
         }
     }
 }

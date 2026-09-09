@@ -9,6 +9,7 @@ from .fixtures import candidate
 from .jobs import JOBS, execute, cancel
 from .prepare import ROOT
 from .probes import probe
+from boot_support.scenarios import reached
 
 
 def suite(revision):
@@ -17,6 +18,10 @@ def suite(revision):
              ("panic", revision, "panic", 120, 30, "boot_failed"),
              ("hang", revision, "hang", 120, 15, "boot_timeout"),
              ("invalid", revision, "invalid", 120, 30, "boot_failed"),
+             ("exception", revision, "exception", 120, 30, "boot_failed"),
+             ("gp", revision, "gp", 120, 30, "boot_failed"),
+             ("doublefault", revision, "doublefault", 120, 30, "boot_failed"),
+             ("timer-stall", revision, "timer-stall", 120, 15, "boot_timeout"),
              ("compile_error", candidate(revision, 'compile_error!("RUSTIC_COMPILE_FIXTURE");\nfn main() {}\n'),
               "ok", 120, 30, "build_failed"),
              ("build_hang", candidate(revision, 'fn main() { eprintln!("RUSTIC_BUILD_HANG"); loop { std::thread::sleep(std::time::Duration::from_secs(1)); } }\n'),
@@ -26,6 +31,8 @@ def suite(revision):
         if result["status"] != expected:
             raise RuntimeError(f"{name}: expected {expected}, got {result['status']}; job {result['job_id']}")
         directory = JOBS / result["job_id"]
+        if name in ("ok", "exception", "gp", "doublefault", "timer-stall") and not reached(mode, (directory / "serial.log").read_text()):
+            raise RuntimeError(name + ": guest did not verify the expected interrupt fixture")
         marker = {"compile_error": ("build.log", "RUSTIC_COMPILE_FIXTURE"),
                   "build_hang": ("build.log", "RUSTIC_BUILD_HANG"),
                   "hang": ("serial.log", "RUSTIC HANG deliberate=1")}.get(name)
@@ -36,7 +43,7 @@ def suite(revision):
     evidence["cases"].append(cancellation(cases[-1][1]))
     # A fresh workspace must work again after the deliberately killed build.
     repeat = execute(revision, "ok", 120, 30)
-    if repeat["status"] != "success":
+    if repeat["status"] != "success" or not reached("ok", (JOBS / repeat["job_id"] / "serial.log").read_text()):
         raise RuntimeError("clean repetition failed")
     evidence["cases"].append({"case": "clean_repeat", "job_id": repeat["job_id"], "status": repeat["status"]})
     (ROOT / "artifacts/sandbox-suite.json").write_text(json.dumps(evidence, indent=2) + "\n")

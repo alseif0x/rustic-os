@@ -14,6 +14,7 @@ class OutcomeTests(unittest.TestCase):
         self.assertEqual(classify(33, False, line, "abc"), "success")
         self.assertEqual(classify(0, False, line, "abc"), "unexpected")
         self.assertEqual(classify(33, False, line, "other"), "unexpected")
+        self.assertEqual(classify(33, False, line + "def", "abc"), "unexpected")
 
     def test_timeout_and_fatal_cannot_be_hidden_by_success_text(self):
         line = "RUSTIC SUCCESS component=boot build=abc"

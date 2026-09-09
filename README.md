@@ -14,6 +14,8 @@ Fase inicial: kernel Rust modular que arranca mediante Limine/UEFI en QEMU, vali
 
 El [ejecutor aislado](docs/EXECUTOR.md) construye revisiones Git y comprueba el arranque en contenedores separados, sin red durante los trabajos y con límites de recursos, cancelación y resultados JSON.
 
+El kernel incorpora [excepciones, interrupciones y reloj](docs/INTERRUPTS.md): tablas de CPU propias, pila de emergencia para doble fallo, temporizador y esperas acotadas por plazos. Las pruebas verifican estas funciones dentro de QEMU antes de informar éxito.
+
 ## Plan y participación
 
 - [Plan vigente: requisitos, hitos, riesgos y reglas de ejecución](https://github.com/alseif0x/rustic-os/issues/1).

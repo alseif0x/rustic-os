@@ -5,6 +5,7 @@ import json
 import subprocess
 from sandbox_support.prepare import prepare
 from sandbox_support.jobs import execute, cancel
+from boot_support.scenarios import MODES
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
@@ -12,7 +13,7 @@ if __name__ == "__main__":
     commands.add_parser("prepare")
     run = commands.add_parser("run")
     run.add_argument("--revision", required=True)
-    run.add_argument("--mode", choices=["ok", "panic", "hang", "invalid"], default="ok")
+    run.add_argument("--mode", choices=MODES, default="ok")
     run.add_argument("--build-timeout", type=int, default=120)
     run.add_argument("--boot-timeout", type=int, default=30)
     stop = commands.add_parser("cancel")

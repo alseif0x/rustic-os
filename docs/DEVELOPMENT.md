@@ -57,6 +57,8 @@ install instala las versiones exactas de tools/environment.toml; verify rechaza 
 
 La imagen FAT32/UEFI ya se construye y arranca. Los [comandos de arranque y sus límites](BOOT.md) incluyen ejecución individual y pruebas de éxito, panic, bloqueo y argumentos inválidos.
 
+#33 añade [excepciones, reloj y esperas](INTERRUPTS.md), con contratos puros comprobados en host y pruebas de IRQ, errores de CPU y doble fallo dentro del invitado. No requiere nuevas crates ni nightly.
+
 ## CI y prueba negativa
 
 .github/workflows/check.yml ejecuta el mismo cargo xtask check en ubuntu-24.04, para push y pull_request. Acciones fijadas por SHA, token contents:read, checkout sin credenciales persistentes y sin secretos de proyecto. Registra versión de toolchain, logs y biblioteca no_std como artefactos con retención de 14 días. Un job separado instala QEMU/OVMF fijados, prueba el ejecutor y arranca las cuatro variantes, conservando imágenes y evidencia.

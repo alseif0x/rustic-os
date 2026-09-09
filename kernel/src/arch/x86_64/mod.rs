@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
+pub(crate) mod interrupts;
 mod io;
 mod serial;
 
 pub(crate) use serial::Serial;
 
-/// Stop this CPU with maskable interrupts disabled; no IDT exists yet.
+/// Stop this CPU with maskable interrupts disabled.
 pub(crate) fn halt() -> ! {
     loop {
-        // SAFETY: Kernel entry runs at ring 0. No interrupt handlers are installed.
+        // SAFETY: Kernel runs at ring 0. This is a terminal path with IF disabled.
         unsafe { core::arch::asm!("cli", "hlt", options(nomem, nostack)) };
     }
 }

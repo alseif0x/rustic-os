@@ -9,17 +9,20 @@ import time
 
 import environment
 from .image import build, OUTPUT
+from .scenarios import EXPECTED, reached
 
 
 def classify(returncode, timed_out, serial, build_id):
     if timed_out:
         return "timeout"
-    if returncode == 33 and f"RUSTIC SUCCESS component=boot build={build_id}" in serial and "RUSTIC PANIC" not in serial and "RUSTIC FATAL" not in serial:
+    if returncode == 33 and f"RUSTIC SUCCESS component=boot build={build_id}" in serial.splitlines() and "RUSTIC PANIC" not in serial and "RUSTIC FATAL" not in serial and "RUSTIC EXCEPTION" not in serial:
         return "success"
     if returncode == 35 and "RUSTIC PANIC" in serial:
         return "panic"
     if returncode == 37 and "RUSTIC FATAL" in serial:
         return "fatal"
+    if returncode == 39 and f"RUSTIC EXCEPTION build={build_id} " in serial:
+        return "exception"
     return "unexpected"
 
 
@@ -76,13 +79,13 @@ def suite(timeout):
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "suite.json").unlink(missing_ok=True)
     results = []
-    for mode, expected in [("ok", "success"), ("panic", "panic"), ("hang", "timeout"), ("invalid", "fatal")]:
+    for mode, expected in EXPECTED.items():
         result = run(build(mode), timeout)
         serial = (OUTPUT / mode / "serial.log").read_text(errors="replace")
         # A loader failure that hangs cannot pass the deliberate-hang fixture.
-        reached_fixture = mode != "hang" or "RUSTIC HANG deliberate=1" in serial
+        reached_fixture = reached(mode, serial)
         if result["outcome"] != expected or not reached_fixture:
             raise RuntimeError(f"{mode}: expected {expected}, got {result}; inspect {OUTPUT / mode}")
         results.append({"mode": mode, **result})
     (OUTPUT / "suite.json").write_text(json.dumps(results, indent=2) + "\n")
-    print("All four boot scenarios verified.", flush=True)
+    print(f"All {len(EXPECTED)} boot scenarios verified.", flush=True)

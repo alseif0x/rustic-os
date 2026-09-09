@@ -14,6 +14,7 @@ from . import runtime
 from .artifacts import collect, sha256
 from .prepare import ROOT, STATE
 from .process import command
+from boot_support.scenarios import MODES
 
 JOBS = ROOT / "artifacts/jobs"
 
@@ -48,7 +49,7 @@ def cancel(job_id):
 def execute(revision, mode, build_timeout, boot_timeout):
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ValueError("revision must be a full local commit SHA")
-    if mode not in ("ok", "panic", "hang", "invalid"):
+    if mode not in MODES:
         raise ValueError("unsupported mode")
     if not 1 <= build_timeout <= 300 or not 1 <= boot_timeout <= 120:
         raise ValueError("timeouts outside supported limits")
