@@ -1,40 +1,40 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Licencias y procedencia
+# Licensing and provenance
 
-## Decisión del proyecto
+## Project decision
 
-El propietario ha elegido Apache License 2.0 para el material original de RusticOS en [#32](https://github.com/alseif0x/rustic-os/issues/32). El texto oficial íntegro se conserva en [LICENSE](../LICENSE), sin sustituir sus campos de ejemplo ni añadir términos propios.
+The owner selected Apache License 2.0 for original RusticOS material in [#32](https://github.com/alseif0x/rustic-os/issues/32). The full official text is preserved in [LICENSE](../LICENSE), without replacing its example fields or adding custom terms.
 
-Fuente: [texto oficial de Apache](https://www.apache.org/licenses/LICENSE-2.0.txt). SHA-256 del archivo oficial descargado para esta publicación: `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`.
+Source: [official Apache text](https://www.apache.org/licenses/LICENSE-2.0.txt). SHA-256 of the official file downloaded for this publication: `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`.
 
-## Base inicial — 9 de septiembre de 2026
+## Initial baseline — September 9, 2026
 
-La publicación inicial contiene LICENSE y documentación original. No incorpora código del kernel, crates, dependencias de ejecución/construcción, binarios, firmware, fuentes tipográficas ni material vendorizado.
+The initial license publication contains LICENSE and original documentation. It does not include kernel code, crates, runtime/build dependencies, binaries, firmware, fonts or vendored material.
 
-| Categoría | Estado de esta publicación |
+| Category | Status at that initial publication |
 | --- | --- |
-| Código original y dependencias Rust | Todavía no incorporados. |
-| Documentación original | Apache-2.0, identificada mediante SPDX. |
-| Componentes/material de terceros distribuido | Ninguno; LICENSE reproduce el texto oficial de la licencia. |
-| Herramientas externas usadas para editar/publicar | No distribuidas como parte de RusticOS. Su uso no acredita revisión de futuras dependencias del SO. |
+| Original code and Rust dependencies | Not yet included. |
+| Original documentation | Apache-2.0, identified through SPDX. |
+| Distributed third-party components/material | None; LICENSE reproduces the official license text. |
+| External tools used to edit/publish | Not distributed as part of RusticOS. Their use does not establish review of future OS dependencies. |
 
 ## NOTICE
 
-La entrega del workspace añade código original y herramientas de desarrollo externas. El [inventario de dependencias](dependencies.md) registra sus versiones, procedencia y límites de distribución; la sección de base inicial anterior se conserva como historial de la publicación de licencia.
+The workspace delivery adds original code and external development tools. The [dependency inventory](dependencies.md) records their versions, provenance and distribution limits; the initial baseline above is retained as the history of the license publication.
 
-No se incorpora un archivo NOTICE inicial: no hay atribuciones de componentes de terceros incluidos que deban recogerse en él. Esta decisión corresponde solo al contenido de esta publicación. Cuando se introduzca material con avisos requeridos, se preservarán y se añadirá NOTICE u otra atribución según corresponda; Apache-2.0 no autoriza eliminarlos.
+No initial NOTICE file was added because that publication included no third-party component attributions requiring one. This decision applies only to that publication's contents. When material with required notices is introduced, preserve them and add NOTICE or another attribution as appropriate; Apache-2.0 does not authorize removing them.
 
-## Revisión antes de añadir una dependencia
+## Review before adding a dependency
 
-Registrar por componente: nombre, versión/revisión, fuente, identificador de licencia, uso en construcción/ejecución, distribución de código/binario, avisos requeridos, compatibilidad evaluada, responsable y evidencia.
+Record for each component: name, version/revision, source, license identifier, build/runtime use, source/binary distribution, required notices, compatibility assessment, responsible reviewer and evidence.
 
-Resolver bloqueantes antes de distribuir; no asumir que una licencia abierta basta para cualquier combinación. El material de terceros conserva sus propios términos. Mantener cabeceras originales y enlaces a textos/avisos; separar claramente cualquier excepción a la licencia del proyecto.
+Resolve blockers before distribution; do not assume an open license is sufficient for every combination. Third-party material retains its own terms. Preserve original headers and links to license texts/notices; clearly separate any exception to the project's license.
 
-Repetir la revisión cuando cambie una dependencia o la forma de distribuirla. La base vacía inicial no aprueba dependencias futuras.
+Repeat the review when a dependency or its distribution changes. The initial empty baseline does not approve future dependencies.
 
-## Convención
+## Convention
 
-La imagen inicial de #8 incorpora Limine al volumen y bindings/runtime al ELF. El [inventario vigente](dependencies.md) identifica versiones y licencias; la imagen conserva sus avisos completos en /licenses. OVMF y QEMU siguen siendo herramientas externas. La ausencia inicial de terceros descrita arriba es histórica, no una descripción de esta imagen.
+The initial #8 image includes Limine in the volume and bindings/runtime in the ELF. The [current inventory](dependencies.md) identifies versions and licenses; the image preserves their full notices under /licenses. OVMF and QEMU remain external tools. The initial absence of third parties described above is historical, not a description of this image.
 
-Los archivos originales con sintaxis de comentarios usan `SPDX-License-Identifier: Apache-2.0`, conforme a [CONTRIBUTING.md](../CONTRIBUTING.md). Los avisos de copyright deben reflejar autoría real. El texto de LICENSE se mantiene sin modificaciones.
+Original files with comment syntax use `SPDX-License-Identifier: Apache-2.0`, as described in [CONTRIBUTING.md](../CONTRIBUTING.md). Copyright notices must reflect actual authorship. The LICENSE text remains unchanged.

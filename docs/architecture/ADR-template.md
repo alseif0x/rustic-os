@@ -1,10 +1,16 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-# ADR-NNNN: decisión
-Estado y fecha:
-Issue / requisitos:
 
-## Contexto y decisión
-## Alternativas y costes
-## Responsabilidades y fronteras
-## Validación y evidencia
-## Riesgos y condiciones de revisión
+# ADR-NNNN: decision
+
+Status and date:
+Issue / requirements:
+
+## Context and decision
+
+## Alternatives and costs
+
+## Responsibilities and boundaries
+
+## Validation and evidence
+
+## Risks and review conditions

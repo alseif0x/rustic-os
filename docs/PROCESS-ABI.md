@@ -1,37 +1,39 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# ABI de procesos R0 — versión 1.0
+# R0 process ABI — version 1.0
 
-Contrato mínimo de #10, conservado por la extensión de [IPC/handles de #34](IPC.md). El SDK sigue en #11. La fuente compartida de constantes es `crates/abi`, sin dependencia del kernel.
-No es el ABI Linux ni una interfaz MCP. La identidad proviene del proceso que
-el kernel está ejecutando; ningún argumento puede sustituirla.
+Minimal #10 contract, preserved by the [#34 IPC/handle extension](IPC.md). The SDK remains in #11. The shared source of constants is `crates/abi`, with no kernel dependency.
+This is neither the Linux ABI nor an MCP interface. Identity comes from the process the kernel is executing; no argument can replace it.
 
-Un programa ELF64 estático x86_64 entra por e_entry en ring 3, CS=0x2b,
-SS=0x33, RSP alineado a 16 bytes, IF=1 e IOPL=0. No recibe una dirección de
-retorno: debe terminar mediante EXIT. El primer corte admite código entero
-sin x87/MMX/SIMD, TLS, enlace dinámico ni red zone requerida por el kernel.
-RDI, RSI y RDX contienen tres enteros de arranque suministrados por el
-lanzador de pruebas. Los demás registros generales comienzan en cero.
-La pila de usuario tiene 16 KiB RW/NX y una página inferior sin mapear.
-SYSCALL/SYSENTER no son entradas admitidas: el kernel deshabilita esas rutas.
+A static x86_64 ELF64 program enters at e_entry in ring 3, with CS=0x2b,
+SS=0x33, RSP aligned to 16 bytes, IF=1 and IOPL=0. It receives no return
+address and must terminate through EXIT. The initial implementation supports
+integer code without x87/MMX/SIMD, TLS or dynamic linking; the kernel does
+not rely on a red zone. RDI, RSI and RDX contain three startup integers supplied
+by the test launcher. Other general-purpose registers start at zero.
+The user stack is 16 KiB RW/NX with an unmapped page below it.
+SYSCALL/SYSENTER are not supported entry points: the kernel disables these paths.
 
-INT 0x80 usa RAX como número y RDI como argumento entero. Devuelve un entero
-de 64 bits en RAX y conserva los demás registros generales. RFLAGS conserva
-los indicadores aritméticos y DF; el kernel fija IF y elimina flags de
-control no admitidos antes de reanudar. No hay punteros ni buffers de usuario
-en estas llamadas. No se modifica la memoria del llamante.
+INT 0x80 uses RAX as the call number and RDI as the integer argument. It returns
+a 64-bit integer in RAX and preserves other general-purpose registers.
+RFLAGS preserves arithmetic flags and DF; the kernel sets IF and removes
+unsupported control flags before resuming. These calls contain no user
+pointers or buffers and do not modify caller memory.
 
-| RAX | Nombre | RDI | Resultado |
+| RAX | Name | RDI | Result |
 | --- | --- | --- | --- |
-| 0 | QUERY | Ignorado | 0x00010000, versión 1.0 |
-| 1 | EXIT | Código de salida u64 | Termina; no retorna |
-| 2 | REPORT | Valor diagnóstico u64 | 0; máximo ocho valores por proceso, después QUOTA |
-| 3 | GET_PID | Ignorado | Identidad monotónica asignada por kernel |
+| 0 | QUERY | Ignored | 0x00010000, version 1.0 |
+| 1 | EXIT | u64 exit code | Terminates; does not return |
+| 2 | REPORT | u64 diagnostic value | 0; at most eight values per process, then QUOTA |
+| 3 | GET_PID | Ignored | Monotonic identity assigned by the kernel |
 
-Número desconocido devuelve NOT_SUPPORTED = u64::MAX. QUOTA = u64::MAX - 1.
-REPORT conserva contador y último valor en el registro del proceso: no concede
-E/S arbitraria ni acepta texto del usuario para interpretarlo como log del kernel.
-La espera, terminación por el supervisor de pruebas y creación se ofrecen por
-API interna tipada; aún no son syscalls. Esperar un proceso vivo devuelve
-pendiente; esperar uno terminado recupera sus recursos y consume su resultado.
-PID desconocido o ya recogido produce error. La extensión de [IPC](IPC.md) añade handles por propietario y derechos atenuables. La concesión/transferencia y cancelación por PID permanecen en la API del lanzador de confianza, sin exponer autoridad arbitraria por syscall.
+Unknown numbers return NOT_SUPPORTED = u64::MAX. QUOTA = u64::MAX - 1.
+REPORT retains a counter and last value in the process record: it grants
+no arbitrary I/O and accepts no user text to interpret as a kernel log.
+Waiting for processes, termination by the test supervisor and creation are
+provided through a typed internal API; they are not yet syscalls. Waiting
+for a live process returns pending; waiting for an exited process reclaims
+its resources and consumes its result. An unknown or already reaped PID
+produces an error. The [IPC](IPC.md) extension adds owner-bound handles and
+attenuable rights. Grants/transfers and cancellation by PID remain in the
+trusted launcher API, without exposing arbitrary authority through a syscall.

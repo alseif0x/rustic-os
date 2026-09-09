@@ -1,76 +1,77 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-# Ejecutor aislado del anfitrión (#21)
 
-El propietario puede construir una revisión Git y probar su kernel en QEMU sin ejecutar los scripts candidatos directamente en su sesión. No requiere un modelo, MCP ni interfaz gráfica. Es infraestructura del anfitrión; no es todavía un servicio de RusticOS ni el puente de #42.
+# Isolated host executor (#21)
 
-## Uso
+The owner can build a Git revision and test its kernel in QEMU without running candidate scripts directly in their session. No model, MCP or graphical interface is required. This is host infrastructure; it is not yet a RusticOS service or the #42 bridge.
 
-Base: Linux amd64, Python 3.12, Git y Docker Engine con cgroup v2. Validado en Ubuntu 24.04 bajo WSL2 y en CI. En Windows ejecutar desde Ubuntu; QEMU usa TCG, sin KVM ni acceso a dispositivos del anfitrión.
+## Usage
 
-Desde un checkout de infraestructura revisado:
+Baseline: Linux amd64, Python 3.12, Git and Docker Engine with cgroup v2. Validated on Ubuntu 24.04 under WSL2 and in CI. On Windows, run from Ubuntu; QEMU uses TCG without KVM or access to host devices.
+
+From a reviewed infrastructure checkout:
 
 ```sh
 python3 tools/sandbox.py prepare
 python3 tools/sandbox.py run --revision "$(git rev-parse HEAD)"
 python3 tools/sandbox.py test --revision "$(git rev-parse HEAD)"
-python3 tools/sandbox.py cancel ID_DEL_TRABAJO
+python3 tools/sandbox.py cancel JOB_ID
 ```
 
-`prepare` descarga herramientas y dependencias y construye la imagen de referencia. Es una operación de confianza del propietario, con red, que puede tardar hasta 15 minutos. Repetirla cuando cambien las herramientas o las dependencias revisadas. No ejecutar este paso desde código candidato no revisado. La configuración queda en `.cache/sandbox-image.json`: digest de Ubuntu, identidad inmutable de la imagen y hash de los archivos de infraestructura. No se ejecuta el Dockerfile de una revisión candidata.
+`prepare` downloads tools and dependencies and builds the reference image. It is a trusted owner operation with network access that may take up to 15 minutes. Repeat it when reviewed tools or dependencies change. Do not run this step from unreviewed candidate code. Configuration is saved in `.cache/sandbox-image.json`: Ubuntu digest, immutable image identity and infrastructure file hash. A candidate revision's Dockerfile is not executed.
 
-`run` exige el SHA completo de un commit local. Exporta ese commit con `git archive`; no incluye `.git` ni cambios sin commit. No admite comandos, montajes, variables de entorno, dispositivos, URLs ni opciones Docker del solicitante. Los únicos ajustes son `--mode ok|panic|hang|invalid|exception|gp|doublefault|timer-stall|memory-ro|memory-nx|memory-unmapped|memory-text-alias|memory-guard`, `--build-timeout 1..300` (120 por defecto) y `--boot-timeout 1..120` (30 por defecto). Los modos distintos de `ok` son pruebas deliberadas de arranque, excepciones y pérdida del temporizador; véase [INTERRUPTS.md](INTERRUPTS.md).
+`run` requires the full SHA of a local commit. It exports that commit with `git archive`, excluding `.git` and uncommitted changes. It accepts no caller-supplied commands, mounts, environment variables, devices, URLs or Docker options. The only adjustments are `--mode ok|panic|hang|invalid|exception|gp|doublefault|timer-stall|memory-ro|memory-nx|memory-unmapped|memory-text-alias|memory-guard`, `--build-timeout 1..300` (default 120) and `--boot-timeout 1..120` (default 30). Modes other than `ok` are deliberate boot, exception, timer-loss and memory-protection tests; see [INTERRUPTS.md](INTERRUPTS.md) and [MEMORY.md](MEMORY.md).
 
-La salida estándar es un objeto JSON. Los eventos van a stderr; el evento `started` incluye el identificador necesario para cancelar desde otra terminal. `Ctrl+C` y SIGTERM también solicitan cancelación y limpieza. Código de salida 0: éxito, preparación o cancelación atendida; 1: fallo. Los errores de sintaxis de argparse usan 2.
+Standard output is a JSON object. Events go to stderr; the `started` event includes the identifier needed to cancel from another terminal. `Ctrl+C` and SIGTERM also request cancellation and cleanup. Exit code 0 means success, preparation or handled cancellation; 1 means failure. argparse syntax errors use 2.
 
-## Fronteras y recursos
+## Boundaries and resources
 
-1. Un contenedor construye el snapshot con Cargo offline y un registro de dependencias desechable. El target es `x86_64-unknown-none`; se fija `RUSTIC_BUILD_ID` al prefijo de la revisión.
-2. Se exporta únicamente un ELF acotado mediante un ejecutable de referencia de solo lectura. El receptor del anfitrión acepta un único miembro regular con nombre exacto; rechaza enlaces, rutas alternativas y tamaños excesivos. No extrae rutas del archivo tar. Los bytes candidatos continúan siendo datos no confiables, incluso si cambian durante la exportación.
-3. Se elimina el contenedor de construcción. Otro contenedor empaqueta esos bytes con Limine, configuración y avisos de referencia, y ejecuta QEMU. Los scripts candidatos no controlan el evaluador de arranque. El éxito exige la salida de QEMU y el marcador serie de la revisión esperada.
-4. Se recogen los artefactos y se eliminan ambos contenedores, incluidos sus procesos y tmpfs. No hay reutilización de workspaces entre trabajos.
+1. One container builds the snapshot with offline Cargo and a disposable dependency registry. The target is `x86_64-unknown-none`; `RUSTIC_BUILD_ID` is set to the revision prefix.
+2. Only a size-bounded ELF is exported through a read-only reference executable. The host receiver accepts a single regular member with the exact name; it rejects links, alternative paths and oversized data. It does not extract paths from the tar archive. Candidate bytes remain untrusted data, even if they change during export.
+3. The build container is removed. A second container packages those bytes with reference Limine, configuration and notices, then runs QEMU. Candidate scripts do not control the boot evaluator. Success requires QEMU's exit status and the serial marker for the expected revision.
+4. Artifacts are collected and both containers are removed, including their processes and tmpfs. Workspaces are not reused between jobs.
 
-| Límite por contenedor | Política |
+| Per-container limit | Policy |
 | --- | --- |
-| CPU / RAM / swap adicional | 2 CPU, 2 GiB, 0 |
-| Procesos | 128 |
-| Espacio de trabajo / temporal | tmpfs de 1 GiB / 128 MiB, incluidos en la RAM |
-| Red / privilegios | ninguna red externa, UID 1000, sin capabilities, no-new-privileges, seccomp predeterminado |
-| Sistema de archivos | raíz de solo lectura; sin montajes del anfitrión, socket Docker ni dispositivos añadidos |
-| Snapshot / ELF / imagen recuperados | máximo 32 MiB / 16 MiB / 64 MiB |
-| Logs de cliente / logs de VM recuperados | 8 MiB por comando / 1 MiB por log |
-| Concurrencia e intentos | un trabajo activo por checkout; un intento, sin reintentos automáticos |
+| CPU / RAM / additional swap | 2 CPUs, 2 GiB, 0 |
+| Processes | 128 |
+| Workspace / temporary space | 1 GiB / 128 MiB tmpfs, included in RAM |
+| Network / privileges | No external network, UID 1000, no capabilities, no-new-privileges, default seccomp |
+| Filesystem | Read-only root; no host mounts, Docker socket or added devices |
+| Retrieved snapshot / ELF / image | Maximum 32 MiB / 16 MiB / 64 MiB |
+| Client logs / retrieved VM logs | 8 MiB per command / 1 MiB per log |
+| Concurrency and attempts | One active job per checkout; one attempt, no automatic retries |
 
-Los límites de tiempo cubren cada fase: la construcción usa el presupuesto indicado; la fase de empaquetado y VM permite 30 segundos adicionales al timeout de QEMU. Creación, exportación y limpieza tienen plazos propios de hasta 30 segundos por comando. No se promete que el tiempo total sea exactamente la suma de los dos parámetros.
+Time limits cover each stage: builds use the stated budget; packaging and VM execution allow 30 seconds beyond the QEMU timeout. Creation, export and cleanup have their own deadlines of up to 30 seconds per command. Total elapsed time is not promised to equal exactly the sum of the two parameters.
 
-Docker comparte el kernel Linux del anfitrión. Estas comprobaciones verifican restricciones concretas, no una garantía frente a vulnerabilidades de Docker, del kernel o de QEMU. Para código hostil de terceros que requiera una frontera más fuerte, ejecutar también el servicio Docker y el controlador dentro de una VM desechable. El usuario autorizado a manejar Docker mantiene autoridad sobre el anfitrión: no entregar ese socket ni una shell de ese usuario al invitado o a un agente sin mediación.
+Docker shares the host Linux kernel. These checks verify specific restrictions, not protection against vulnerabilities in Docker, the kernel or QEMU. For hostile third-party code requiring a stronger boundary, also run the Docker service and controller inside a disposable VM. A user authorized to manage Docker retains authority over the host: do not hand that socket or the user's shell to a guest or agent without mediation.
 
-La sonda usa un archivo sintético del host; comprueba ausencia de ese archivo y del socket, denegación de escritura en raíz y conexión externa, UID, capabilities, seccomp, cgroups, cuotas tmpfs y ausencia de montajes/dispositivos añadidos. No inspecciona documentos personales. Cualquier secreto previamente incluido en un commit exportado sí forma parte del snapshot; el ejecutor no es un detector de secretos.
+The probe uses a synthetic host file. It checks the absence of that file and the socket, denied root writes and external connections, UID, capabilities, seccomp, cgroups, tmpfs quotas and absence of added mounts/devices. It does not inspect personal documents. Any secret already included in an exported commit is part of the snapshot; the executor is not a secret scanner.
 
-## Resultados y recuperación
+## Results and recovery
 
-`artifacts/jobs/ID/job.json` registra `schema_version: 1`, revisión, imagen de herramientas, hashes del controlador, infraestructura de imagen y snapshot, límites, configuración observada de los contenedores, tiempos, resultado del invitado y artefactos con SHA-256 y tamaño. `image.json` añade versiones/hashes de Rust, QEMU, OVMF, Limine y del kernel/imagen. Los logs y los artefactos permanecen en el anfitrión tras la limpieza.
+`artifacts/jobs/ID/job.json` records `schema_version: 1`, revision, tool image, controller/image-infrastructure/snapshot hashes, limits, observed container configuration, timings, guest result and artifacts with SHA-256 and size. `image.json` adds versions/hashes for Rust, QEMU, OVMF, Limine and the kernel/image. Logs and artifacts remain on the host after cleanup.
 
-| Estado final | Significado |
+| Final status | Meaning |
 | --- | --- |
-| `success` | compilación y arranque de la revisión esperada verificados |
-| `build_failed` | la compilación devolvió error |
-| `build_timeout` | la construcción superó el presupuesto |
-| `boot_failed` | fallo de empaquetado/VM o panic/fatal/salida inesperada del invitado; consultar logs y `guest_result` |
-| `boot_timeout` | timeout de QEMU o de la fase de arranque |
-| `resource_limit` | Docker notificó muerte por falta de memoria; otros límites pueden aparecer como fallo de fase |
-| `cancelled` | cancelación atendida y limpieza terminada |
-| `executor_error` | error del controlador o transferencia; no se acredita fallo del kernel |
-| `cleanup_failed` | no se pudo confirmar la eliminación; `cleanup_errors` requiere atención del propietario |
-| `request_error` | entrada/configuración no válida o herramienta local no disponible |
+| `success` | Build and boot of the expected revision verified |
+| `build_failed` | Compilation returned an error |
+| `build_timeout` | Build exceeded its budget |
+| `boot_failed` | Packaging/VM failure or guest panic/fatal/unexpected exit; inspect logs and `guest_result` |
+| `boot_timeout` | QEMU or boot-stage timeout |
+| `resource_limit` | Docker reported an out-of-memory kill; other limits may appear as stage failures |
+| `cancelled` | Cancellation handled and cleanup completed |
+| `executor_error` | Controller or transfer error; no kernel failure established |
+| `cleanup_failed` | Removal could not be confirmed; `cleanup_errors` needs owner attention |
+| `request_error` | Invalid input/configuration or unavailable local tool |
 
-`cancel ID` solicita detener los contenedores del trabajo y comprueba su etiqueta de propiedad antes de eliminarlos. Su respuesta `cancellation_requested` acredita la solicitud atendida; el estado terminal completo debe leerse en `job.json`. Tras SIGKILL, reinicio o caída de Docker, volver a ejecutar `cancel ID` cuando Docker esté disponible; si el controlador ya no está activo, reconcilia también el estado abandonado. No se borran contenedores ajenos, imágenes del propietario ni artefactos para ocultar errores. No hay una instalación del kernel en el anfitrión que restaurar: se vuelve a ejecutar un commit conocido en un workspace nuevo.
+`cancel ID` requests termination of the job's containers and checks their ownership label before removing them. Its `cancellation_requested` response confirms the handled request; read the full terminal status in `job.json`. After SIGKILL, reboot or Docker failure, run `cancel ID` again once Docker is available; if the controller is no longer active, it also reconciles abandoned state. Unrelated containers, owner images and artifacts are not deleted to hide errors. There is no host kernel installation to restore: rerun a known commit in a fresh workspace.
 
-La cuota de los trabajos no incluye el aprovisionamiento de Docker ni el historial acumulado de artefactos. El propietario gestiona esa retención; CI conserva evidencia 14 días. No se realiza limpieza global de Docker. La imagen de herramientas se construye localmente y no se publica en un registro; los paquetes conservan sus propias licencias.
+Job quotas do not include Docker provisioning or accumulated artifact history. The owner manages retention; CI keeps evidence for 14 days. There is no global Docker cleanup. The tool image is built locally and is not published to a registry; packages retain their own licenses.
 
-## Verificación y límites de la evidencia
+## Verification and evidence limits
 
-`test` ejecuta diecisiete casos: éxito, panic, bloqueo del invitado, argumentos inválidos, #UD, #GP, doble fallo, pérdida del temporizador, cinco fallos de protección de memoria, error real de compilación, bloqueo real de build script, cancelación durante compilación y repetición limpia exitosa. Los fixtures son commits locales sin referencias, creados con un índice Git temporal: no modifican archivos, staging ni ramas. Los casos de bloqueo/error exigen su marcador para evitar aceptar un fallo previo de herramientas. `artifacts/sandbox-suite.json` enlaza los trabajos; `artifacts/isolation-probe/result.json` registra las restricciones comprobadas.
+`test` runs seventeen cases: success, panic, guest hang, invalid arguments, #UD, #GP, double fault, timer loss, five memory-protection faults, a real compilation error, a real build-script hang, cancellation during compilation and a successful clean repeat. Fixtures are unreferenced local commits created with a temporary Git index: they do not modify files, staging or branches. Hang/error cases require their marker to avoid accepting an earlier tooling failure. `artifacts/sandbox-suite.json` links the jobs; `artifacts/isolation-probe/result.json` records the verified restrictions.
 
-CI aprovisiona desde el código de su revisión, sin credenciales persistentes ni secretos de proyecto. Un autor que cambie también el workflow o el controlador puede cambiar sus propias pruebas: el verde de una PR no es una atestación externa frente a un autor malicioso. El uso con candidatos separados exige una infraestructura revisada y una imagen preparada por el propietario. El aislamiento de contenedores protege la frontera del anfitrión; [#10](PROCESSES.md) comprueba por separado procesos en ring 3 dentro del invitado. El caso `ok` exige además los resultados de protección, supervivencia y recuperación de esos procesos y el intercambio IPC con validación de buffers/handles. La preparación incluye la crate propia de ABI, sin nuevas descargas Cargo.
+CI provisions from its revision's code without persistent credentials or project secrets. An author who also changes the workflow or controller can change their own tests: a green PR is not external attestation against a malicious author. Testing separate candidates requires reviewed infrastructure and an owner-prepared image. Container isolation protects the host boundary; [#10](PROCESSES.md) separately checks ring 3 processes inside the guest. The `ok` case also requires those processes' protection, survivor progress and reclamation results, plus IPC exchange with buffer/handle validation. Preparation includes the original ABI crate without new Cargo downloads.
 
-La imagen ejecutada se fija por identidad de contenido, y Ubuntu por digest. La resolución de todos los paquetes transitivos durante `prepare` no es hermética: reconstruir en otra fecha puede producir otra identidad de imagen, que debe conservarse en la evidencia. La política se apoya en los mecanismos documentados de [límites Docker](https://docs.docker.com/engine/containers/resource_constraints/), [ejecución de contenedores](https://docs.docker.com/engine/containers/run/) y [seccomp](https://docs.docker.com/engine/security/seccomp/).
+The executed image is pinned by content identity and Ubuntu by digest. Resolving all transitive packages during `prepare` is not hermetic: rebuilding on another date may produce another image identity, which must be retained in the evidence. The policy uses documented [Docker resource limits](https://docs.docker.com/engine/containers/resource_constraints/), [container execution](https://docs.docker.com/engine/containers/run/) and [seccomp](https://docs.docker.com/engine/security/seccomp/) mechanisms.

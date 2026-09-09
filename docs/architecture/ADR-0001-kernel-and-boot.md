@@ -1,101 +1,101 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# ADR-0001: núcleo modular y servicios programables
+# ADR-0001: modular kernel and programmable services
 
-Fecha: 2026-09-09. Estado: adoptado para iniciar H0/H1 bajo la delegación del propietario; revisión documental realizada, validación experimental pendiente en #8/#10/#34. Resuelve #3 sobre la base de [requisitos](../requirements-v0.1.md). No declara un kernel implementado.
+Date: 2026-09-09. Status: adopted to begin H0/H1 under the owner's delegation; documentation reviewed, with experimental validation originally assigned to #8/#10/#34. Resolves #3 based on the [requirements](../requirements-v0.1.md). Adoption of this decision alone does not establish an implemented kernel. Subsequent implementation evidence is recorded in those issues and the subsystem guides.
 
-## Decisión
+## Decision
 
-Construir un núcleo monolítico modular en Rust no_std, inicialmente x86_64 y un procesador. Memoria, planificación, interrupciones, handles, IPC y controladores mínimos quedan en kernel. Aplicaciones y servicios de política/producto se ejecutarán en procesos de usuario aislados: supervisor, archivos, shell, catálogo, piloto y escritorio. El servicio de archivos usa E/S de bloque autorizada; no requiere introducir su política en kernel.
+Build a modular monolithic kernel in no_std Rust, initially for x86_64 and one processor. Memory, scheduling, interrupts, handles, IPC and minimal drivers stay in the kernel. Applications and policy/product services will run in isolated user processes: supervisor, files, shell, catalog, agent and desktop. The file service uses authorized block I/O; its policy need not move into the kernel.
 
-Usar UEFI/OVMF y protocolo Limine para cargar un ELF propio. Limine es un componente externo de arranque, no el núcleo de RusticOS. Arrancar en QEMU q35, qemu64, TCG; la combinación exacta de versiones se fija y verifica en #4/#8. No escribir un bootloader propio en H0.
+Use UEFI/OVMF and the Limine protocol to load an original ELF. Limine is an external boot component, not RusticOS's kernel. Boot in QEMU q35, qemu64, TCG; #4/#8 pin and verify the exact version combination. Do not write a custom bootloader in H0.
 
-## Alternativas y razonamiento
+## Alternatives and rationale
 
-Esta comparación es un juicio de diseño para el alcance actual, no un benchmark ni una afirmación sobre la experiencia del equipo, que no está acreditada.
+This comparison is a design judgment for the current scope, not a benchmark or a claim about unestablished team experience.
 
-| Opción | Coste inicial y depuración | Aislamiento | Portabilidad | Decisión |
+| Option | Initial cost and debugging | Isolation | Portability | Decision |
 | --- | --- | --- | --- | --- |
-| Monolítico modular | Menos mecanismos de arranque/IPC necesarios para primeros drivers; un fallo de kernel requiere diagnóstico global | Drivers de kernel comparten privilegio; aplicaciones sí se aíslan al implementar H1 | Módulos de arquitectura y dispositivos explícitos; sin garantía automática | Elegido, con límites de confianza documentados |
-| Micronúcleo desde inicio | Requiere antes IPC, arranque de servidores, delegación, IRQ y DMA de usuario; mayor trabajo para primer sistema útil | Permite separar servidores/drivers, si los mecanismos están correctamente implementados | Fronteras claras pero coste de portado sigue existiendo | Reevaluar con necesidad concreta de aislamiento de drivers |
-| Híbrido con drivers movibles | Flexibilidad, pero dos rutas y políticas aumentan complejidad de implementación/pruebas | Depende de ubicación y permisos de cada componente | Puede facilitar migración futura con contratos bien elegidos | No implementar dos modelos simultáneamente |
+| Modular monolithic | Fewer boot/IPC mechanisms needed for initial drivers; kernel faults require global diagnostics | Kernel drivers share privilege; applications are isolated when H1 is implemented | Explicit architecture/device modules; no automatic guarantee | Selected, with documented trust boundaries |
+| Microkernel from the start | Requires IPC, server startup, delegation, user IRQ and DMA earlier; more work before a useful system | Can separate servers/drivers if mechanisms are implemented correctly | Clear boundaries, but porting costs remain | Reevaluate for a concrete driver-isolation need |
+| Hybrid with movable drivers | Flexible, but two paths and policies increase implementation/testing complexity | Depends on each component's location and permissions | Well-chosen contracts may ease future migration | Do not implement two models simultaneously |
 
-No se inventa una pericia previa para justificar la selección. Se limita el primer corte a piezas pequeñas con invariantes revisables. Migrar drivers a usuario requerirá una nueva decisión y trabajo de aislamiento real; la modularidad del código no equivale a aislamiento.
+No prior expertise is invented to justify the choice. The first increment is limited to small pieces with reviewable invariants. Moving drivers to user mode requires a new decision and real isolation work; code modularity is not isolation.
 
-## Componentes y dependencias
+## Components and dependencies
 
 ```mermaid
 flowchart BT
-    H["QEMU y hardware de referencia"] --> A["arch/x86_64 y controladores"]
-    A --> K["Kernel: memoria, IRQ, procesos, handles e IPC"]
-    K --> S["Servicios: supervisor, archivos y configuración"]
-    S --> U["SDK, shell y aplicaciones"]
-    S --> T["Tools semánticas"]
-    T --> P["Piloto o adaptador MCP"]
-    S --> C["Inventario de capacidades"]
+    H["QEMU and reference hardware"] --> A["arch/x86_64 and drivers"]
+    A --> K["Kernel: memory, IRQ, processes, handles and IPC"]
+    K --> S["Services: supervisor, files and configuration"]
+    S --> U["SDK, shell and applications"]
+    S --> T["Task-oriented tools"]
+    T --> P["Agent or MCP adapter"]
+    S --> C["Capability inventory"]
 ```
 
-Las flechas indican soporte ofrecido, no que el kernel invoque capas superiores. Cargador entrega boot info al módulo boot; este valida y transforma los datos a una representación interna. No propagar structs específicos de Limine a servicios o SDK.
+Arrows indicate provided support, not calls from the kernel into higher layers. The loader provides boot info to the boot module, which validates and transforms it into an internal representation. Do not propagate Limine-specific structs into services or the SDK.
 
-- H0: entrada, validación de boot info, consola serie y panic; kernel sin procesos de usuario todavía.
-- H1: memoria/protecciones (#9), reloj/interrupciones (#33), procesos (#10), syscalls/handles/IPC (#34), SDK (#11), bloque (#35), archivos (#12), supervisor/autoridad (#13) y shell (#14).
-- H2+: inventario de capacidades y catálogo en usuario (#38/#22); modelo, MCP y navegador nunca son dependencias del arranque ni de la autoridad del kernel.
-- La disponibilidad se consulta mediante el servicio de inventario; los derechos efectivos provienen de kernel/supervisor, no del inventario.
+- H0: entry, boot-info validation, serial console and panic; no user processes yet at this stage.
+- H1: memory/protections (#9), clock/interrupts (#33), processes (#10), syscalls/handles/IPC (#34), SDK (#11), block I/O (#35), files (#12), supervisor/authority (#13) and shell (#14).
+- H2+: user-mode capability inventory and catalog (#38/#22); models, MCP and browsers are never dependencies of boot or kernel authority.
+- Availability is queried through the inventory service; effective rights come from the kernel/supervisor, not the inventory.
 
-## Arranque y dispositivos
+## Boot and devices
 
-Elegido Limine por su protocolo documentado y separación entre cargador y ELF, y por disponer de varias arquitecturas de cargador como opción futura. Esto no significa que RusticOS herede soporte para esas arquitecturas. [Proyecto Limine](https://github.com/limine-bootloader/limine), [protocolo](https://github.com/limine-bootloader/limine-protocol/blob/trunk/PROTOCOL.md).
+Limine was chosen for its documented protocol, separation between loader and ELF, and multiple loader architectures as a future option. This does not mean RusticOS inherits support for those architectures. [Limine project](https://github.com/limine-bootloader/limine), [protocol](https://github.com/limine-bootloader/limine-protocol/blob/trunk/PROTOCOL.md).
 
-Alternativas: rust-osdev/bootloader encaja con Rust y genera imágenes BIOS/UEFI; sigue siendo una opción si la integración Limine se bloquea. Su guía ofrece una ruta con artifact dependencies nightly y otra mediante comandos: no se descarta afirmando que siempre exija nightly. Cargador UEFI propio agrega responsabilidad de firmware/mapa de memoria sin beneficio necesario para H0. [rust-osdev/bootloader](https://github.com/rust-osdev/bootloader).
+Alternatives: rust-osdev/bootloader fits Rust and produces BIOS/UEFI images; it remains an option if Limine integration is blocked. Its guide offers a nightly artifact-dependency path and a command-based path: it is not rejected on a claim that it always requires nightly. A custom UEFI loader adds firmware/memory-map responsibility without a necessary H0 benefit. [rust-osdev/bootloader](https://github.com/rust-osdev/bootloader).
 
-Dispositivos de referencia: UART para diagnóstico; bloque/NIC virtio-pci al llegar sus issues; framebuffer de arranque y entrada PS/2 para escritorio inicial; virtio-rng para entropía en #17. Sin passthrough ni DMA de dispositivos físicos. Los drivers en kernel son de confianza: un bug suyo puede comprometer todo el invitado.
+Reference devices: UART for diagnostics; virtio-pci block/NIC when their issues are implemented; boot framebuffer and PS/2 input for the initial desktop; virtio-rng for entropy in #17. No passthrough or physical-device DMA. Kernel drivers are trusted: their bugs can compromise the whole guest.
 
-QEMU ofrece máquinas versionadas y selección de CPU/aceleración; #4 debe fijarlas en lugar de depender de valores predeterminados que cambien. [QEMU](https://www.qemu.org/docs/master/system/invocation.html).
+QEMU provides versioned machines and CPU/acceleration selection; #4 must pin them rather than depend on changing defaults. [QEMU](https://www.qemu.org/docs/master/system/invocation.html).
 
-## Fronteras binarias
+## Binary boundaries
 
-Decisiones para #34/#11, con números/layout final y tests asignados a esas implementaciones:
+Decisions for #34/#11, with final numbers/layout and tests assigned to those implementations:
 
-- Syscalls con ABI explícita propia, números estables dentro de una versión y negociación/consulta de versión. Publicar tabla, registro de argumentos/resultados y códigos de error antes de introducir la primera llamada.
-- Mensajes de IPC con versión, opcode, longitud y correlación de petición; enteros de ancho fijo, codificación little-endian en el wire inicial, longitudes acotadas y rechazo de versiones/opcodes no soportados. Decodificar bytes, no transmutar estructuras Rust.
-- Handles opacos por proceso con protección ante reutilización, derechos atenuables y transferencia explícita por kernel. Identificador numérico recibido por red nunca se convierte directamente en handle válido.
-- No exponer referencias, punteros crudos, String/Vec, enums de layout Rust ni objetos trait a otra dirección de memoria. Copiar/validar buffers de usuario; controlar overflow, tamaño y cambios concurrentes entre validación y uso.
-- Representación C solo para interfaces que realmente la requieran; explicitar padding/alineación y nunca transmitir bytes de padding no inicializados. El layout Rust por defecto no es un contrato binario estable. [Rust Reference](https://doc.rust-lang.org/reference/type-layout.html).
-- IPC inicial con copia y cuotas, sin memoria compartida general para apps. Memoria compartida futura requiere propiedad, permisos, pinning/lifetime y revocación definidos; no se promete zero-copy.
-- Contratos semánticos de servicios (#6) se versionan separadamente del ABI del kernel. JSON Schema/tools/MCP viven en usuario; no imponer sus formatos al IPC del kernel.
+- Syscalls use an explicit project ABI, stable numbers within a version and version negotiation/query. Publish the table, argument/result registers and error codes before introducing the first call.
+- IPC messages carry version, opcode, length and request correlation; fixed-width integers, little-endian initial wire encoding, bounded lengths and rejection of unsupported versions/opcodes. Decode bytes rather than transmuting Rust structures.
+- Opaque per-process handles protect against reuse, with attenuable rights and explicit kernel-mediated transfer. A numeric identifier received over a network never becomes a valid handle directly.
+- Do not expose references, raw pointers, String/Vec, Rust-layout enums or trait objects across address spaces. Copy/validate user buffers; control overflow, size and concurrent changes between validation and use.
+- Use C representation only for interfaces that actually need it; specify padding/alignment and never transmit uninitialized padding bytes. Default Rust layout is not a stable binary contract. [Rust Reference](https://doc.rust-lang.org/reference/type-layout.html).
+- Initial IPC uses copying and quotas, without general application shared memory. Future shared memory requires defined ownership, permissions, pinning/lifetime and revocation; zero-copy is not promised.
+- Semantic service contracts (#6) are versioned separately from the kernel ABI. JSON Schema/tools/MCP live in user mode; do not impose their formats on kernel IPC.
 
-## Organización y unsafe
+## Organization and unsafe code
 
-Estructura inicial a materializar en #4: kernel/src/arch/x86_64, kernel/src/boot, kernel/src/memory, kernel/src/process, kernel/src/ipc, kernel/src/drivers; crates/abi para tipos documentados sin dependencia de kernel; crates/sdk cuando #11 lo implemente; tools/xtask para tareas del anfitrión. No crear stubs vacíos de todas las capacidades futuras.
+Initial structure to be materialized through #4 and subsequent implementations: kernel/src/arch/x86_64, kernel/src/boot, kernel/src/memory, kernel/src/process, kernel/src/ipc, kernel/src/drivers; crates/abi for documented types without kernel dependencies; crates/sdk when #11 implements it; tools/xtask for host tasks. Do not create empty stubs for every future capability.
 
-Mantener instrucciones privilegiadas, tablas, port I/O y entrada de interrupciones en módulos de arquitectura con wrappers acotados. Cada unsafe declara invariantes de alineación, validez, propiedad, concurrencia y duración, más quién las garantiza. Sin allocator en rutas tempranas de panic; definir orden de locks e impedir asignaciones/bloqueos no permitidos dentro de IRQ.
+Keep privileged instructions, tables, port I/O and interrupt entry in architecture modules with bounded wrappers. Every unsafe block declares alignment, validity, ownership, concurrency and lifetime invariants and who guarantees them. No allocator in early panic paths; define lock ordering and prevent prohibited allocations/blocking inside IRQ handlers.
 
-DMA: buffers propiedad del driver, direcciones verificadas, lifetime hasta devolución del dispositivo, barreras y límites de anillos. No liberar ni reutilizar mientras el dispositivo sea propietario. Sin IOMMU implementada no se promete aislamiento de DMA; drivers privilegiados y dispositivos emulados de confianza dentro de R0. Tratar longitudes y respuestas del dispositivo como datos a validar.
+DMA: driver-owned buffers, verified addresses, lifetime until device return, barriers and ring limits. Do not free or reuse while the device owns them. Without an implemented IOMMU, DMA isolation is not promised; R0 trusts privileged drivers and emulated devices. Treat device lengths and responses as data to validate.
 
-## Reutilización y procedencia
+## Reuse and provenance
 
-Preferir bibliotecas mantenidas y compatibles con no_std cuando reduzcan riesgo; evaluar tamaño, features, unsafe y supuestos del runtime. No fijar por anticipado crates de red/TLS/web sin estudiar portabilidad. Limine/firmware/herramientas tienen licencias propias; #4 registra versión, hash, fuente, uso/distribución y avisos conforme a docs/LICENSING.md antes de incorporarlos. Esta decisión no distribuye componentes de terceros ni los relicencia bajo Apache-2.0.
+Prefer maintained, no_std-compatible libraries when they reduce risk; assess size, features, unsafe code and runtime assumptions. Do not preselect network/TLS/web crates without studying portability. Limine/firmware/tools have their own licenses; #4 records version, hash, source, use/distribution and notices under docs/LICENSING.md before inclusion. This decision does not distribute third-party components or relicense them under Apache-2.0.
 
-## Revisión por escenarios
+## Scenario review
 
-| Escenario | Respuesta de la arquitectura | Validación pendiente |
+| Scenario | Architectural response | Validation assigned at adoption |
 | --- | --- | --- |
-| Arranque sin IA | Kernel/boot/serie no enlazan modelo, red ni MCP | #8: positivo, panic y bloqueo |
-| Fallo de proceso | Espacios de direcciones y traps por proceso; supervisor recibe salida | #9/#10: proceso vecino y shell sobreviven |
-| Cliente malicioso | Frontera syscall valida buffers/handles/cuotas; servicio autoriza cada operación | #13/#34 y regresión #28 |
-| Servicio opcional ausente | Inventario lo declara ausente; error tipado, ninguna dependencia de arranque | #6/#38/#24 |
-| Segunda arquitectura | Reemplazar arch/boot/drivers necesarios; no heredar automáticamente el ABI de registros x86 | Futuro #31, no requisito de H0 |
-| Driver falla en kernel | Puede comprometer invitado; diagnóstico y reinicio, sin fingir contención | #8/#28; evaluar traslado a usuario si el riesgo lo exige |
-| Navegador exige POSIX/runtime amplio | #7 cuantifica brechas y propone adaptaciones | Revisar ADR antes de ampliar núcleo por comodidad del port |
+| Boot without AI | Kernel/boot/serial do not link a model, network or MCP | #8: positive, panic and hang |
+| Process fault | Address spaces and per-process traps; supervisor receives exit result | #9/#10: neighboring process and later shell survive |
+| Malicious client | Syscall boundary validates buffers/handles/quotas; service authorizes each operation | #13/#34 and #28 regression |
+| Missing optional service | Inventory reports absence; typed error, no boot dependency | #6/#38/#24 |
+| Second architecture | Replace required arch/boot/drivers; do not automatically inherit x86 register ABI | Future #31, not an H0 requirement |
+| Kernel driver fault | May compromise the guest; diagnostics and restart, without claiming containment | #8/#28; assess user-mode relocation if risk requires it |
+| Browser needs broad POSIX/runtime support | #7 quantifies gaps and proposes adaptations | Review ADR before expanding the kernel merely to ease a port |
 
-## Condiciones de revisión y siguiente ejecución
+## Review conditions and next execution
 
-Reabrir si #8 no logra una imagen reproducible con la combinación fijada; si #10/#34 no aíslan procesos y autoridad; si mediciones de #20 muestran un cuello de botella relevante; si #7 requiere cambios amplios; o si se necesita aislamiento real de drivers. Comparar una alternativa con el mismo escenario y presupuesto antes de migrar.
+Reopen if #8 cannot produce a reproducible image with the pinned combination; if #10/#34 fail to isolate processes and authority; if #20 measurements show a relevant bottleneck; if #7 requires broad changes; or if real driver isolation is needed. Compare an alternative under the same scenario and budget before migrating.
 
-#4 queda habilitada: preparar toolchain y manifiesto de entorno; #8 verifica la decisión con arranque real. No hace falta terminar el navegador o especificar cada API futura para empezar. Revisión realizada: coherencia de dependencias, escenarios anteriores, separación de autoridad y fuentes primarias. No hay revisión independiente ni benchmark todavía.
+At adoption, this enabled #4 to prepare the toolchain/environment manifest and #8 to validate the decision with real boot. Finishing the browser or specifying every future API was not required before starting. Review covered dependency consistency, the scenarios above, authority separation and primary sources. No independent review or benchmark was available at adoption.
 
-## Regla obligatoria de modularidad
+## Mandatory modularity rule
 
-El propietario reiteró durante esta decisión que el código Rust debe tener módulos y submódulos con separación de responsabilidades. «Monolítico» describe el espacio privilegiado compartido, nunca autoriza archivos o gestores que concentren todo. [AGENTS.md](../../AGENTS.md) fija reglas para cada implementación y revisión: entradas mínimas, privacidad por defecto, dependencias acíclicas, estado con dueño, unsafe acotado y crates solo cuando exista una frontera útil.
+The owner reiterated during this decision that Rust code must use modules and submodules with separated responsibilities. “Monolithic” describes shared privileged address space; it never permits files or managers that concentrate everything. [AGENTS.md](../../AGENTS.md) sets implementation/review rules: minimal entry points, privacy by default, acyclic dependencies, owned state, bounded unsafe code and crates only at useful boundaries.
 
-#4 configura el workspace con esas fronteras; #8 incorpora únicamente boot, arquitectura/serie y diagnóstico que necesite el arranque. A medida que se introduzcan memoria, procesos y drivers, cada subsistema tendrá API pequeña y submódulos cohesivos. No crear todos los directorios vacíos por anticipado.
+#4 configures the workspace around those boundaries; #8 adds only the boot, architecture/serial and diagnostic components required for startup. As memory, processes and drivers are introduced, each subsystem must have a small API and cohesive submodules. Do not create all directories empty in advance.

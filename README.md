@@ -2,36 +2,124 @@
 
 # RusticOS
 
-Sistema operativo independiente, desarrollado principalmente en Rust, diseñado para que personas y agentes puedan utilizar sus capacidades mediante servicios comunes.
+**An independent Rust operating system, designed for people and AI agents.**
 
-Cada capacidad propia debe ofrecer una forma estructurada de descubrirla, consultar su estado, operarla y verificar el resultado. Las APIs, las herramientas semánticas y la interoperabilidad MCP facilitan el control por agentes. La interfaz gráfica y el acceso visual son complementarios; la IA será opcional.
+[![CI](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml/badge.svg?branch=main)](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Stage: experimental](https://img.shields.io/badge/stage-experimental-orange.svg)](#current-status)
+[![Target: x86_64 UEFI](https://img.shields.io/badge/target-x86__64%20UEFI-555.svg)](docs/requirements-v0.1.md)
 
-Universalidad y adaptación son objetivos progresivos, demostrados por arquitectura, dispositivo, aplicación y escenario. Las versiones prometerán únicamente capacidades verificadas.
+[Get started](#get-started) · [Documentation](docs/README.md) · [Roadmap](#roadmap) · [Contribute](CONTRIBUTING.md)
 
-## Estado
+RusticOS explores what an operating system can become when its capabilities are accessible through structured APIs from the start. People and agents should be able to discover capabilities, inspect state, perform authorized operations, and verify the result through the same underlying services.
 
-Fase inicial: kernel Rust modular que arranca mediante Limine/UEFI en QEMU, valida el mapa de memoria y emite diagnóstico serie. Las pruebas distinguen éxito, panic, bloqueo y argumentos inválidos. Ya ejecuta aplicaciones de prueba en modo usuario con aislamiento; todavía no hay shell, aplicaciones de producto ni piloto. Consulta [desarrollo](docs/DEVELOPMENT.md) y [arranque y pruebas](docs/BOOT.md) para ejecutar la base.
+The goal is agent control without mandatory screen interpretation. A graphical interface and visual automation remain complementary options. AI is optional: manual use and recovery must work without a model.
 
-El [ejecutor aislado](docs/EXECUTOR.md) construye revisiones Git y comprueba el arranque en contenedores separados, sin red durante los trabajos y con límites de recursos, cancelación y resultados JSON.
+## Current status
 
-El kernel incorpora [excepciones, interrupciones y reloj](docs/INTERRUPTS.md): tablas de CPU propias, pila de emergencia para doble fallo, temporizador y esperas acotadas por plazos. Las pruebas verifican estas funciones dentro de QEMU antes de informar éxito.
+**Early, experimental kernel development.** RusticOS boots its own modular Rust kernel in QEMU through Limine and UEFI. It already runs isolated test programs in user mode and exchanges messages between processes. There is no interactive shell, desktop, browser, or integrated agent yet.
 
-La [gestión de memoria](docs/MEMORY.md) añade marcos de 4 KiB, tablas de páginas propias, permisos de escritura/ejecución y espacios de direcciones independientes. Se prueban agotamiento, recuperación, limpieza al reutilizar y fallos de protección; la ejecución de usuario se verifica en la capa de procesos.
+| Available today | What is verified |
+| --- | --- |
+| [UEFI boot and diagnostics](docs/BOOT.md) | Image construction, serial output, positive boot and deliberate failures |
+| [Interrupts and time](docs/INTERRUPTS.md) | CPU exception handling, emergency stack, timer interrupts and bounded waits |
+| [Memory protection](docs/MEMORY.md) | Physical frames, owned page tables, write/execute permissions and separate address spaces |
+| [Native processes](docs/PROCESSES.md) | Static ELF loading, ring 3 execution, timer preemption, fault containment and resource reclamation |
+| [IPC and handles](docs/IPC.md) | Versioned messages, kernel-provided sender identity, validated buffers, ownership, waits and closure |
+| [Isolated test executor](docs/EXECUTOR.md) | Exact Git revisions, offline jobs, resource limits, cancellation and structured evidence |
 
-El subsistema de [procesos nativos](docs/PROCESSES.md) valida ELF estáticos, crea espacios privados, reparte la CPU por turnos y contiene fallos de aplicaciones en ring 3. Las pruebas comprueban un programa no cooperante, accesos prohibidos y recuperación de recursos. El [ABI mínimo](docs/PROCESS-ABI.md) ofrece versión, salida, identidad y diagnóstico entero; [IPC y handles](docs/IPC.md) añaden mensajes versionados, identidad del emisor, espera y cierre, con comprobación de buffers y derechos. La crate `rustic-abi` comparte los contratos sin depender del kernel; el SDK de aplicaciones Rust continúa en #11.
+The IPC implementation was accepted with **27 Rust tests, 19 Python tests, 13 VM scenarios and 17 isolated executor scenarios**, including real user-mode exchanges and rejected invalid operations. See the [recorded CI run](https://github.com/alseif0x/rustic-os/actions/runs/34407198755) and [acceptance evidence](https://github.com/alseif0x/rustic-os/issues/34). These are checks of the current reference configuration, not production security guarantees.
 
-## Plan y participación
+The current VM uses **x86_64, one CPU and 256 MiB RAM**. Process and IPC limits are deliberately small; see their contracts before building on them.
 
-- [Plan vigente: requisitos, hitos, riesgos y reglas de ejecución](https://github.com/alseif0x/rustic-os/issues/1).
-- [Milestones de GitHub](https://github.com/alseif0x/rustic-os/milestones).
-- [Horizontes y propuestas para experimentar](https://github.com/alseif0x/rustic-os/issues/31).
-- [Primer trabajo de definición: requisitos y plataforma](https://github.com/alseif0x/rustic-os/issues/2).
-- [Guía de contribución](CONTRIBUTING.md).
+## Why an API-accessible OS?
 
-La v0.1 experimental tiene como objetivo consola nativa, piloto opcional, navegador con motor y renderizado dentro de RusticOS y un ciclo verificable de cambio y recuperación. El modelo, compilador y entorno de pruebas pueden ser externos, declarando esa dependencia.
+An agent should be able to ask a service what it can do, submit a typed request, observe progress and verify the outcome. That requires explicit contracts and permissions throughout the system.
 
-## Licencia
+The planned integration follows these layers:
 
-El código y la documentación originales de RusticOS se publican bajo **Apache License 2.0** (`Apache-2.0`). El texto completo está en [LICENSE](LICENSE).
+```text
+People and replaceable AI agents
+        │
+Console / GUI / native client / MCP adapter
+        │
+Task-oriented tools and versioned service APIs
+        │
+OS services and native application SDK
+        │
+Rust kernel: memory · processes · IPC · isolation
+```
 
-Los componentes de terceros conservan sus licencias y avisos. Consulta el [inventario y las reglas de licencias](docs/LICENSING.md). La publicación de la licencia implementa la [decisión del propietario en #32](https://github.com/alseif0x/rustic-os/issues/32).
+- **Shared services:** the console, GUI and agents use the same service logic.
+- **Explicit authority:** discovering a capability does not grant permission to use it.
+- **MCP interoperability:** MCP is a planned adapter; native clients can use the local contracts directly.
+- **Verifiable effects:** operations need inspectable state, meaningful errors and independent outcome checks.
+- **Measured adaptability:** hardware, application compatibility and interaction modes expand through tested capabilities and deterministic fallback policies.
+
+The kernel does not depend on MCP or a model. The service, tool and agent layers above it are roadmap work. Read the [agent integration proposal](docs/architecture/agent-integration.md) for the design and open experiments.
+
+## Get started
+
+Use **Ubuntu 24.04 amd64**, directly or through WSL2. Ubuntu hosts the compiler and QEMU; the guest runs RusticOS's own kernel. Install Rust and the base tools using the [development guide](docs/DEVELOPMENT.md), then run:
+
+```sh
+git clone https://github.com/alseif0x/rustic-os.git
+cd rustic-os
+source ~/.cargo/env
+
+# Install the pinned reference VM tools; requires sudo.
+python3 tools/environment.py install
+
+# Check the workspace and host-side runner contracts.
+cargo xtask check
+python3 -m unittest discover -s tools/tests -v
+
+# Build the image and run the guest's acceptance checks.
+python3 tools/boot.py run --mode ok
+```
+
+A successful run produces serial evidence and exits; it does not open an interactive desktop. Build artifacts and logs are written under `artifacts/boot/ok/`.
+
+For the complete VM suite:
+
+```sh
+python3 tools/boot.py test --timeout 30
+```
+
+See [boot commands and expected results](docs/BOOT.md) and the [isolated executor](docs/EXECUTOR.md) for reproducible failure tests and revision-based execution.
+
+## Built to stay modular
+
+| Location | Responsibility |
+| --- | --- |
+| [`kernel/`](kernel/) | Pure kernel contracts plus architecture-specific boot, memory and process execution |
+| [`crates/abi/`](crates/abi/) | Shared `no_std` binary contracts, independent of kernel implementation |
+| [`tools/`](tools/) | Host-side checks, image construction, QEMU execution and sandbox orchestration |
+| [`docs/`](docs/README.md) | Requirements, architecture decisions, subsystem contracts and evidence guides |
+
+Modules follow ownership and trust boundaries. Entry points compose components; CPU instructions and `unsafe` code stay in narrow modules with documented invariants. See [the repository engineering rules](AGENTS.md).
+
+## Roadmap
+
+| Milestone | Outcome | Status |
+| --- | --- | --- |
+| H0 — Reproducible foundation | Licensed workspace, boot and failure detection | Complete |
+| H1 — Manual OS foundation | Isolated processes, IPC, native SDK, persistent files, authority and shell | In progress |
+| H2 — Programmatic control | Service tools, operation contracts and capability-based adaptation | Planned |
+| H3 — Networking and agents | Networking, MCP interoperability and an optional integrated agent | Planned |
+| H4 — Desktop and browser | Graphical interaction and a browser engine running inside RusticOS | Planned |
+| H5 — Experimental v0.1 | Verified candidates, activation, recovery and integrated acceptance | Planned |
+
+**Next:** [native Rust SDK and application manifest](https://github.com/alseif0x/rustic-os/issues/11), using the existing ABI to compile and run an independent Rust application inside the guest.
+
+The experimental v0.1 target includes a native console, optional agent, locally running browser engine and a verifiable change/recovery cycle. The model, compiler and test environment may be external, with that dependency declared. Broad hardware support and universal application compatibility are long-term research goals, not current promises.
+
+Follow the [living plan](https://github.com/alseif0x/rustic-os/issues/1), [milestones](https://github.com/alseif0x/rustic-os/milestones) and [long-term experiments](https://github.com/alseif0x/rustic-os/issues/31). Historical issue discussions may be in Spanish; repository documentation and new contribution templates use English.
+
+## Contributing
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md), the [requirements](docs/requirements-v0.1.md) and an issue with resolved dependencies. Architecture improvements are welcome when they include alternatives, maintenance costs and a testable outcome. Human and AI-assisted changes follow the same review and evidence requirements.
+
+## License
+
+Original RusticOS code and documentation are licensed under the **[Apache License 2.0](LICENSE)**. Third-party components retain their own licenses and notices. See the [licensing policy](docs/LICENSING.md) and [dependency inventory](docs/dependencies.md).

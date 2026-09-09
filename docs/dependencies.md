@@ -1,35 +1,36 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-# Inventario inicial de dependencias y herramientas
 
-Fecha: 2026-09-09. Revisión realizada por el agente implementador; sin revisión independiente. Complementa [LICENSING.md](LICENSING.md).
+# Dependency and tool inventory
 
-Tras #8, Cargo.lock contiene rustic-kernel, xtask, limine 0.5.0 y bitflags 2.13.1. El código original es Apache-2.0; las crates conservan sus licencias. La imagen CI incorpora BOOTX64.EFI de Limine y el ELF propio; el firmware OVMF sigue siendo externo.
+Date: 2026-09-09. Reviewed by the implementing agent; no independent review. Complements [LICENSING.md](LICENSING.md).
 
-| Componente | Versión / fuente | Uso y distribución |
+After #8, Cargo.lock contains rustic-kernel, xtask, limine 0.5.0 and bitflags 2.13.1. Original code is Apache-2.0; dependency crates retain their licenses. The CI image includes Limine's BOOTX64.EFI and the project's ELF; OVMF firmware remains external. The original #34 ABI addition is recorded below.
+
+| Component | Version / source | Use and distribution |
 | --- | --- | --- |
-| Rust/Cargo/rust-lld | Rust 1.98.1, commit 48a229ceaefd4985c50990b14116b6d856af0985; LLVM 22.1.8; static.rust-lang.org | Toolchain externa; no se redistribuye en el repo. Rust usa MIT/Apache-2.0; LLVM conserva sus términos y excepciones. |
-| rustup | 1.29.1, instalación oficial | Gestor externo, no distribuido. |
-| QEMU | 1:8.2.2+ds-0ubuntu1.18, Ubuntu noble | Ejecutor externo GPL-2.0 y componentes con avisos propios; no distribuido ni enlazado en kernel. |
-| OVMF | 2024.02-2ubuntu0.9, Ubuntu noble | Firmware externo; avisos por componente en paquete Ubuntu/EDK II. No distribuido. |
-| mtools / dosfstools / xorriso | Versiones exactas en tools/environment.toml, Ubuntu noble | Utilidades externas; conservar sus términos si se distribuyen en el futuro. |
-| Limine | 12.8.0, [release oficial](https://github.com/Limine-Bootloader/Limine/releases/tag/v12.8.0) | BOOTX64.EFI extraído del archivo verificado e incorporado a la imagen. LICENSE BSD-2-Clause de Mintsuki y colaboradores se copia íntegra a /licenses/LIMINE.txt. |
-| checkout / upload-artifact | SHA en workflow; repositorios oficiales actions | Acciones remotas de CI, no vendorizadas. No proporcionan una licencia al código del proyecto. |
-| Docker Engine / Ubuntu container | Engine 29.7.2 validado localmente; Ubuntu 24.04 amd64 con digest en tools/sandbox_support/prepare.py | Herramientas externas de #21. Imagen construida localmente, sin publicación en registro; cada paquete conserva sus avisos. La identidad final se guarda por trabajo. |
+| Rust/Cargo/rust-lld | Rust 1.98.1, commit 48a229ceaefd4985c50990b14116b6d856af0985; LLVM 22.1.8; static.rust-lang.org | External toolchain; not redistributed in the repo. Rust uses MIT/Apache-2.0; LLVM retains its terms and exceptions. |
+| rustup | 1.29.1, official installation | External manager, not distributed. |
+| QEMU | 1:8.2.2+ds-0ubuntu1.18, Ubuntu noble | External executor, GPL-2.0 and components with their own notices; not distributed or linked into the kernel. |
+| OVMF | 2024.02-2ubuntu0.9, Ubuntu noble | External firmware; component notices in Ubuntu/EDK II packages. Not distributed. |
+| mtools / dosfstools / xorriso | Exact versions in tools/environment.toml, Ubuntu noble | External utilities; preserve their terms if distributed in future. |
+| Limine | 12.8.0, [official release](https://github.com/Limine-Bootloader/Limine/releases/tag/v12.8.0) | BOOTX64.EFI extracted from the verified archive and included in the image. The complete BSD-2-Clause LICENSE from Mintsuki and contributors is copied to /licenses/LIMINE.txt. |
+| checkout / upload-artifact | SHA in workflow; official actions repositories | Remote CI actions, not vendored. They do not license the project's code. |
+| Docker Engine / Ubuntu container | Engine 29.7.2 validated locally; Ubuntu 24.04 amd64 with digest in tools/sandbox_support/prepare.py | External #21 tools. Image built locally, without registry publication; each package retains its notices. Final identity is stored per job. |
 
-tools/environment.toml conserva URL/hash del archivo Limine, hashes de OVMF y revisión del protocolo. OVMF no se empaqueta en la imagen ni en los artefactos de CI. Los avisos originales de dependencias se conservan en licenses/ y dentro de la imagen; esos textos no se relicencian bajo Apache-2.0.
+tools/environment.toml preserves the Limine archive URL/hash, OVMF hashes and protocol revision. OVMF is not packaged in the image or CI artifacts. Original dependency notices are preserved in licenses/ and inside the image; those texts are not relicensed under Apache-2.0.
 
-## Código incorporado al ELF de #8
+## Code included in the #8 ELF
 
-| Componente | Versión/checksum del lockfile | Aviso distribuido |
+| Component | Version/lockfile checksum | Distributed notice |
 | --- | --- | --- |
-| limine, bindings Rust | 0.5.0 / af6d2ee42712e7bd2c787365cd1dab06ef59a61becbf87bec7b32b970bd2594b | MIT OR Apache-2.0; se conserva LICENSE-MIT en licenses/limine-rust-MIT.txt. |
-| bitflags | 2.13.1 / b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da | Dependencia transitiva no_std; MIT conservada en licenses/bitflags-MIT.txt. |
-| Rust core/runtime | Toolchain 1.98.1 | LICENSE-MIT oficial del tag conservada en licenses/rust-MIT.txt. |
+| limine, Rust bindings | 0.5.0 / af6d2ee42712e7bd2c787365cd1dab06ef59a61becbf87bec7b32b970bd2594b | MIT OR Apache-2.0; LICENSE-MIT preserved in licenses/limine-rust-MIT.txt. |
+| bitflags | 2.13.1 / b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da | Transitive no_std dependency; MIT preserved in licenses/bitflags-MIT.txt. |
+| Rust core/runtime | Toolchain 1.98.1 | Official tag's LICENSE-MIT preserved in licenses/rust-MIT.txt. |
 
-Estas licencias se copian a /licenses junto a RUSTIC.txt (Apache-2.0 del proyecto). La biblioteca pura sigue sin depender de Limine; los bindings solo se activan para el binario boot-image. No se copia código de un template de kernel. Limine 0.6.5 se inspeccionó y descartó por necesitar ptr_metadata experimental; no está en el artefacto. Se prueba limine 0.5.0 con base revision 3 y cargador 12.8.0.
+These licenses are copied to /licenses alongside RUSTIC.txt (the project's Apache-2.0 license). The pure library still has no Limine dependency; bindings are enabled only for the boot-image binary. No kernel-template code is copied. Limine 0.6.5 was inspected and rejected because it needs experimental ptr_metadata; it is not in the artifact. limine 0.5.0 is tested with base revision 3 and loader 12.8.0.
 
-Fuentes de revisión para componentes externos: LICENSE del archivo de Limine verificado por hash; metadatos y copyright de los paquetes instalados bajo /usr/share/doc; [Rust copyright](https://github.com/rust-lang/rust/blob/master/COPYRIGHT), [QEMU licencia](https://www.qemu.org/docs/master/about/license.html). Las condiciones concretas de un futuro paquete distribuido se revisan antes de publicarlo.
+External component review sources: LICENSE from the hash-verified Limine archive; installed package metadata and copyright under /usr/share/doc; [Rust copyright](https://github.com/rust-lang/rust/blob/master/COPYRIGHT), [QEMU license](https://www.qemu.org/docs/master/about/license.html). The specific terms of a future distributed package are reviewed before publication.
 
-## Contratos propios de #34
+## Original #34 contracts
 
-`rustic-abi` 0.1.0 es una crate original de este repositorio bajo Apache-2.0, sin dependencias externas ni unsafe. Contiene constantes de procesos/IPC y errores; la usa el kernel y la reutilizará el SDK. Cargo.lock solo añade esa dependencia por ruta: las versiones/checksums de limine y bitflags permanecen iguales. Los avisos existentes de la imagen siguen siendo suficientes; no se incorpora material de terceros nuevo.
+`rustic-abi` 0.1.0 is an original crate in this repository under Apache-2.0, without external dependencies or unsafe code. It contains process/IPC constants and errors; the kernel uses it and the SDK will reuse it. Cargo.lock adds only that path dependency: limine and bitflags versions/checksums remain unchanged. Existing image notices remain sufficient; no new third-party material is included.

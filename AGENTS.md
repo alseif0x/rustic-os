@@ -1,29 +1,31 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Instrucciones para trabajar en RusticOS
+# Working on RusticOS
 
-Estas reglas aplican a todo el repositorio. El propietario exige Rust modular y submodular con separación de responsabilidades.
+These rules apply throughout the repository. The owner requires modular Rust with submodules and separation of responsibilities.
 
-## Diseño e implementación
+## Design and implementation
 
-- Organizar por responsabilidad y límites de confianza: boot, arquitectura, memoria, procesos, IPC, drivers y servicios. Crear submódulos cuando haya conceptos independientes; no llenar un archivo con subsistemas distintos.
-- main.rs y lib.rs son puntos de entrada/composición. mod.rs o el archivo raíz del módulo declara estructura, API pública y coordinación mínima; no acumula implementación de subsistemas.
-- Mantener detalles privados por defecto. Usar pub(super) o pub(crate) cuando baste; exponer una API pública pequeña con tipos y errores definidos.
-- Dependencias acíclicas y dirigidas. El kernel no depende del SDK de usuario, modelo, MCP, GUI o herramientas del anfitrión. Los contratos compartidos no importan implementaciones.
-- Separar mecanismo de política: el kernel aplica memoria/handles/aislamiento; servicios deciden políticas de producto sobre esa autoridad.
-- Encapsular instrucciones de CPU, MMIO/port I/O y unsafe en módulos estrechos; documentar invariantes de validez, propiedad, duración y concurrencia.
-- Evitar módulos utils/common que mezclen responsabilidades, gestores que conozcan todo y estado global mutable sin propietario. El estado de cada subsistema tiene un dueño y reglas de acceso explícitos.
-- Extraer una crate cuando exista una frontera útil de reutilización, plataforma, confianza o compilación. No crear una crate por archivo ni abstracciones/traits sin una necesidad real.
-- Separar código del anfitrión (construcción/pruebas) del código del invitado. No introducir std accidentalmente en el kernel no_std.
-- Dividir por cohesión y motivos de cambio, no por un límite arbitrario de líneas. No crear árboles vacíos para funcionalidades futuras.
-- Un núcleo monolítico puede compartir espacio privilegiado y seguir siendo modular en código. La modularidad no acredita aislamiento de sus drivers.
+- Organize by responsibility and trust boundary: boot, architecture, memory, processes, IPC, drivers and services. Create submodules for independent concepts; do not place unrelated subsystems in one file.
+- `main.rs` and `lib.rs` are entry and composition points. `mod.rs` or the module root declares structure, public API and minimal coordination; it must not accumulate subsystem implementations.
+- Keep details private by default. Use `pub(super)` or `pub(crate)` where sufficient; expose a small public API with defined types and errors.
+- Keep dependencies directed and acyclic. The kernel must not depend on the user SDK, a model, MCP, GUI or host tools. Shared contracts must not import implementations.
+- Separate mechanism from policy: the kernel enforces memory, handles and isolation; services make product policy decisions within that authority.
+- Encapsulate CPU instructions, MMIO/port I/O and `unsafe` in narrow modules; document validity, ownership, lifetime and concurrency invariants.
+- Avoid `utils`/`common` modules that mix responsibilities, managers that know everything, and mutable global state without an owner. Each subsystem's state has an explicit owner and access rules.
+- Extract a crate when there is a useful reuse, platform, trust or compilation boundary. Do not create one crate per file or abstractions/traits without a real need.
+- Separate host code for builds/tests from guest code. Do not accidentally introduce `std` into the `no_std` kernel.
+- Split by cohesion and reasons for change, not an arbitrary line limit. Do not create empty trees for future functionality.
+- A monolithic kernel can share privileged address space while remaining modular in code. Modularity does not establish driver isolation.
 
-## Revisión y validación
+## Review and validation
 
-En cada cambio Rust comprobar responsabilidad de módulos, dirección de dependencias, visibilidad, propiedad de estado y nuevas fronteras unsafe. Añadir pruebas de comportamiento/fallos en la capa que posee el contrato; evitar pruebas que solo repitan la implementación.
+For every Rust change, review module responsibilities, dependency direction, visibility, state ownership and new `unsafe` boundaries. Add behavior/failure tests in the layer that owns the contract; avoid tests that merely repeat the implementation.
 
-Ejecutar formato, lints y pruebas que estén configurados y sean adecuados al cambio. Hasta que #4 los establezca, no inventar comandos exitosos. El arranque, los contratos y la autoridad tienen validaciones distintas; un mock del host no demuestra ejecución en RusticOS.
+Run configured formatting, lints and tests appropriate to the change. Use the commands established in [the development guide](docs/DEVELOPMENT.md); never invent successful results. Boot, contracts and authority require different validation; a host mock does not demonstrate execution in RusticOS.
 
-## Plan y alcance
+## Plan and scope
 
-Consultar docs/requirements-v0.1.md, docs/architecture/ADR-0001-kernel-and-boot.md y la issue activa. Conservar trazabilidad al revisar decisiones. No declarar capacidades implementadas ni cerrar pruebas por existir documentación. Seguir CONTRIBUTING.md y docs/LICENSING.md para procedencia y avisos.
+Consult `docs/requirements-v0.1.md`, `docs/architecture/ADR-0001-kernel-and-boot.md` and the active issue. Preserve traceability when revising decisions. Do not claim capabilities are implemented or close tests merely because documentation exists. Follow `CONTRIBUTING.md` and `docs/LICENSING.md` for provenance and notices.
+
+Write maintained documentation and contribution templates in English. Preserve protocol identifiers, commands, source references and historical evidence when translating.

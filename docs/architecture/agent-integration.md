@@ -1,128 +1,129 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Integración de agentes: contratos nativos y adaptadores
+# Agent integration: native contracts and adapters
 
-Fecha: 2026-09-09. Estado: propuesta técnica investigada, pendiente de contratos ejecutables y mediciones en #6/#43. No es una ABI aprobada ni funcionalidad implementada.
+Date: 2026-09-09. Status: researched technical proposal, pending executable contracts and measurements in #6/#43. This is not an approved ABI or implemented functionality. Kernel IPC was subsequently implemented in #34; the product integration and adapter experiments below remain proposed.
 
-## Conclusión y alcance
+## Conclusion and scope
 
-RusticOS debe ofrecer servicios estructurados a personas, aplicaciones y agentes. MCP será un adaptador de interoperabilidad, no el protocolo obligatorio del kernel, de las aplicaciones o del piloto integrado. La ventaja de producto es poder descubrir capacidades reales, operar recursos y verificar efectos sin interpretar píxeles. Una API HTTP por cada syscall no consigue ese objetivo.
+RusticOS should provide structured services to people, applications and agents. MCP will be an interoperability adapter, not a mandatory protocol for the kernel, applications or integrated agent. The product advantage is discovering real capabilities, operating on resources and verifying effects without interpreting pixels. An HTTP API for every syscall does not achieve that goal.
 
-La separación por capas estaba en #1/#6/#22/#23/#39, pero faltaban métodos concretos y una comparación de las rutas. Además, #39 imponía HTTPS aun cuando un cliente local podría usar stdio. Esta revisión concreta el trabajo y corrige esa dependencia.
+Layer separation existed in #1/#6/#22/#23/#39, but concrete methods and a comparison of paths were missing. Also, #39 required HTTPS even when a local client could use stdio. This review makes the work concrete and corrects that dependency.
 
-## Capas propuestas
+## Proposed layers
 
-| Capa | Responsabilidad | Elección propuesta |
+| Layer | Responsibility | Proposed choice |
 | --- | --- | --- |
-| Kernel/IPC (#3/#34) | Aislamiento, handles con derechos, canales, espera, límites | ABI explícita y mensajes acotados; decidir codificación y transferencia de handles con pruebas de portabilidad. |
-| Servicios/SDK (#6/#11/#13) | Recursos, métodos tipados, estados, eventos y autoridad efectiva | Contratos versionados; una implementación de cada servicio compartida por CLI, GUI y tools. |
-| Herramientas (#22) | Acciones comprensibles para agentes, selección contextual y resultados comprobables | Catálogo nativo con entradas/salidas estructuradas y adaptaciones revisadas de los contratos. |
-| Piloto integrado (#23) | Bucle de observación, llamada al modelo, ejecución autorizada y verificación | Ejecutar localmente las llamadas estructuradas del modelo mediante el catálogo nativo. |
-| Clientes externos (#39) | Interoperabilidad con hosts de agentes | MCP con versión y transporte probados contra un cliente independiente. |
-| Integraciones adicionales | Clientes convencionales o delegación a agentes independientes | Evaluar HTTP/OpenAPI, gRPC o A2A solo cuando exista un consumidor y una necesidad medible. |
+| Kernel/IPC (#3/#34) | Isolation, handles with rights, channels, waits, limits | Explicit ABI and bounded messages; decide encoding and handle transfer through portability tests. |
+| Services/SDK (#6/#11/#13) | Resources, typed methods, states, events and effective authority | Versioned contracts; one service implementation shared by CLI, GUI and tools. |
+| Tools (#22) | Agent-understandable actions, contextual selection and verifiable results | Native catalog with structured inputs/outputs and reviewed contract adaptations. |
+| Integrated agent (#23) | Observation loop, model calls, authorized execution and verification | Execute structured model calls locally through the native catalog. |
+| External clients (#39) | Interoperability with agent hosts | MCP version and transport tested against an independent client. |
+| Additional integrations | Conventional clients or delegation to independent agents | Evaluate HTTP/OpenAPI, gRPC or A2A only when there is a consumer and measurable need. |
 
-El registro permite descubrir servicios, pero no debe convertirse necesariamente en un proxy por el que pase todo byte del SO. Separar el control (comandos, permisos, estados) de los datos voluminosos (archivos, imágenes, vídeo): streams o handles autorizados y acotados, sin copiar todo al contexto del modelo.
+The registry enables service discovery, but need not become a proxy for every OS byte. Separate control (commands, permissions, state) from bulk data (files, images, video): use authorized, bounded streams or handles instead of copying everything into the model context.
 
-Fuchsia muestra una separación entre definiciones tipadas, bindings y canales IPC; inspira el diseño, sin implicar portar FIDL completo. D-Bus aporta patrones de introspección, propiedades, eventos y versionado. [FIDL](https://fuchsia.dev/fuchsia-src/concepts/fidl/overview), [diseño de APIs D-Bus](https://dbus.freedesktop.org/doc/dbus-api-design.html).
+Fuchsia illustrates separation between typed definitions, bindings and IPC channels; it informs the design without implying a full FIDL port. D-Bus contributes introspection, property, event and versioning patterns. [FIDL](https://fuchsia.dev/fuchsia-src/concepts/fidl/overview), [D-Bus API design](https://dbus.freedesktop.org/doc/dbus-api-design.html).
 
-gRPC ofrece contratos de servicio y llamadas simples o streaming. Es una alternativa a estudiar para clientes que lo requieran; su utilidad no demuestra que su runtime sea la mejor base para un SO nuevo. [Conceptos de gRPC](https://grpc.io/docs/what-is-grpc/core-concepts/).
+gRPC provides service contracts and unary/streaming calls. It is an alternative to investigate for clients that require it; usefulness does not establish that its runtime is the best foundation for a new OS. [gRPC concepts](https://grpc.io/docs/what-is-grpc/core-concepts/).
 
-## Cómo se conecta el agente
+## How the agent connects
 
-1. El piloto obtiene las herramientas disponibles y permitidas para su sesión.
-2. Envía al modelo solo descriptores relevantes y el contexto autorizado.
-3. El modelo devuelve nombre y argumentos estructurados.
-4. El ejecutor local valida esquema, límites y delegación; el servicio vuelve a comprobar la autoridad al actuar.
-5. El servicio devuelve resultado o identificador de operación.
-6. El piloto consulta estado/evidencia y decide el siguiente paso dentro del presupuesto.
+1. The integrated agent obtains tools available and permitted for its session.
+2. It sends the model only relevant descriptors and authorized context.
+3. The model returns a name and structured arguments.
+4. The local executor validates schema, limits and delegation; the service checks authority again when acting.
+5. The service returns a result or operation identifier.
+6. The agent inspects state/evidence and chooses the next step within its budget.
 
-Este flujo permite que la inferencia sea remota mientras el ejecutor vive dentro de RusticOS; no requiere publicar un servidor entrante del SO. Es una elección de arquitectura basada en el flujo documentado de function calling, donde la aplicación ejecuta el código. [OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling).
+This flow allows remote inference while the executor lives inside RusticOS; it does not require exposing an inbound OS server. This architectural choice follows the documented function-calling flow in which the application executes code. [OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling).
 
-Un cliente externo puede usar MCP para llegar al mismo catálogo. La especificación consultada distingue stdio y Streamable HTTP. Elegir stdio no resuelve por sí solo cruzar anfitrión/invitado: si el cliente corre fuera de la VM, hace falta un puente definido y autorizado. Para HTTP remoto se añaden #16/#17, autenticación y el alcance de exposición. No crear transportes personalizados salvo necesidad demostrada. [Transportes MCP 2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports).
+An external client can use MCP to reach the same catalog. The consulted specification distinguishes stdio and Streamable HTTP. Choosing stdio does not itself solve host/guest crossing: if the client runs outside the VM, a defined, authorized bridge is required. Remote HTTP adds #16/#17, authentication and exposure scope. Do not create custom transports without a demonstrated need. [MCP 2026-07-28 transports](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports).
 
-Hay que fijar versión de protocolo y comprobar compatibilidad real de SDK/cliente, no seguir automáticamente latest. Las conexiones MCP administradas por proveedores pueden admitir transportes distintos de los de un host local. [OpenAI MCP](https://developers.openai.com/api/docs/guides/tools-connectors-mcp).
+Pin the protocol version and test actual SDK/client compatibility rather than automatically following latest. Provider-managed MCP connections may support different transports from a local host. [OpenAI MCP](https://developers.openai.com/api/docs/guides/tools-connectors-mcp).
 
-A2A trata la colaboración entre agentes independientes y sus tareas; no sustituye las APIs de archivos, procesos o ventanas. Queda como opción futura, sin nueva dependencia de v0.1. [A2A y MCP](https://a2a-protocol.org/dev/topics/a2a-and-mcp/).
+A2A addresses collaboration among independent agents and their tasks; it does not replace file, process or window APIs. It remains a future option, without a new v0.1 dependency. [A2A and MCP](https://a2a-protocol.org/dev/topics/a2a-and-mcp/).
 
-## Primer contrato vertical propuesto
+## First proposed vertical contract
 
-Nombres lógicos provisionales, no URLs ni syscalls finales. Las ocho operaciones deben existir primero en un backend determinista (#43), después contra servicios reales (#22). Los fixtures pueden precrear el workspace y el archivo: esto no pretende ser todavía una API de archivos completa.
+Provisional logical names, not final URLs or syscalls. The eight operations must exist first in a deterministic backend (#43), then against real services (#22). Fixtures may precreate the workspace and file: this is not yet intended as a complete file API.
 
-| Método | Entrada principal | Salida observable |
+| Method | Main input | Observable output |
 | --- | --- | --- |
-| capabilities.list | filtro, cursor, límite | capacidades visibles, versión, disponibilidad, cursor siguiente |
-| capabilities.describe | capability_id, versión soportada | esquema, efectos, permisos requeridos, límites |
-| files.read | workspace_id, resource_id, rango acotado | contenido, versión, hash, truncamiento explícito |
-| files.replace | workspace_id, resource_id, expected_version, contenido acotado, idempotency_key | operación o recibo con nueva versión y hash |
-| operations.get | operation_id | estado, progreso, efectos conocidos, evidencia |
-| operations.cancel | operation_id | solicitud de cancelación aceptada/rechazada; estado actual |
-| events.read | ámbito, cursor, límite, espera máxima | cambios autorizados, cursor o indicación de resincronización |
-| system.status | selección de campos | salud y perfil/capacidades activos, instante de observación |
+| capabilities.list | filter, cursor, limit | visible capabilities, version, availability, next cursor |
+| capabilities.describe | capability_id, supported version | schema, effects, required permissions, limits |
+| files.read | workspace_id, resource_id, bounded range | content, version, hash, explicit truncation |
+| files.replace | workspace_id, resource_id, expected_version, bounded content, idempotency_key | operation or receipt with new version and hash |
+| operations.get | operation_id | status, progress, known effects, evidence |
+| operations.cancel | operation_id | accepted/rejected cancellation request; current status |
+| events.read | scope, cursor, limit, maximum wait | authorized changes, cursor or resynchronization indication |
+| system.status | selected fields | health and active profile/capabilities, observation time |
 
-Ejemplo de argumentos de files.replace:
+Example files.replace arguments:
 
 ```json
 {
   "workspace_id": "ws-demo",
   "resource_id": "file-demo",
   "expected_version": "v7",
-  "content_utf8": "Hola RusticOS\n",
+  "content_utf8": "Hello RusticOS\n",
   "idempotency_key": "mission-demo-step-2"
 }
 ```
 
-La identidad y los derechos no son argumentos que el modelo pueda inventar: vienen de la sesión/handles autenticados. Los identificadores son referencias, no permisos. Resolver y autorizar el recurso dentro de su workspace; comprobar precondición y cambio de forma atómica en el servicio.
+Identity and rights are not arguments the model can invent: they come from authenticated sessions/handles. Identifiers are references, not permissions. Resolve and authorize the resource within its workspace; check the precondition and apply the change atomically in the service.
 
-Una aceptación asíncrona devuelve operation_id; una operación finalizada devuelve estado, resource_id, versión/hash y referencia de auditoría. La misión verifica el resultado mediante files.read y la versión/hash esperadas. Nunca deduce éxito únicamente del texto producido por el modelo.
+Asynchronous acceptance returns operation_id; a completed operation returns status, resource_id, version/hash and an audit reference. The mission verifies the result through files.read and the expected version/hash. It never infers success solely from model-generated text.
 
-## Semántica que hay que cerrar antes de ampliar el catálogo
+## Semantics to settle before expanding the catalog
 
-- Esquemas de entrada/salida con límites de tamaño, profundidad, rangos y campos permitidos; documentación de efectos y errores.
-- Estado de ejecución: queued, running, succeeded, failed o cancelled. Distinguir cancel_requested del resultado final. Una desconexión puede dejar al cliente sin conocer el desenlace: reconciliar mediante operation_id/clave antes de repetir.
-- Idempotencia por identidad, ámbito y clave; definir periodo de retención. Misma clave con argumentos distintos produce conflicto. No prometer exactamente una vez para efectos externos.
-- Cancelar detiene trabajo cuando sea posible; no implica deshacer efectos ya confirmados. Reportar efectos parciales y posibilidades reales de compensación.
-- Errores distinguibles: invalid_argument, permission_denied, not_found, version_conflict, unavailable, resource_exhausted; indicar posibilidad de reintento sin filtrar recursos ajenos.
-- Eventos paginados, cursor, retención acotada, backpressure y resincronización tras pérdida. No prometer registro eterno ni entrega exactamente una vez.
-- Presupuestos de tiempo, resultados y recursos. Los timeouts de transporte no equivalen a fallo de la operación.
-- Fuente contractual canónica con generación/validación de descriptores. JSON Schema es candidato práctico para la frontera de tools; no representa por sí solo transferencia de handles del kernel. Documentar explícitamente la correspondencia con tipos del IPC, bytes, enteros y versiones.
-- Descubrimiento por tarea y sesión: no enviar cientos de tools a cada petición del modelo ni confundir una capacidad disponible con una autorizada.
-- Autoridad en servicios/kernel, políticas explícitas y revocación. MCP describe intercambios; no puede hacer cumplir por sí mismo la autoridad del SO. [Especificación MCP](https://modelcontextprotocol.io/specification/2026-07-28).
+- Input/output schemas with limits on size, depth, ranges and allowed fields; documented effects and errors.
+- Execution states: queued, running, succeeded, failed or cancelled. Distinguish cancel_requested from the final result. A disconnection may leave the client unaware of the outcome: reconcile through operation_id/key before retrying.
+- Idempotency scoped by identity, scope and key; define retention. The same key with different arguments produces a conflict. Do not promise exactly-once external effects.
+- Cancellation stops work where possible; it does not undo already committed effects. Report partial effects and actual compensation options.
+- Distinguishable errors: invalid_argument, permission_denied, not_found, version_conflict, unavailable, resource_exhausted; indicate retryability without leaking other owners' resources.
+- Paginated events, cursors, bounded retention, backpressure and resynchronization after loss. Do not promise an eternal log or exactly-once delivery.
+- Time, result and resource budgets. Transport timeouts do not equal operation failure.
+- A canonical contract source with descriptor generation/validation. JSON Schema is a practical candidate for the tool boundary; it does not itself represent kernel handle transfer. Explicitly document mappings to IPC types, bytes, integers and versions.
+- Discovery by task and session: do not send hundreds of tools on every model request or confuse an available capability with an authorized one.
+- Authority in services/kernel, explicit policies and revocation. MCP describes exchanges; it cannot enforce OS authority by itself. [MCP specification](https://modelcontextprotocol.io/specification/2026-07-28).
 
-## Expansión por producto
+## Expansion by product area
 
-| Familia | Operaciones a diseñar | Responsable |
+| Family | Operations to design | Owning issues |
 | --- | --- | --- |
-| Archivos/workspaces | listar, crear, mover, eliminar, patch y versiones | #6/#12/#25 |
-| Procesos y servicios | listar, iniciar, consultar, detener; estado y reinicio | #6/#10/#13 |
-| Configuración y adaptación | consultar, validar, previsualizar y aplicar; explicar degradación | #6/#38 |
-| Escritorio/aplicaciones | listar ventanas, activar, acciones semánticas, accesibilidad y captura seleccionada | #40 |
-| Navegador | navegar, consultar contenido seleccionado, identificar elementos y actuar con estado verificable | #41 |
-| Construcción/candidatas | enviar trabajo acotado, seguir pruebas, verificar y activar artefacto | #42/#26/#27 |
+| Files/workspaces | list, create, move, delete, patch and versions | #6/#12/#25 |
+| Processes and services | list, start, inspect, stop; health and restart | #6/#10/#13 |
+| Configuration and adaptation | inspect, validate, preview and apply; explain degradation | #6/#38 |
+| Desktop/applications | list windows, activate, semantic actions, accessibility and selected capture | #40 |
+| Browser | navigate, inspect selected content, identify elements and act with verifiable state | #41 |
+| Builds/candidates | submit bounded job, follow tests, verify and activate artifact | #42/#26/#27 |
 
-La cobertura de apps propias incluye acciones de producto y estados semánticos. Las apps ajenas solo tendrán la cobertura que permita su API/adaptador/accesibilidad; declarar dónde se necesita visión. No es realista prometer control semántico completo de cualquier binario externo.
+First-party app coverage includes product actions and semantic state. External apps only have the coverage supported by their API/adapter/accessibility; declare where vision is needed. Complete semantic control over every external binary is not a realistic promise.
 
-## Experimento de decisión (#43)
+## Decision experiment (#43)
 
-Comparar el mismo contrato y los mismos fixtures por:
-- cliente nativo de referencia;
-- adaptador de function calling con respuestas de modelo simuladas;
-- adaptador MCP mínimo en el anfitrión con cliente independiente.
+Compare the same contract and fixtures through:
 
-El prototipo de adaptadores es desechable y acotado; no requiere todos los servicios de RusticOS ni completa #23/#39. Mantener fijo payload, backend, hardware, versiones y carga. Medir latencia p50/p95, RAM, bytes por misión, número de llamadas y coste de integración. Separar tiempo de transporte del tiempo de inferencia; este último no se mide con simulación.
+- A reference native client.
+- A function-calling adapter with simulated model responses.
+- A minimal host MCP adapter with an independent client.
 
-Pruebas obligatorias: misión correcta, denegación, revocación, argumentos inválidos, conflicto concurrente, reintento tras perder respuesta, cancelación con efectos parciales, paginación y cursor expirado. Una ruta que cambie permisos o declare éxito falso se descarta, aunque sea más rápida.
+The adapter prototype is disposable and bounded; it does not require all RusticOS services or complete #23/#39. Keep payload, backend, hardware, versions and load fixed. Measure p50/p95 latency, RAM, bytes per mission, call count and integration cost. Separate transport time from inference time; simulation does not measure the latter.
 
-Registrar candidatos IPC/codificación y requisitos de runtime; no extrapolar cifras del host a la VM. Fijar presupuestos de aceptación a partir de la línea base antes de seleccionar implementación. Repetir los casos en el invitado al cerrar #22/#39. La calidad de selección de herramientas por un modelo real se evalúa en #23, no con respuestas simuladas.
+Required tests: successful mission, denial, revocation, invalid arguments, concurrent conflict, retry after lost response, cancellation with partial effects, pagination and expired cursor. Reject any path that changes permissions or claims false success, even if it is faster.
 
-## Mejoras realistas
+Record IPC/encoding candidates and runtime requirements; do not extrapolate host measurements to the VM. Set acceptance budgets from the baseline before selecting an implementation. Repeat cases in the guest when closing #22/#39. Real-model tool-selection quality is evaluated in #23, not with simulated responses.
 
-- Especificación ejecutable antes de multiplicar endpoints: descubrir → leer → modificar con precondición → verificar, también bajo fallos.
-- Mapa de capacidades consultable que explique por qué una función está ausente, degradada o no autorizada cuando la política permita revelarlo.
-- Acciones de producto y árbol semántico de aplicaciones como parte del SDK; la GUI y el agente actúan sobre el mismo estado.
-- Previsualización de cambios para configuración y candidatas cuando sea realizable; no inventar dry-run perfecto para operaciones irreversibles.
-- Recibos estructurados y registro reproducible de misiones con datos sensibles omitidos; ampliar a replay en entornos desechables después.
-- Posponer A2A y adaptadores HTTP/gRPC adicionales hasta contar con un consumidor real. Reducir protocolos iniciales conserva recursos para kernel, drivers, SDK y navegador.
+## Realistic improvements
 
-## Decisiones pendientes
+- Executable specification before multiplying endpoints: discover → read → modify with a precondition → verify, including under failure.
+- Queryable capability map explaining why a feature is absent, degraded or unauthorized when policy allows disclosure.
+- Product actions and an application semantic tree as part of the SDK; GUI and agent act on the same state.
+- Change previews for configuration and candidates where feasible; do not invent a perfect dry-run for irreversible operations.
+- Structured receipts and reproducible mission records with sensitive data omitted; expand to replay in disposable environments later.
+- Defer A2A and additional HTTP/gRPC adapters until a real consumer exists. Fewer initial protocols preserve resources for the kernel, drivers, SDK and browser.
 
-#3/#34: IPC, ABI y codificación con medidas y portabilidad. #6: esquemas ejecutables y semántica definitiva. #39: pareja cliente/SDK, revisión MCP y transporte. #43: evidencia comparativa. No se afirma todavía que una biblioteca o transporte sea el mejor: esta propuesta fija las fronteras y cómo decidir.
+## Pending decisions
+
+#3/#34 assign IPC, ABI and encoding with measurements and portability; the initial kernel implementation is now documented in [IPC.md](../IPC.md). #6 owns executable schemas and final service semantics. #39 owns client/SDK pairing, MCP revision and transport. #43 owns comparative evidence. No library or transport is yet claimed to be best for the product integration: this proposal establishes the boundaries and how to decide.

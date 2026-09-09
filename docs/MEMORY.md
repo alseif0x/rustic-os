@@ -1,59 +1,60 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
-# Memoria física, virtual y protecciones — #9
 
-## Alcance R0
+# Physical memory, virtual memory and protections — #9
 
-El kernel asigna y libera marcos físicos de 4 KiB, construye tablas de páginas propias y cambia entre espacios de direcciones con datos independientes. La base sigue siendo x86_64, cuatro niveles de paginación, una CPU y QEMU q35/TCG con 256 MiB. Se rechazan LA57, PCID y CPU sin NX. No hay nuevas dependencias Cargo ni cambio de toolchain.
+## R0 scope
 
-El asignador mínimo tiene granularidad de página. No hay aún `GlobalAlloc`, `Box`, heap de tamaños variables, swapping o NUMA. Las pruebas propias de este subsistema cambian CR3 en ring 0; #10 añade por separado [procesos y planificación con pruebas en ring 3](PROCESSES.md).
+The kernel allocates and frees 4 KiB physical frames, builds owned page tables and switches between address spaces with independent data. The baseline remains x86_64, four-level paging, one CPU and QEMU q35/TCG with 256 MiB. LA57, PCID and CPUs without NX are rejected. No new Cargo dependencies or toolchain change are introduced.
 
-## Responsabilidades y propiedad
+The minimal allocator operates at page granularity. There is no `GlobalAlloc`, `Box`, variable-size heap, swapping or NUMA yet. This subsystem's own tests switch CR3 in ring 0; #10 separately adds [processes and scheduling tested in ring 3](PROCESSES.md).
 
-| Módulo | Responsabilidad |
+## Responsibilities and ownership
+
+| Module | Responsibility |
 | --- | --- |
-| `memory/frames.rs` de la biblioteca | Inventario, reservas, asignación y liberación por bitmaps, sin punteros ni CPU |
-| `memory/page.rs` de la biblioteca | Direcciones virtuales válidas y política de permisos |
-| `arch/x86_64/memory/physical.rs` | Propietario único de bitmaps, marcos y acceso crudo por HHDM |
-| `cpu.rs` | CR0.WP, EFER.NXE, CR3 e invalidación de traducciones |
-| `tables.rs` | Recorrido de tablas, permisos efectivos y división de hojas grandes |
-| `bootstrap.rs` | Copia privada de tablas del cargador y protección del kernel/alias |
-| `space.rs` | Ciclo de vida de raíces, mapeo, desmapeo y devolución de recursos |
-| `memory/tests/` de arquitectura | Asignación, agotamiento, espacios, hojas grandes y fallos deliberados |
-| `boot/limine.rs` | Traduce respuestas del cargador a valores propios; no filtra tipos Limine al asignador |
+| Library `memory/frames.rs` | Inventory, reservations, bitmap allocation and release, without pointers or CPU access |
+| Library `memory/page.rs` | Valid virtual addresses and permission policy |
+| `arch/x86_64/memory/physical.rs` | Sole owner of bitmaps, frames and raw HHDM access |
+| `cpu.rs` | CR0.WP, EFER.NXE, CR3 and translation invalidation |
+| `tables.rs` | Table walking, effective permissions and splitting large leaves |
+| `bootstrap.rs` | Private copy of loader tables and kernel/alias protection |
+| `space.rs` | Root lifecycle, mapping, unmapping and resource return |
+| Architecture `memory/tests/` | Allocation, exhaustion, spaces, large leaves and deliberate faults |
+| `boot/limine.rs` | Translates loader responses into owned values; no Limine types leak into the allocator |
 
-`Memory` posee el asignador físico y la raíz de kernel; los espacios secundarios dependen de que esa raíz y sus tablas superiores sigan vivas. El token es local a una CPU. No se asigna ni libera memoria en handlers de IRQ/NMI, y los métodos requieren acceso exclusivo al propietario. Este modelo no sustituye locks/SMP ni autoriza asignación concurrente desde interrupciones. No se exponen referencias Rust a páginas que puedan invalidarse al cambiar de espacio.
+`Memory` owns the physical allocator and kernel root; secondary spaces require that root and its upper tables to stay alive. The token is CPU-local. IRQ/NMI handlers do not allocate or free memory, and methods require exclusive access to the owner. This model does not replace locks/SMP or authorize concurrent interrupt allocation. No Rust references are exposed to pages that address-space switches could invalidate.
 
-## Inventario y reservas
+## Inventory and reservations
 
-Dos bitmaps estáticos de 32 KiB registran marcos administrables y marcos asignados: 64 KiB de metadatos para direcciones físicas inferiores a 1 GiB. Ese es un límite explícito del corte, no una promesa de soporte probado para una máquina de 1 GiB. Una región usable que lo sobrepase se rechaza antes de importarla; no se ignora silenciosamente. Ampliarlo requiere revisar metadatos, direcciones, presupuestos y pruebas.
+Two static 32 KiB bitmaps track manageable and allocated frames: 64 KiB of metadata for physical addresses below 1 GiB. This is an explicit implementation limit, not a claim of tested support for a 1 GiB machine. A usable region exceeding it is rejected before import, not silently ignored. Raising it requires reviewing metadata, addresses, budgets and tests.
 
-Se valida completamente el mapa antes de importar páginas. Solo entran páginas completas de regiones `USABLE`; cualquier tipo desconocido, firmware, ACPI, ejecutable/módulos o memoria del cargador queda excluido. Se reserva además el primer MiB y la extensión física completa del ELF, obtenida de la respuesta de dirección del ejecutable y de símbolos del linker. Las reservas redondean hacia fuera; las regiones usables se redondean hacia dentro. Se rechazan liberación doble, direcciones desalineadas, marcos no administrados y reservas de marcos en uso.
+The entire map is validated before pages are imported. Only whole pages from `USABLE` regions are included; unknown types, firmware, ACPI, executable/modules and loader memory are excluded. The first MiB and the full ELF physical extent are also reserved, using the executable-address response and linker symbols. Reservations round outward; usable regions round inward. Double frees, unaligned addresses, unmanaged frames and reservation of in-use frames are rejected.
 
-El cargador sigue siendo de confianza. Sus tablas, respuestas y pila de arranque permanecen reservadas aunque ya existan tablas propias. La semántica de `USABLE`, HHDM y la dirección física del ejecutable se toma de la [revisión fijada del protocolo Limine](https://github.com/limine-bootloader/limine-protocol/blob/da65184e91f80fcb397270121b1e2515a11e01ee/PROTOCOL.md). El validador R0 exige mapa ordenado y sin solapamientos, incluso para regiones reservadas: puede rechazar mapas que otra plataforma pudiera admitir; no se acredita compatibilidad universal.
+The loader remains trusted. Its tables, responses and boot stack stay reserved even after owned tables exist. `USABLE`, HHDM and executable physical-address semantics follow the [pinned Limine protocol revision](https://github.com/limine-bootloader/limine-protocol/blob/da65184e91f80fcb397270121b1e2515a11e01ee/PROTOCOL.md). The R0 validator requires a sorted, nonoverlapping map, including reserved regions: it may reject maps another platform could accept; universal compatibility is not established.
 
-Agotar el inventario devuelve un error tipado y conserva el estado. Se limpia una página completa antes de exponerla en otro mapeo o espacio. No se ejecuta una búsqueda interminable, no se roba memoria reservada y no se sustituye el fallo por una dirección nula.
+Inventory exhaustion returns a typed error and preserves state. A whole page is cleared before exposure through another mapping or space. The allocator does not search indefinitely, steal reserved memory or substitute a null address for failure.
 
-## Tablas y permisos
+## Tables and permissions
 
-Antes de activar una raíz propia se copian recursivamente las tablas superiores del cargador en marcos nuevos. Se vacía la mitad inferior, se retira el acceso de usuario de todos los mapeos heredados y se deshabilita la ejecución por defecto. Se mantienen las direcciones superiores necesarias para código, pila, IRQ, TSS y HHDM. La raíz y todos sus descendientes son propios; no se modifican las tablas del cargador.
+Before activating an owned root, the loader's upper tables are recursively copied into new frames. The lower half is cleared, user access is removed from all inherited mappings and execution is disabled by default. Upper addresses needed for code, stack, IRQ, TSS and HHDM are retained. The root and all descendants are owned; loader tables are not modified.
 
-Los símbolos del linker delimitan código, datos de solo lectura, datos modificables y final del ELF. El código queda RO/X; datos constantes y peticiones quedan RO/NX; datos modificables, bitmaps y tablas quedan RW/NX. Los alias HHDM del código y los datos constantes también son de solo lectura y no ejecutables. Sin esa protección de alias, otra dirección permitiría modificar el mismo código físico. La pila de emergencia de #33 conserva 16 KiB utilizables y añade una página de guarda, desmapeada tanto en la dirección del kernel como en HHDM. La pila de arranque heredada no gana una guarda en este corte.
+Linker symbols delimit code, read-only data, writable data and the ELF end. Code becomes RO/X; constants and requests RO/NX; writable data, bitmaps and tables RW/NX. HHDM aliases of code and constants are also read-only and nonexecutable. Without alias protection, another address could modify the same physical code. The #33 emergency stack retains 16 KiB usable space and gains a guard page, unmapped at both its kernel address and HHDM alias. The inherited boot stack does not gain a guard in this increment.
 
-Cuando hace falta granularidad de 4 KiB, se dividen las hojas heredadas grandes conservando direcciones y atributos de caché, incluida la distinta posición de PAT. El caso de 1 GiB se comprueba estructuralmente mediante una raíz sintética que nunca se activa; no se acredita ejecución de esa hoja en el CPU de referencia. El arranque y los accesos reales verifican los mapeos usados por R0.
+Where 4 KiB granularity is needed, inherited large leaves are split while preserving addresses and cache attributes, including PAT's different bit position. The 1 GiB case is checked structurally through a synthetic root that is never activated; execution of that leaf on the reference CPU is not established. Boot and real accesses verify the mappings R0 uses.
 
-Se habilitan CR0.WP y EFER.NXE y se comprueba NX en CPUID. PGE queda deshabilitado y las tablas nuevas no crean entradas globales. Cambiar CR3 e invalidar traducciones respeta las reglas de paginación del volumen 3 del [Intel SDM](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html). Los accesos crudos a tablas están acotados a páginas residentes y entradas alineadas; las operaciones no crean referencias Rust que puedan aliasar las modificaciones A/D del hardware.
+CR0.WP and EFER.NXE are enabled and CPUID is checked for NX. PGE remains disabled and new tables create no global entries. CR3 switching and translation invalidation follow volume 3 of the [Intel SDM](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html). Raw table accesses are bounded to resident pages and aligned entries; operations create no Rust references that could alias hardware A/D updates.
 
-## Asignación virtual y espacios
+## Virtual allocation and spaces
 
-Los mapeos nuevos se restringen a páginas alineadas de la mitad canónica inferior, excluyendo la página nula. La API asigna sus propios marcos; no permite que un solicitante elija un marco del kernel. Rechaza mapeos duplicados y permisos simultáneamente escribibles/ejecutables. El bit de usuario solo se concede en esas páginas nuevas, con permisos efectivos calculados a través de todos los niveles.
+New mappings are restricted to aligned pages in the lower canonical half, excluding the null page. The API allocates its own frames; callers cannot choose a kernel frame. It rejects duplicate mappings and simultaneously writable/executable permissions. User access is granted only on these new pages, with effective permissions calculated through all levels.
 
-Una asignación que agota memoria durante la creación de tablas elimina las entradas añadidas y devuelve todos los marcos de esa operación. Desmapear invalida la traducción activa antes de reutilizar el marco, retira tablas vacías y recarga la raíz para invalidar también las cachés de recorrido. No existen otros CPUs que necesiten un TLB shootdown; introducirlos exige otra política de sincronización.
+An allocation that exhausts memory while creating tables removes added entries and returns every frame acquired by that operation. Unmapping invalidates the active translation before frame reuse, removes empty tables and reloads the root to invalidate paging-structure caches as well. No other CPUs need a TLB shootdown; introducing them requires another synchronization policy.
 
-Los espacios secundarios comparten las tablas superiores del kernel y poseen su raíz, tablas inferiores y páginas de datos. Las tablas superiores quedan fijas tras el bootstrap; no se proporciona una API para mutarlas después. Destruir un espacio inactivo devuelve sus recursos inferiores y raíz, nunca las tablas superiores compartidas. Se rechaza destruir el espacio activo o la raíz del kernel. La destrucción es explícita; #10 la vincula a la recogida del proceso terminado. No se implementa todavía conteo de referencias, páginas compartidas, copy-on-write ni un recolector de espacios abandonados.
+Secondary spaces share the kernel's upper tables and own their root, lower tables and data pages. Upper tables remain fixed after bootstrap; no API is provided to mutate them afterward. Destroying an inactive space returns its lower resources and root, never shared upper tables. Destroying the active space or kernel root is rejected. Destruction is explicit; #10 connects it to reaping an exited process. Reference counting, shared pages, copy-on-write and collection of abandoned spaces are not implemented.
 
-Si falla la construcción inicial de tablas, el arranque termina con diagnóstico antes de activar la nueva raíz. Esa ruta terminal no intenta continuar como un kernel parcialmente inicializado. La reversión y recuperación de recursos se comprueban para las operaciones ordinarias posteriores.
+If initial table construction fails, boot ends with diagnostics before the new root is activated. That terminal path does not attempt to continue as a partly initialized kernel. Rollback and resource recovery are checked for ordinary subsequent operations.
 
-## Pruebas y evidencia
+## Tests and evidence
 
 ```sh
 cargo xtask check
@@ -63,20 +64,20 @@ python3 tools/sandbox.py prepare
 python3 tools/sandbox.py test --revision "$(git rev-parse HEAD)"
 ```
 
-`ok` exige que las pruebas de IRQ y memoria terminen antes de SUCCESS. Las pruebas de memoria realizan 16 ciclos de mapeo/escritura/desmapeo, rechazan duplicados y W+X, comprueban código/rodata/alias/guarda, crean dos espacios con la misma dirección virtual y marcos distintos, alternan CR3 y verifican sus datos, rechazan destruir el activo y devuelven sus recursos. Una prueba estructural comprueba la división 1 GiB → 2 MiB → 4 KiB y PAT.
+`ok` requires IRQ and memory tests to finish before SUCCESS. Memory tests run 16 map/write/unmap cycles, reject duplicates and W+X, check code/rodata/aliases/guard, create two spaces with the same virtual address and different frames, alternate CR3 and verify their data, reject destruction of the active space and return resources. A structural test checks 1 GiB → 2 MiB → 4 KiB splitting and PAT.
 
-Después se agota el inventario físico real del invitado. La lista de marcos temporales se guarda dentro de ellos para evitar una gran reserva adicional de heap o pila. Se libera un único marco, se vuelve a obtener ese mismo marco y se comprueban sus 4 KiB limpios. Se dejan solo dos marcos libres y se intenta una asignación que necesita cuatro: debe fallar y devolver lo adquirido parcialmente. Finalmente se recupera exactamente el contador libre inicial.
+Next, the guest's real physical inventory is exhausted. The temporary frame list is stored within those frames to avoid a large additional heap or stack allocation. A single frame is freed, reacquired and checked for 4 KiB of zeroes. With only two free frames left, an allocation needing four must fail and return its partial acquisitions. Finally, the exact initial free counter is recovered.
 
-Cinco fixtures deben producir #PF (vector 14), CR2 igual a la dirección anunciada y el código concreto:
+Five fixtures must produce #PF (vector 14), CR2 matching the announced address and the specific error code:
 
-| Modo | Acceso deliberado | Error |
+| Mode | Deliberate access | Error |
 | --- | --- | --- |
-| `memory-ro` | Escribir página RO desde ring 0 | 0x3 |
-| `memory-nx` | Ejecutar una página NX | 0x11 |
-| `memory-unmapped` | Leer tras desmapear y liberar | 0x0 |
-| `memory-text-alias` | Escribir código mediante su alias HHDM | 0x3 |
-| `memory-guard` | Leer la guarda de la pila de emergencia | 0x0 |
+| `memory-ro` | Write an RO page from ring 0 | 0x3 |
+| `memory-nx` | Execute an NX page | 0x11 |
+| `memory-unmapped` | Read after unmapping and release | 0x0 |
+| `memory-text-alias` | Write code through its HHDM alias | 0x3 |
+| `memory-guard` | Read the emergency-stack guard | 0x0 |
 
-Se usan instrucciones de prueba explícitas, sin formar referencias Rust inválidas. Un acceso permitido por error acaba en UD2 y no satisface el resultado esperado. Un #DF, otra dirección, otro código o un timeout tampoco pasan como prueba de protección. Son fallos terminales de la VM de prueba; la supervivencia de un segundo proceso tras un fallo de aplicación se comprueba por separado en [#10](PROCESSES.md).
+Explicit test instructions are used without forming invalid Rust references. An incorrectly allowed access reaches UD2 and does not satisfy the expected result. A #DF, different address/code or timeout also fails the protection test. These are terminal test-VM faults; survival of a second process after an application fault is checked separately in [#10](PROCESSES.md).
 
-La suite directa tiene 13 escenarios y la aislada 17, conservando los anteriores de #8/#21/#33. Los resultados y logs quedan en los mismos directorios de evidencia; cada imagen conserva revisión, configuración y hashes. Una muestra inicial con 256 MiB registró 52.795 marcos administrados, 15 marcos de tablas propias y 52.780 libres antes y después del agotamiento; metadatos de 65.536 bytes. El arranque completo, con autopruebas, tardó unos 6,3 segundos. Son medidas de esa revisión/R0, no umbrales universales. La issue enlaza el commit y CI de cierre; revisión por el agente implementador, sin revisión independiente.
+The direct suite has 13 scenarios and the isolated suite 17, preserving previous #8/#21/#33 cases. Results and logs remain in the same evidence directories; each image retains revision, configuration and hashes. An initial 256 MiB sample recorded 52,795 managed frames, 15 owned-table frames and 52,780 free before and after exhaustion, with 65,536 bytes of metadata. Full boot including self-tests took around 6.3 seconds. These are measurements of that revision/R0, not universal thresholds. The issue links the closing commit and CI; review was by the implementing agent, without independent review.

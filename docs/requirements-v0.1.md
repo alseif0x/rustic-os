@@ -1,98 +1,100 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Requisitos y plataforma de referencia — v0.1 experimental
+# Requirements and reference platform — experimental v0.1
 
-Estado: base de trabajo adoptada para #2 el 2026-09-09. El propietario autorizó continuar con la propuesta de primera entrega mediante «adelante pues». Se conserva el alcance previamente acordado; las elecciones técnicas se realizan dentro de esa delegación. La aceptación del documento no acredita implementación ni aprobación individual previa de cada parámetro.
+Status: working baseline adopted for #2 on 2026-09-09. The owner authorized proceeding with the first-delivery proposal (“go ahead”). The previously agreed scope is preserved; technical choices are made within that delegation. Acceptance of the document does not establish implementation or prior individual approval of every parameter.
 
-## Producto y límites
+## Product and limits
 
-RusticOS es un SO propio principalmente en Rust. Debe funcionar manualmente sin IA y permitir a agentes operar capacidades propias por APIs/tools, con visión complementaria. El piloto vive en RusticOS; inferencia, compilación y VM de pruebas pueden ser externos, declarando su ubicación. Consola, GUI y agente comparten servicios y autoridad.
+RusticOS is an independent OS written primarily in Rust. It must work manually without AI and let agents operate first-party capabilities through APIs/tools, with complementary visual access. The integrated agent runs inside RusticOS; inference, compilation and test VMs may be external, with their location declared. Console, GUI and agent share services and authority.
 
-v0.1 incluye: arranque, procesos aislados, archivos persistentes, shell, herramientas nativas, adaptación determinista, red/HTTPS, piloto opcional, interoperabilidad MCP, escritorio y navegador con renderizado local, candidata verificable y recuperación. No promete producción, toda la web, cualquier dispositivo, compatibilidad binaria universal, inferencia local, compilación interna completa ni sustitución del kernel en caliente.
+v0.1 includes boot, isolated processes, persistent files, shell, native tools, deterministic adaptation, networking/HTTPS, an optional agent, MCP interoperability, desktop and browser with local rendering, verifiable candidates and recovery. It does not promise production readiness, the entire web, every device, universal binary compatibility, local inference, complete internal compilation or hot kernel replacement.
 
-Universalidad se mide por separado: arquitectura CPU, dispositivos, aplicaciones e interacción. Inicialmente una CPU y un conjunto virtual de dispositivos. Adaptación significa consultar capacidades reales y seleccionar/degradar funciones según políticas y presupuestos; no modificar código automáticamente para improvisar soporte.
+Universality is measured separately across CPU architecture, devices, applications and interaction. Initially there is one CPU and a virtual device set. Adaptation means querying actual capabilities and selecting/degrading features according to policies and budgets; it does not mean automatically changing code to improvise support.
 
-## Plataforma R0
+## R0 platform
 
-Los siguientes son parámetros de la configuración de prueba, no requisitos mínimos de un producto terminado.
+The following are test-configuration parameters, not minimum requirements for a finished product.
 
-| Elemento | Base acordada |
+| Element | Adopted baseline |
 | --- | --- |
-| Desarrollo | Ubuntu 24.04 en WSL2 de este equipo (observado: 24.04.4 LTS). CI Linux Ubuntu 24.04; fijar imagen y herramientas en #4. |
-| CPU/invitado | x86_64, modelo QEMU qemu64, 1 vCPU. No utilizar cpu=host como base reproducible. |
-| Máquina | Familia QEMU q35; #4 fija el nombre pc-q35-X.Y disponible en la versión seleccionada. |
-| Ejecución | TCG obligatorio en la prueba base, sin requerir virtualización anidada. Aceleración adicional tiene resultados separados. |
-| Firmware | UEFI mediante OVMF, Secure Boot desactivado en R0; copia desechable de variables por ejecución. #4 fija build y hashes. |
-| Arranque | Protocolo Limine, kernel ELF x86_64-unknown-none; imagen con partición FAT/EFI y cargador. #4 fija revisión del cargador/protocolo/bindings e imagen; #8 valida el recorrido. |
-| Memoria | H0: 256 MiB. Prueba integrada inicial: 2048 MiB. Perfil restringido para #20/#38: 512 MiB. No se exige navegador en todos los perfiles; declarar degradación. |
-| Disco | Arranque de solo lectura siempre que la herramienta lo permita; persistencia separada: virtio-blk-pci, disco virtual de 4 GiB con copia por escenario. Nunca discos físicos del anfitrión. |
-| NIC | virtio-net-pci, desactivada H0/H1. Desde H3 red de pruebas aislada; egreso habilitado explícitamente por escenario. |
-| Gráficos | Framebuffer entregado por el cargador con dispositivo VGA virtual estándar, modo objetivo 1024×768; renderizado software inicial. Sin aceleración 3D obligatoria. |
-| Entrada | Teclado y ratón PS/2 emulados; consola serie para el mínimo manual. |
-| Reloj/interrupciones | LAPIC/IOAPIC y temporización inicial a concretar en #33, bajo R0 monoprocesador; no requisito SMP inicial. |
-| Diagnóstico | UART serie COM1 a log; monitor QEMU separado del canal de usuario. Salida de pruebas distinguible del texto de arranque. |
-| Entropía | virtio-rng-pci para #17; fuente externa declarada, no inferir entropía del reloj. |
-| Compartición | Sin carpetas personales, portapapeles ni dispositivos físicos compartidos por defecto. Puente de construcción exclusivo de #42. |
+| Development | Ubuntu 24.04 in this machine's WSL2 (observed: 24.04.4 LTS). Linux CI on Ubuntu 24.04; image/tools assigned to #4. |
+| CPU/guest | x86_64, QEMU qemu64 model, 1 vCPU. Do not use cpu=host as the reproducible baseline. |
+| Machine | QEMU q35 family; #4 pins the pc-q35-X.Y name available in the selected version. |
+| Execution | TCG required for the baseline test, without requiring nested virtualization. Additional acceleration has separate results. |
+| Firmware | UEFI through OVMF, Secure Boot disabled in R0; disposable variable copy per run. #4 pins the build and hashes. |
+| Boot | Limine protocol, x86_64-unknown-none ELF kernel; image with FAT/EFI boot volume and loader. #4 pins loader/protocol/bindings/image; #8 validates the path. |
+| Memory | H0: 256 MiB. Initial integrated test: 2048 MiB. Restricted #20/#38 profile: 512 MiB. A browser is not required in every profile; declare degradation. |
+| Disk | Read-only boot where tooling permits; separate persistence: virtio-blk-pci, 4 GiB virtual disk copied per scenario. Never physical host disks. |
+| NIC | virtio-net-pci, disabled in H0/H1. From H3, isolated test networking; egress explicitly enabled per scenario. |
+| Graphics | Loader-provided framebuffer with standard virtual VGA, target mode 1024×768; initial software rendering. No mandatory 3D acceleration. |
+| Input | Emulated PS/2 keyboard and mouse; serial console for minimal manual interaction. |
+| Clock/interrupts | Initially assigned to #33 under single-CPU R0, without an initial SMP requirement. #33 adopts PIC/PIT; LAPIC/IOAPIC remain future work. |
+| Diagnostics | COM1 serial UART to log; QEMU monitor separate from the user channel. Test output distinguishable from boot text. |
+| Entropy | virtio-rng-pci for #17; declared external source, without inferring entropy from the clock. |
+| Sharing | No personal folders, clipboard or physical devices shared by default. Dedicated build bridge in #42. |
 
-#4 debe registrar versiones exactas de Rust/Cargo, QEMU, OVMF, Limine, utilidades de imagen y CI; hashes/fuentes y comandos verificados. No descargar latest en cada construcción. #4 no se cierra con una ficha sin versiones. Esta asignación evita inventar versiones antes de probar compatibilidad.
+#4 must record exact Rust/Cargo, QEMU, OVMF, Limine, image-utility and CI versions, hashes/sources and verified commands. Do not download latest on every build. #4 cannot close with an unversioned checklist. This assignment avoids inventing versions before testing compatibility. Current versions are recorded in [the development guide](DEVELOPMENT.md) and tools/environment.toml.
 
-## Requisitos trazables
+The current memory implementation rejects usable physical regions above 1 GiB. The integrated 2048 MiB profile remains a future acceptance target and requires extending that implementation; current 256 MiB evidence does not establish it.
 
-Cada escenario se ejecutará contra el invitado salvo indicación expresa. Evidencia común: commit, configuración R0, herramientas, comandos, resultado esperado/obtenido, logs y hashes de artefactos. Conservar negativos, no solo el caso satisfactorio.
+## Traceable requirements
 
-| ID | Requisito verificable | Escenario / evidencia | Issues |
+Each scenario runs against the guest unless explicitly stated otherwise. Common evidence: commit, R0 configuration, tools, commands, expected/observed result, logs and artifact hashes. Preserve negatives as well as the successful case.
+
+| ID | Verifiable requirement | Scenario / evidence | Issues |
 | --- | --- | --- | --- |
-| R01 | Imagen propia y diagnóstico de éxito, fallo y bloqueo | B0/B1/B2: serie, código/estado y timeout del ejecutor; reconstrucción limpia | #4 #8 #21 |
-| R02 | Uso manual sin IA, procesos aislados y persistencia | S1: proceso A falla sin matar B/shell; guardar/reiniciar/leer archivo | #9 #10 #11 #12 #13 #14 #34 |
-| R03 | Cobertura estructurada de capacidades propias incluidas | M1 y catálogo de acciones de producto con API/tool y comprobación; cobertura calculada sobre lista versionada | #6 #22 #40 #41 #29 |
-| R04 | Autoridad del propietario y autonomía separadas | A1: permiso denegado, revocado y limitado a workspace; toma de control sin modelo | #5 #13 #24 #28 |
-| R05 | Piloto real opcional operando sin visión | M2, resultado de servicio, identidad de modelo/configuración y apagado | #23 #29 |
-| R06 | Cliente MCP independiente sobre servicios reales | C1: repetir M1 por adaptador; mismo efecto y mismas denegaciones | #39 |
-| R07 | Red, DNS y HTTPS dentro del invitado | N1: resolver/consultar fixture, rechazo de certificado inválido y fallo de DNS explícito | #16 #17 #36 |
-| R08 | Navegador con motor y renderizado local | W1–W5, capturas/estado/acciones y pruebas del servicio web | #7 #19 |
-| R09 | Escritorio operable y visión opcional acotada | D1: abrir/activar/cerrar ventana por API; captura de selección autorizada; volver a consola ante fallo | #18 #37 #40 #41 |
-| R10 | Adaptación determinista observable | P1: misma entrada/política produce mismo perfil; memoria limitada revela capacidades ausentes/degradadas | #20 #38 |
-| R11 | Cambio, candidata y recuperación verificables | M3, hashes de origen/artefacto, pruebas y arranque de recuperación sin IA | #25 #26 #27 #42 |
-| R12 | Publicación reproducible y procedencia | L1: inventario, licencia, release experimental, comandos y límites documentados | #30 #32 |
+| R01 | Original image and success/failure/hang diagnostics | B0/B1/B2: serial, exit/status and runner timeout; clean rebuild | #4 #8 #21 |
+| R02 | Manual operation without AI, isolated processes and persistence | S1: process A fails without killing B/shell; save/reboot/read a file | #9 #10 #11 #12 #13 #14 #34 |
+| R03 | Structured coverage of included first-party capabilities | M1 and product-action catalog with API/tool and verification; coverage calculated over a versioned list | #6 #22 #40 #41 #29 |
+| R04 | Owner authority separate from autonomy | A1: denied, revoked and workspace-scoped permission; takeover without a model | #5 #13 #24 #28 |
+| R05 | Real optional agent operating without vision | M2, service result, model/configuration identity and shutdown | #23 #29 |
+| R06 | Independent MCP client over real services | C1: repeat M1 through the adapter; same effects and denials | #39 |
+| R07 | Networking, DNS and HTTPS inside the guest | N1: resolve/query fixture, reject invalid certificate and explicit DNS failure | #16 #17 #36 |
+| R08 | Browser engine and rendering run locally | W1–W5, screenshots/state/actions and web-service tests | #7 #19 |
+| R09 | Usable desktop and bounded optional vision | D1: open/activate/close window through API; capture authorized selection; return to console on failure | #18 #37 #40 #41 |
+| R10 | Observable deterministic adaptation | P1: same input/policy yields same profile; limited memory exposes missing/degraded capabilities | #20 #38 |
+| R11 | Verifiable change, candidate and recovery | M3, source/artifact hashes, tests and recovery boot without AI | #25 #26 #27 #42 |
+| R12 | Reproducible publication and provenance | L1: inventory, license, experimental release, documented commands and limits | #30 #32 |
 
-## Primeros escenarios B0–B2 y S1
+## Initial scenarios B0–B2 and S1
 
-B0: desde checkout limpio construir imagen y arrancar sin red/GUI/IA. Emitir identificador de build y marcador final de éxito; el ejecutor comprueba ambos y el estado de salida definido. Un mensaje temprano no basta.
+B0: build an image from a clean checkout and boot without networking/GUI/AI. Emit a build identifier and final success marker; the runner verifies both and the defined exit status. An early message is insufficient.
 
-B1: variante de prueba con panic deliberado. Debe conservar diagnóstico y terminar como fallo aunque haya emitido el mensaje inicial. B2: variante bloqueada; el ejecutor termina solo esa VM al agotar el plazo y devuelve timeout, no éxito. #8/#21 fijan los códigos y el timeout tras medir línea base. Repetir construcción y comparar hashes; no prometer identidad binaria antes de resolver diferencias.
+B1: test variant with deliberate panic. It must preserve diagnostics and end as failure even after the initial message. B2: blocked variant; the runner terminates only that VM at the deadline and returns timeout, not success. #8/#21 fix codes and timeouts after measuring the baseline. Repeat construction and compare hashes; do not promise binary identity before resolving differences.
 
-S1, H1: arrancar shell nativa sin red/GUI/modelo; lanzar dos procesos, provocar acceso inválido en uno y mantener operativo el otro. Crear/leer archivo, reiniciar y verificar persistencia. Entrada manual por serie permitida.
+S1, H1: boot the native shell without networking/GUI/model; launch two processes, trigger an invalid access in one and keep the other operational. Create/read a file, reboot and verify persistence. Manual serial input is allowed.
 
-## Tres misiones de producto
+## Three product missions
 
-M1, H2: workspace y archivo precreados. Descubrir tools, leer contenido/versión, reemplazar con expected_version y clave de idempotencia, consultar operación y verificar contenido/hash. Repetir con permiso denegado, versión obsoleta y respuesta perdida; no alterar otro workspace ni duplicar efectos. Cliente determinista, capturas/OCR/clicks deshabilitados.
+M1, H2: precreated workspace and file. Discover tools, read content/version, replace using expected_version and an idempotency key, inspect the operation and verify content/hash. Repeat with denied permission, stale version and lost response; do not alter another workspace or duplicate effects. Deterministic client, screenshots/OCR/clicks disabled.
 
-M2, H3: mismo objetivo con piloto ejecutándose dentro de RusticOS y modelo real sustituible, local o remoto. Registrar pasos, errores, presupuesto y verificación del servicio. Inyectar llamada inválida, caída de proveedor y cancelación; no ampliar permisos y conservar uso manual. MCP se valida por C1, sin obligar al piloto a utilizarlo.
+M2, H3: same objective with an agent running inside RusticOS and a real replaceable model, local or remote. Record steps, errors, budget and service verification. Inject an invalid call, provider outage and cancellation; do not expand permissions and preserve manual use. MCP is validated through C1 without forcing the integrated agent to use it.
 
-M3, H5: modificar una utilidad en workspace, enviar construcción al ejecutor acotado, recibir artefacto identificado y resultados, activar bajo política del propietario. Inducir fallo y recuperar versión anterior sin IA ni proveedor disponible. No permitir que un resultado de texto del agente sustituya pruebas o hash.
+M3, H5: modify a utility in a workspace, send a build to the bounded executor, receive an identified artifact and results, then activate under owner policy. Induce a failure and recover the prior version without AI or an available provider. Do not let agent text replace tests or hashes.
 
-## Contrato web mínimo
+## Minimum web contract
 
-Fixtures locales versionados, servidos por un servidor de pruebas controlado; renderizado y JavaScript ocurren en RusticOS. #7 evalúa motor y registra brechas; no exige un sitio público cambiante como prueba.
+Versioned local fixtures served by a controlled test server; rendering and JavaScript execute in RusticOS. #7 evaluates the engine and records gaps; a changing public website is not required as a test.
 
-| Caso | Fixture y aceptación |
+| Case | Fixture and acceptance |
 | --- | --- |
-| W1 HTML/CSS | Documento con títulos, párrafos, enlaces, lista, imagen local y cajas con tamaño/color/margen. DOM y geometría esperada; revisión de captura con tolerancias de fuente documentadas. |
-| W2 Unicode | UTF-8: español con tildes y ñ, texto griego y CJK con fuentes de prueba licenciadas. Contenido extraído conserva codepoints; sin caracteres de sustitución inesperados. |
-| W3 JavaScript | Botón que incrementa contador y actualiza DOM; ejecución por acción del usuario y API produce el mismo valor observable. |
-| W4 Formularios | Campos etiquetados, foco por teclado, envío GET/POST al fixture; servidor recibe nombres/valores esperados y el navegador muestra la respuesta. |
-| W5 HTTPS | CA de prueba instalada explícitamente, certificado válido aceptado; caducado, nombre incorrecto o CA no confiable rechazados. Sin opción silenciosa de ignorar validación. |
+| W1 HTML/CSS | Document with headings, paragraphs, links, list, local image and boxes with size/color/margin. Expected DOM and geometry; screenshot review with documented font tolerances. |
+| W2 Unicode | UTF-8: Spanish accents and ñ, Greek and CJK text with licensed test fonts. Extracted content preserves codepoints; no unexpected replacement characters. |
+| W3 JavaScript | Button increments a counter and updates the DOM; user and API actions produce the same observable value. |
+| W4 Forms | Labeled fields, keyboard focus, GET/POST submission to fixture; server receives expected names/values and browser displays the response. |
+| W5 HTTPS | Explicitly installed test CA, valid certificate accepted; expired, wrong-name or untrusted-CA certificates rejected. No silent bypass of validation. |
 
-Accesibilidad inicial: navegación por teclado, foco visible, nombres/roles/estado consultables en controles propios y del fixture, salida textual de errores. No se promete conformidad integral de accesibilidad ni toda la plataforma web. Formularios nativos y ventanas tendrán equivalencia entre acción manual y semántica.
+Initial accessibility: keyboard navigation, visible focus, queryable names/roles/state for first-party and fixture controls, textual errors. Comprehensive accessibility conformance and the entire web platform are not promised. Native forms and windows must provide equivalent manual and semantic actions.
 
-## Datos y autoridad
+## Data and authority
 
-Modo manual sin modelo; modo híbrido y automático según #24, independientemente del perfil de permisos de #5. El propietario delega ámbitos y puede revocarlos. El descubrimiento no concede autoridad. Identidad vinculada a sesión/handles, nunca confiada a argumentos del modelo.
+Manual mode without a model; hybrid and automatic modes under #24, independent of #5 permission profiles. The owner delegates scopes and can revoke them. Discovery grants no authority. Identity is bound to sessions/handles, never trusted from model arguments.
 
-Cada conexión al proveedor declara destino y datos enviados. Fixtures sintéticos en pruebas; secretos fuera del prompt/log; seleccionar contenido antes de egreso y registrar metadatos sin almacenar credenciales. Contenido web/archivos no concede nuevas instrucciones privilegiadas. Capturas limitadas a la selección autorizada. Políticas exactas y almacenamiento de credenciales se implementan en #5/#13/#23.
+Each provider connection declares its destination and transmitted data. Use synthetic test fixtures; keep secrets out of prompts/logs; select content before egress and record metadata without storing credentials. Web/file content grants no new privileged instructions. Screenshots are limited to the authorized selection. Exact policies and credential storage are implemented in #5/#13/#23.
 
-## Decisiones abiertas y responsables por issue
+## Open decisions and issue ownership
 
-#3 adopta arquitectura/arranque. #4 fija herramientas y máquina versionada. #5 concreta Low/Medium/Total y reglas de consentimiento. #6 fija contratos. #7 selecciona motor/fuentes y brechas web. #20 fija presupuestos medidos. #33 concreta temporización. #39 fija SDK/cliente/transporte MCP. #42 elige el canal al ejecutor. No bloquean la definición inicial con decisiones de componentes todavía no implementados.
+#3 adopts architecture/boot. #4 pins tools and the versioned machine. #5 defines Low/Medium/Total and consent rules. #6 defines contracts. #7 selects the engine/fonts and web gaps. #20 sets measured budgets. #33 defines timing. #39 pins MCP SDK/client/transport. #42 selects the executor channel. Decisions about components not yet implemented do not block the initial definition.
 
-Cambiar hardware objetivo, alcance obligatorio o ubicación de componentes requiere registrar motivo e impacto en #1 y actualizar este documento. Una adaptación de parámetros de prueba por evidencia no se presenta como capacidad universal nueva.
+Changing target hardware, required scope or component location requires recording the reason and impact in #1 and updating this document. Evidence-based test-parameter adjustments must not be presented as a new universal capability.
