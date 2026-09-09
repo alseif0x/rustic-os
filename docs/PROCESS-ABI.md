@@ -2,7 +2,7 @@
 
 # ABI de procesos R0 — versión 1.0
 
-Primer contrato mínimo de #10, anterior a IPC/handles de #34 y SDK de #11.
+Contrato mínimo de #10, conservado por la extensión de [IPC/handles de #34](IPC.md). El SDK sigue en #11. La fuente compartida de constantes es `crates/abi`, sin dependencia del kernel.
 No es el ABI Linux ni una interfaz MCP. La identidad proviene del proceso que
 el kernel está ejecutando; ningún argumento puede sustituirla.
 
@@ -34,5 +34,4 @@ E/S arbitraria ni acepta texto del usuario para interpretarlo como log del kerne
 La espera, terminación por el supervisor de pruebas y creación se ofrecen por
 API interna tipada; aún no son syscalls. Esperar un proceso vivo devuelve
 pendiente; esperar uno terminado recupera sus recursos y consume su resultado.
-PID desconocido o ya recogido produce error. No hay autoridad entre procesos
-ni transferencia de handles en este corte.
+PID desconocido o ya recogido produce error. La extensión de [IPC](IPC.md) añade handles por propietario y derechos atenuables. La concesión/transferencia y cancelación por PID permanecen en la API del lanzador de confianza, sin exponer autoridad arbitraria por syscall.

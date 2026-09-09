@@ -20,6 +20,7 @@ pub enum Exit {
 pub enum State {
     Ready,
     Running,
+    Blocked,
     Exited(Exit),
 }
 
@@ -31,6 +32,7 @@ pub enum Error {
     NotExited,
     AlreadyExited,
     NotRunning,
+    NotBlocked,
     Exhausted,
 }
 
@@ -120,6 +122,25 @@ impl Table {
         }
         record.state = State::Exited(exit);
         Ok(())
+    }
+    pub fn block(&mut self, pid: Pid) -> Result<(), Error> {
+        let record = self.slots[self.slot(pid)?].as_mut().unwrap();
+        if record.state != State::Running {
+            return Err(Error::NotRunning);
+        }
+        record.state = State::Blocked;
+        Ok(())
+    }
+    pub fn wake(&mut self, pid: Pid) -> Result<(), Error> {
+        let record = self.slots[self.slot(pid)?].as_mut().unwrap();
+        if record.state != State::Blocked {
+            return Err(Error::NotBlocked);
+        }
+        record.state = State::Ready;
+        Ok(())
+    }
+    pub fn pid_at(&self, slot: usize) -> Option<Pid> {
+        self.slots.get(slot)?.map(|r| r.pid)
     }
     pub fn reap(&mut self, pid: Pid) -> Result<Exit, Error> {
         let slot = self.slot(pid)?;

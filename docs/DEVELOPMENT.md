@@ -63,6 +63,8 @@ La imagen FAT32/UEFI ya se construye y arranca. Los [comandos de arranque y sus 
 
 #10 añade [carga ELF, ciclo de vida y procesos en ring 3](PROCESSES.md). Validación y turnos residen en la biblioteca; memoria de usuario y transición de CPU quedan en módulos de arquitectura. Los negativos de procesos se contienen dentro del escenario `ok`.
 
+#34 incorpora [IPC y handles](IPC.md), la crate propia `rustic-abi` y copia validada de buffers. El workspace y el ejecutor incluyen `crates/`; la huella directa del build incluye su código y manifiestos. La versión de las dependencias externas permanece igual.
+
 ## CI y prueba negativa
 
 .github/workflows/check.yml ejecuta el mismo cargo xtask check en ubuntu-24.04, para push y pull_request. Acciones fijadas por SHA, token contents:read, checkout sin credenciales persistentes y sin secretos de proyecto. Registra versión de toolchain, logs y biblioteca no_std como artefactos con retención de 14 días. Un job separado instala QEMU/OVMF fijados, prueba el ejecutor y arranca los trece escenarios, conservando imágenes y evidencia.

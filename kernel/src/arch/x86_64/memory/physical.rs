@@ -103,8 +103,9 @@ impl Physical {
                 .checked_add(data.len())
                 .is_some_and(|end| end <= PAGE_SIZE as usize)
         );
-        // SAFETY: Loader owns a fresh page in an inactive user root, no data
-        // references escape, source is disjoint kernel bytes, and bounds fit.
+        // SAFETY: Owner holds an allocated page in an inactive user root. No user
+        // runs, IRQ/DMA never access these bytes, no data references escape,
+        // source is disjoint kernel bytes, and the checked interval fits.
         unsafe {
             core::ptr::copy_nonoverlapping(
                 data.as_ptr(),
@@ -116,5 +117,22 @@ impl Physical {
 
     pub(super) fn empty(&self, table: u64) -> bool {
         (0..512).all(|index| self.read(table, index) == 0)
+    }
+    pub(super) fn read_bytes(&self, frame: u64, offset: usize, data: &mut [u8]) {
+        assert!(self.frames.is_allocated(frame));
+        assert!(
+            offset
+                .checked_add(data.len())
+                .is_some_and(|end| end <= PAGE_SIZE as usize)
+        );
+        // SAFETY: Quiescent owned user page, validated full interval, resident HHDM;
+        // output is disjoint kernel storage. No user or DMA can mutate it here.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                self.pointer(frame).cast::<u8>().add(offset),
+                data.as_mut_ptr(),
+                data.len(),
+            )
+        }
     }
 }

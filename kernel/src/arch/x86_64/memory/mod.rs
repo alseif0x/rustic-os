@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! R0 memory owner. Physical bookkeeping, table mechanics and fixtures stay separate.
 mod bootstrap;
+mod copy;
 mod cpu;
 mod physical;
 mod space;

@@ -29,3 +29,7 @@ tools/environment.toml conserva URL/hash del archivo Limine, hashes de OVMF y re
 Estas licencias se copian a /licenses junto a RUSTIC.txt (Apache-2.0 del proyecto). La biblioteca pura sigue sin depender de Limine; los bindings solo se activan para el binario boot-image. No se copia código de un template de kernel. Limine 0.6.5 se inspeccionó y descartó por necesitar ptr_metadata experimental; no está en el artefacto. Se prueba limine 0.5.0 con base revision 3 y cargador 12.8.0.
 
 Fuentes de revisión para componentes externos: LICENSE del archivo de Limine verificado por hash; metadatos y copyright de los paquetes instalados bajo /usr/share/doc; [Rust copyright](https://github.com/rust-lang/rust/blob/master/COPYRIGHT), [QEMU licencia](https://www.qemu.org/docs/master/about/license.html). Las condiciones concretas de un futuro paquete distribuido se revisan antes de publicarlo.
+
+## Contratos propios de #34
+
+`rustic-abi` 0.1.0 es una crate original de este repositorio bajo Apache-2.0, sin dependencias externas ni unsafe. Contiene constantes de procesos/IPC y errores; la usa el kernel y la reutilizará el SDK. Cargo.lock solo añade esa dependencia por ruta: las versiones/checksums de limine y bitflags permanecen iguales. Los avisos existentes de la imagen siguen siendo suficientes; no se incorpora material de terceros nuevo.

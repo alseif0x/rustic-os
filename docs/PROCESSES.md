@@ -23,8 +23,7 @@ No hay hilos, fork, enlace dinámico, TLS, señales, prioridad, SMP, demanda de
 páginas ni estado de punto flotante/SIMD por proceso. Las instrucciones de esa
 última categoría provocan un fallo del proceso: no se dejan compartir registros
 extendidos accidentalmente. El protocolo inicial de llamadas enteras está en
-[PROCESS-ABI.md](PROCESS-ABI.md); IPC, handles, copia de buffers y autoridad de
-servicios pertenecen a #34/#13. La GUI y los agentes consumirán servicios posteriores.
+[PROCESS-ABI.md](PROCESS-ABI.md); [IPC, handles y copia de buffers](IPC.md) se incorporan en #34; autoridad de servicios queda en #13. La GUI y los agentes consumirán servicios posteriores.
 
 ## Separación de responsabilidades
 
@@ -32,10 +31,10 @@ servicios pertenecen a #34/#13. La GUI y los agentes consumirán servicios poste
 | --- | --- |
 | `process/elf.rs` en la biblioteca | Decodificación y validación completa sin unsafe, CPU ni asignación |
 | `process/lifecycle.rs` | Identidad, estados, capacidad, turnos y consumo del resultado |
-| `process/abi.rs` | Constantes del primer ABI, sin dependencias de implementación |
+| `crates/abi` y reexport `process/abi.rs` | Contratos compartidos, sin dependencias de implementación |
 | `process/runtime/error.rs` | Errores de la frontera de carga/proceso, sin dependencia del administrador |
 | `process/runtime/loader.rs` | Copiar segmentos, completar con ceros y revertir una carga incompleta |
-| `process/runtime/manager.rs` | Poseer espacios/contextos, ejecutar un turno y aplicar el resultado del evento |
+| `process/runtime/manager.rs` / `record.rs` | Poseer espacios/contextos, ejecutar un turno y aplicar el resultado del evento |
 | `arch/x86_64/memory/user.rs` | Mapeos, copia inicial, ejecución acotada con cambio/restauración de raíz y destrucción |
 | `interrupts/frame.rs` | Layout exacto de registros y validación del retorno de usuario |
 | `interrupts/user_cpu.rs` | Deshabilitar entradas de privilegio ajenas al ABI y fijar opciones de CPU |
@@ -169,3 +168,5 @@ adicional de pila de entrada de 20 KiB (incluida guarda). Esta reserva estática
 no se vuelve a cobrar por proceso. El ELF de cada fixture ocupa 8.200 bytes en la
 imagen; dos variantes quedan embebidas como datos de prueba, fuera del consumo
 dinámico de las raíces. Los tres puntos de agotamiento se registran por separado.
+
+#34 añade el estado Blocked, módulos de syscalls e integración de IPC. El cierre de handles ocurre al terminar el proceso, aunque sus páginas se conserven hasta recogerse. La política de despertar sigue fuera del handler. El diagnóstico de tamaño del administrador incluye ahora el broker y los registros de espera.

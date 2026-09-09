@@ -18,10 +18,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustic-abi"
+version = "0.1.0"
+
+[[package]]
 name = "rustic-kernel"
 version = "0.1.0"
 dependencies = [
  "limine",
+ "rustic-abi",
 ]
 
 [[package]]

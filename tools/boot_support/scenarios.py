@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Reference fixture contract shared by direct and isolated execution."""
 from .process_evidence import verified as process_verified
+from .ipc_evidence import verified as ipc_verified
 MEMORY_FAULTS = {"memory-ro": (3, "MemoryReadOnly"), "memory-nx": (17, "MemoryNx"),
                  "memory-unmapped": (0, "MemoryUnmapped"), "memory-text-alias": (3, "MemoryTextAlias"),
                  "memory-guard": (0, "MemoryGuard")}
@@ -13,7 +14,7 @@ MODES = tuple(EXPECTED)
 def reached(mode, serial):
     if mode == "ok":
         return ("RUSTIC IRQ verified=1 breakpoint=1 spurious=2 waits=3 cancelled=1 race_waits=100" in serial
-                and memory_verified(serial) and process_verified(serial, records))
+                and memory_verified(serial) and process_verified(serial, records) and ipc_verified(serial, records))
     if mode == "hang":
         return "RUSTIC HANG deliberate=1" in serial
     if mode == "timer-stall":

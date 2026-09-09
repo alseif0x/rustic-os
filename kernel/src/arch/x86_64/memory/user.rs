@@ -5,7 +5,7 @@ use crate::arch::interrupts::{self, Frame, Mask, UserEvent};
 use rustic_kernel::memory::{PAGE_SIZE, PagePermissions, VirtualPage};
 
 pub(crate) struct UserSpace {
-    inner: AddressSpace,
+    pub(super) inner: AddressSpace,
 }
 
 impl Memory {

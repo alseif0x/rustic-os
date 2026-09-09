@@ -2,6 +2,22 @@
 use rustic_kernel::process::lifecycle::{CAPACITY, Error, Exit, State, Table};
 
 #[test]
+fn blocked_tasks_are_skipped_and_woken_exactly_once() {
+    let mut table = Table::new();
+    let (_, pid) = table.create().unwrap();
+    assert_eq!(table.block(pid), Err(Error::NotRunning));
+    table.schedule().unwrap();
+    table.block(pid).unwrap();
+    assert_eq!(table.schedule(), Ok(None));
+    table.wake(pid).unwrap();
+    assert_eq!(table.wake(pid), Err(Error::NotBlocked));
+    table.schedule().unwrap();
+    table.block(pid).unwrap();
+    table.finish(pid, Exit::Killed).unwrap();
+    assert_eq!(table.reap(pid), Ok(Exit::Killed));
+}
+
+#[test]
 fn round_robin_requires_suspend_and_skips_exited_slots() {
     let mut table = Table::new();
     let (_, a) = table.create().unwrap();

@@ -18,7 +18,7 @@ El kernel incorpora [excepciones, interrupciones y reloj](docs/INTERRUPTS.md): t
 
 La [gestión de memoria](docs/MEMORY.md) añade marcos de 4 KiB, tablas de páginas propias, permisos de escritura/ejecución y espacios de direcciones independientes. Se prueban agotamiento, recuperación, limpieza al reutilizar y fallos de protección; la ejecución de usuario se verifica en la capa de procesos.
 
-El subsistema de [procesos nativos](docs/PROCESSES.md) valida ELF estáticos, crea espacios privados, reparte la CPU por turnos y contiene fallos de aplicaciones en ring 3. Las pruebas comprueban un programa no cooperante, accesos prohibidos y recuperación de recursos. El [ABI mínimo](docs/PROCESS-ABI.md) ofrece versión, salida, identidad y diagnóstico entero; IPC y handles continúan en #34.
+El subsistema de [procesos nativos](docs/PROCESSES.md) valida ELF estáticos, crea espacios privados, reparte la CPU por turnos y contiene fallos de aplicaciones en ring 3. Las pruebas comprueban un programa no cooperante, accesos prohibidos y recuperación de recursos. El [ABI mínimo](docs/PROCESS-ABI.md) ofrece versión, salida, identidad y diagnóstico entero; [IPC y handles](docs/IPC.md) añaden mensajes versionados, identidad del emisor, espera y cierre, con comprobación de buffers y derechos. La crate `rustic-abi` comparte los contratos sin depender del kernel; el SDK de aplicaciones Rust continúa en #11.
 
 ## Plan y participación
 

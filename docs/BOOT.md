@@ -43,7 +43,7 @@ python3 tools/boot.py test --timeout 30
 | memory-nx | #PF por ejecución prohibida, error 0x11 y CR2 esperado | 39 | 1 |
 | memory-unmapped / memory-guard | #PF por dirección ausente, error 0 y CR2 esperado | 39 | 1 |
 
-El dispositivo isa-debug-exit transforma el valor escrito por el kernel en (valor × 2) + 1; estos códigos son exclusivos de la prueba R0. Cualquier combinación inesperada devuelve 2. La suite completa devuelve 0 solo si los trece casos coinciden con sus resultados y marcadores esperados. Un timeout de firmware sin alcanzar el fixture no pasa la prueba de bloqueo. `ok` comprueba [interrupciones y esperas](INTERRUPTS.md), [memoria](MEMORY.md) y [procesos en ring 3](PROCESSES.md) antes de SUCCESS.
+El dispositivo isa-debug-exit transforma el valor escrito por el kernel en (valor × 2) + 1; estos códigos son exclusivos de la prueba R0. Cualquier combinación inesperada devuelve 2. La suite completa devuelve 0 solo si los trece casos coinciden con sus resultados y marcadores esperados. Un timeout de firmware sin alcanzar el fixture no pasa la prueba de bloqueo. `ok` comprueba [interrupciones y esperas](INTERRUPTS.md), [memoria](MEMORY.md), [procesos en ring 3](PROCESSES.md) e [IPC](IPC.md) antes de SUCCESS.
 
 30 segundos es el presupuesto local inicial, con arranques positivos observados en torno a 4 segundos; CI usa 45 segundos para absorber variación de runner. No constituye un objetivo de rendimiento universal. El anfitrión mata únicamente el proceso QEMU creado por esa ejecución y espera su salida; también lo retira ante interrupción del ejecutor.
 

@@ -20,6 +20,8 @@ def source_id():
     digest = hashlib.sha256()
     paths = sorted((ROOT / "kernel").rglob("*.rs"))
     paths += sorted((ROOT / "kernel").rglob("*.S"))
+    paths += sorted((ROOT / "crates").rglob("*.rs"))
+    paths += sorted((ROOT / "crates").rglob("Cargo.toml"))
     paths += [ROOT / name for name in ("kernel/linker.ld", "Cargo.toml", "Cargo.lock", "kernel/Cargo.toml", "rust-toolchain.toml", ".cargo/config.toml")]
     for path in paths:
         digest.update(str(path.relative_to(ROOT)).encode())

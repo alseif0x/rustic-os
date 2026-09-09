@@ -38,6 +38,14 @@ impl Frame {
     pub(crate) fn call(&self) -> (u64, u64) {
         (self.registers[14], self.registers[8])
     }
+    pub(crate) fn arguments(&self) -> [u64; 3] {
+        [self.registers[8], self.registers[9], self.registers[11]]
+    }
+    pub(crate) fn set_arguments(&mut self, args: [u64; 3]) {
+        self.registers[8] = args[0];
+        self.registers[9] = args[1];
+        self.registers[11] = args[2];
+    }
     pub(crate) fn valid_user(&self) -> bool {
         self.cs == 0x2b
             && self.ss == 0x33
