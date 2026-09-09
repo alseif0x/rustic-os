@@ -16,6 +16,8 @@ El [ejecutor aislado](docs/EXECUTOR.md) construye revisiones Git y comprueba el 
 
 El kernel incorpora [excepciones, interrupciones y reloj](docs/INTERRUPTS.md): tablas de CPU propias, pila de emergencia para doble fallo, temporizador y esperas acotadas por plazos. Las pruebas verifican estas funciones dentro de QEMU antes de informar éxito.
 
+La [gestión de memoria](docs/MEMORY.md) añade marcos de 4 KiB, tablas de páginas propias, permisos de escritura/ejecución y espacios de direcciones independientes. Se prueban agotamiento, recuperación, limpieza al reutilizar y fallos de protección; los procesos de usuario siguen pendientes.
+
 ## Plan y participación
 
 - [Plan vigente: requisitos, hitos, riesgos y reglas de ejecución](https://github.com/alseif0x/rustic-os/issues/1).

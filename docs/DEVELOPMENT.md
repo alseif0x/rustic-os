@@ -59,6 +59,8 @@ La imagen FAT32/UEFI ya se construye y arranca. Los [comandos de arranque y sus 
 
 #33 añade [excepciones, reloj y esperas](INTERRUPTS.md), con contratos puros comprobados en host y pruebas de IRQ, errores de CPU y doble fallo dentro del invitado. No requiere nuevas crates ni nightly.
 
+#9 incorpora [memoria y protecciones](MEMORY.md): bitmaps de marcos en la biblioteca pura y tablas de páginas x86_64 en el binario. La suite del invitado prueba agotamiento real, recuperación, espacios independientes y cinco fallos de página identificados.
+
 ## CI y prueba negativa
 
 .github/workflows/check.yml ejecuta el mismo cargo xtask check en ubuntu-24.04, para push y pull_request. Acciones fijadas por SHA, token contents:read, checkout sin credenciales persistentes y sin secretos de proyecto. Registra versión de toolchain, logs y biblioteca no_std como artefactos con retención de 14 días. Un job separado instala QEMU/OVMF fijados, prueba el ejecutor y arranca las cuatro variantes, conservando imágenes y evidencia.

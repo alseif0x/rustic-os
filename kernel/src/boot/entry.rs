@@ -39,7 +39,15 @@ pub(crate) fn run() -> ! {
     let Some(mut interrupts) = arch::interrupts::initialize() else {
         diagnostic::fatal("interrupts_already_initialized")
     };
+    let layout = adapter::memory_layout().unwrap_or_else(|reason| diagnostic::fatal(reason));
+    let mut memory = arch::memory::Memory::initialize(layout, adapter::memory_regions())
+        .unwrap_or_else(|error| panic!("memory initialization: {error:?}"));
     match mode {
+        BootMode::MemoryReadOnly
+        | BootMode::MemoryNx
+        | BootMode::MemoryUnmapped
+        | BootMode::MemoryTextAlias
+        | BootMode::MemoryGuard => memory.fault(mode),
         BootMode::TimerStall => interrupts.stall(),
         BootMode::Panic => panic!("deliberate boot test"),
         BootMode::Hang => {
@@ -51,6 +59,7 @@ pub(crate) fn run() -> ! {
         }
         BootMode::Ok => {
             interrupts.verify();
+            memory.verify();
             if let Some(mut serial) = Serial::take() {
                 let _ = writeln!(
                     serial,

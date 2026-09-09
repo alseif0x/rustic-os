@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 pub(crate) mod interrupts;
 mod io;
+pub(crate) mod memory;
 mod serial;
 
 pub(crate) use serial::Serial;

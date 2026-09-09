@@ -15,10 +15,16 @@ struct Tss {
 
 const _: () = assert!(size_of::<Tss>() == 104);
 
-#[repr(C, align(16))]
-struct Stack([u8; 16 * 1024]);
+#[repr(C, align(4096))]
+struct Stack {
+    guard: [u8; 4096],
+    usable: [u8; 16 * 1024],
+}
 
-static mut STACK: Stack = Stack([0; 16 * 1024]);
+static mut STACK: Stack = Stack {
+    guard: [0; 4096],
+    usable: [0; 16 * 1024],
+};
 static mut TSS: Tss = Tss {
     reserved0: 0,
     rsp: [0; 3],
@@ -38,7 +44,11 @@ pub(super) struct Descriptor {
 
 pub(super) fn emergency_contains(address: usize) -> bool {
     let start = core::ptr::addr_of!(STACK) as usize;
-    (start..start + size_of::<Stack>()).contains(&address)
+    (start + 4096..start + size_of::<Stack>()).contains(&address)
+}
+
+pub(super) fn emergency_guard() -> u64 {
+    core::ptr::addr_of!(STACK) as u64
 }
 
 /// Called exactly once, by initialization with IF=0, before any IDT uses this TSS.

@@ -25,6 +25,10 @@ core::arch::global_asm!(include_str!("entry.S"));
 compile_error!("Interrupt stubs require the x86_64-unknown-none soft-float, no-SIMD ABI");
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
+pub(crate) fn emergency_guard() -> u64 {
+    segments::emergency_guard()
+}
+
 pub(crate) struct Controller {
     _local: PhantomData<*mut ()>,
 }

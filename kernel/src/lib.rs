@@ -4,4 +4,5 @@
 #![forbid(unsafe_code)]
 
 pub mod boot;
+pub mod memory;
 pub mod time;

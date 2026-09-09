@@ -9,6 +9,11 @@ pub enum BootMode {
     GeneralProtection,
     DoubleFault,
     TimerStall,
+    MemoryReadOnly,
+    MemoryNx,
+    MemoryUnmapped,
+    MemoryTextAlias,
+    MemoryGuard,
 }
 
 impl BootMode {
@@ -22,6 +27,11 @@ impl BootMode {
             b"mode=gp" => Some(Self::GeneralProtection),
             b"mode=doublefault" => Some(Self::DoubleFault),
             b"mode=timer-stall" => Some(Self::TimerStall),
+            b"mode=memory-ro" => Some(Self::MemoryReadOnly),
+            b"mode=memory-nx" => Some(Self::MemoryNx),
+            b"mode=memory-unmapped" => Some(Self::MemoryUnmapped),
+            b"mode=memory-text-alias" => Some(Self::MemoryTextAlias),
+            b"mode=memory-guard" => Some(Self::MemoryGuard),
             _ => None,
         }
     }
