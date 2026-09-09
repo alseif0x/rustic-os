@@ -4,7 +4,7 @@
 
 Date: 2026-09-09. Reviewed by the implementing agent; no independent review. Complements [LICENSING.md](LICENSING.md).
 
-After #8, Cargo.lock contains rustic-kernel, xtask, limine 0.5.0 and bitflags 2.13.1. Original code is Apache-2.0; dependency crates retain their licenses. The CI image includes Limine's BOOTX64.EFI and the project's ELF; OVMF firmware remains external. The original #34 ABI addition is recorded below.
+Cargo.lock contains the original rustic-kernel, rustic-abi and xtask packages, plus limine 0.5.0 and bitflags 2.13.1. Original code is Apache-2.0; dependency crates retain their licenses. The boot image includes Limine's BOOTX64.EFI and the project's ELF; OVMF firmware remains external.
 
 | Component | Version / source | Use and distribution |
 | --- | --- | --- |
@@ -19,7 +19,7 @@ After #8, Cargo.lock contains rustic-kernel, xtask, limine 0.5.0 and bitflags 2.
 
 tools/environment.toml preserves the Limine archive URL/hash, OVMF hashes and protocol revision. OVMF is not packaged in the image or CI artifacts. Original dependency notices are preserved in licenses/ and inside the image; those texts are not relicensed under Apache-2.0.
 
-## Code included in the #8 ELF
+## Third-party code included in the kernel ELF
 
 | Component | Version/lockfile checksum | Distributed notice |
 | --- | --- | --- |
@@ -31,6 +31,6 @@ These licenses are copied to /licenses alongside RUSTIC.txt (the project's Apach
 
 External component review sources: LICENSE from the hash-verified Limine archive; installed package metadata and copyright under /usr/share/doc; [Rust copyright](https://github.com/rust-lang/rust/blob/master/COPYRIGHT), [QEMU license](https://www.qemu.org/docs/master/about/license.html). The specific terms of a future distributed package are reviewed before publication.
 
-## Original #34 contracts
+## Original shared contracts
 
 `rustic-abi` 0.1.0 is an original crate in this repository under Apache-2.0, without external dependencies or unsafe code. It contains process/IPC constants and errors; the kernel uses it and the SDK will reuse it. Cargo.lock adds only that path dependency: limine and bitflags versions/checksums remain unchanged. Existing image notices remain sufficient; no new third-party material is included.
