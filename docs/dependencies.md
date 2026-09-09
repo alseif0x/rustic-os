@@ -40,3 +40,7 @@ The original `rustic-sdk` and `rustic-sdk-probe` packages added for #11 also use
 ## Block storage implementation
 
 #35 adds original Apache-2.0 driver/DMA code, following the [VirtIO specification](https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html) legacy PCI contract. The [virtio-drivers README](https://github.com/rcore-os/virtio-drivers) was reviewed as a reuse option; the crate was not incorporated and no source was copied. The [transport decision](BLOCK.md) records the tradeoff. Existing QEMU/OVMF packages and Cargo dependencies remain unchanged. Sparse test disks contain only generated fixtures.
+
+## Architecture research tooling
+
+The finite operation model in `tools/research/operation_model` is original Apache-2.0 Python code using only the reference host's standard library. The [research agenda](architecture/systems-roadmap.md) cites prior work for design comparison; no source from those projects or papers is copied or distributed. No new package, Rust crate or guest runtime is introduced.

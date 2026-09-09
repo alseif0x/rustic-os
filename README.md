@@ -60,6 +60,8 @@ Rust kernel: memory · processes · IPC · isolation
 
 The kernel does not depend on MCP or a model. The service, tool and agent layers above it are roadmap work. Read the [agent integration proposal](docs/architecture/agent-integration.md) for the design and open experiments.
 
+The [systems research agenda](docs/architecture/systems-roadmap.md) explores a further goal: tasks whose state, authority, effects and recovery remain understandable across people and replaceable agents. It includes prior work, stage gates and a small executed host model; these proposals are distinct from the implemented features above.
+
 ## Get started
 
 Use **Ubuntu 24.04 amd64**, directly or through WSL2. Ubuntu hosts the compiler and QEMU; the guest runs RusticOS's own kernel. Install Rust and the base tools using the [development guide](docs/DEVELOPMENT.md), then run:
@@ -114,7 +116,7 @@ Modules follow ownership and trust boundaries. Entry points compose components; 
 | H4 — Desktop and browser | Graphical interaction and a browser engine running inside RusticOS | Planned |
 | H5 — Experimental v0.1 | Verified candidates, activation, recovery and integrated acceptance | Planned |
 
-**Next:** [define the authority policy](https://github.com/alseif0x/rustic-os/issues/5), then implement the [persistent file service](https://github.com/alseif0x/rustic-os/issues/12) over the tested block driver. The native SDK and sector storage are available; file permissions, supervision and shell remain ahead.
+**Next:** [define authority](https://github.com/alseif0x/rustic-os/issues/5) and [service contracts](https://github.com/alseif0x/rustic-os/issues/6), then provide [bounded block access](https://github.com/alseif0x/rustic-os/issues/44) to the user-mode [file service](https://github.com/alseif0x/rustic-os/issues/12). The native SDK and sector storage are available; the service bridge, file permissions, supervision and shell remain ahead.
 
 The experimental v0.1 target includes a native console, optional agent, locally running browser engine and a verifiable change/recovery cycle. The model, compiler and test environment may be external, with that dependency declared. Broad hardware support and universal application compatibility are long-term research goals, not current promises.
 

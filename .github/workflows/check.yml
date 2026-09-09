@@ -25,6 +25,8 @@ jobs:
           cargo xtask check 2>&1 | tee artifacts/check.log
       - name: Verify failure detection
         run: bash tools/check-failure.sh
+      - name: Check finite operation model
+        run: python3 -m tools.research.operation_model > artifacts/operation-model.json
       - name: Preserve evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

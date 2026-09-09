@@ -127,3 +127,5 @@ Record IPC/encoding candidates and runtime requirements; do not extrapolate host
 ## Pending decisions
 
 #3/#34 assign IPC, ABI and encoding with measurements and portability; the initial kernel implementation is now documented in [IPC.md](../IPC.md). #6 owns executable schemas and final service semantics. #39 owns client/SDK pairing, MCP revision and transport. #43 owns comparative evidence. No library or transport is yet claimed to be best for the product integration: this proposal establishes the boundaries and how to decide.
+
+The [systems roadmap review](systems-roadmap.md), dated 2026-09-10, extends this proposal with stage gates, explicit block-to-user access (#44), service-capacity planning and bounded experiments for task continuity. Its [finite operation model](operation-model.md) illustrates why commit-time resource and authority checks and a recovery contract matter. It does not resolve #5/#6 or implement the #43 adapter comparison.

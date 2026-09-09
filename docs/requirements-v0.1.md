@@ -45,7 +45,7 @@ Each scenario runs against the guest unless explicitly stated otherwise. Common 
 | ID | Verifiable requirement | Scenario / evidence | Issues |
 | --- | --- | --- | --- |
 | R01 | Original image and success/failure/hang diagnostics | B0/B1/B2: serial, exit/status and runner timeout; clean rebuild | #4 #8 #21 |
-| R02 | Manual operation without AI, isolated processes and persistence | S1: process A fails without killing B/shell; save/reboot/read a file | #9 #10 #11 #12 #13 #14 #34 |
+| R02 | Manual operation without AI, isolated processes and persistence | S1: process A fails without killing B/shell; save/reboot/read a file | #9 #10 #11 #12 #13 #14 #34 #44 |
 | R03 | Structured coverage of included first-party capabilities | M1 and product-action catalog with API/tool and verification; coverage calculated over a versioned list | #6 #22 #40 #41 #29 |
 | R04 | Owner authority separate from autonomy | A1: denied, revoked and workspace-scoped permission; takeover without a model | #5 #13 #24 #28 |
 | R05 | Real optional agent operating without vision | M2, service result, model/configuration identity and shutdown | #23 #29 |
@@ -98,3 +98,5 @@ Each provider connection declares its destination and transmitted data. Use synt
 #3 adopts architecture/boot. #4 pins tools and the versioned machine. #5 defines Low/Medium/Total and consent rules. #6 defines contracts. #7 selects the engine/fonts and web gaps. #20 sets measured budgets. #33 defines timing. #39 pins MCP SDK/client/transport. #42 selects the executor channel. Decisions about components not yet implemented do not block the initial definition.
 
 Changing target hardware, required scope or component location requires recording the reason and impact in #1 and updating this document. Evidence-based test-parameter adjustments must not be presented as a new universal capability.
+
+Architecture review on 2026-09-10: #44 makes the existing requirement for user-mode file-service access to the kernel block driver an explicit prerequisite of #12. #5/#6 precede that interface; #20 records the service topology and capacity gaps before integrated H1 acceptance. This clarifies implementation order without changing mandatory v0.1 outcomes. The [systems roadmap](architecture/systems-roadmap.md) records the rationale and separately labels optional research experiments.

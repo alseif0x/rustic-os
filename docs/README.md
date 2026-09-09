@@ -29,6 +29,8 @@ Start with the [project overview](../README.md) for current capabilities and the
 - [Experimental v0.1 requirements](requirements-v0.1.md): scope, reference profiles and acceptance scenarios.
 - [Kernel and boot decision](architecture/ADR-0001-kernel-and-boot.md): chosen architecture, alternatives and review conditions.
 - [Agent integration proposal](architecture/agent-integration.md): service APIs, tools, MCP and proposed experiments.
+- [Systems roadmap and research agenda](architecture/systems-roadmap.md): stage gates, architectural gaps and bounded experiments for human/agent workflows.
+- [Operation-boundary experiment](architecture/operation-model.md): finite host model of edit/revocation races and retry after a crash; not guest implementation evidence.
 - [ADR template](architecture/ADR-template.md): record a new architecture decision.
 - [Living implementation plan](https://github.com/alseif0x/rustic-os/issues/1): dependencies, milestones and completion evidence. Historical issue discussions may be in Spanish.
 
