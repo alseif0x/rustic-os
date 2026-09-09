@@ -10,7 +10,7 @@ Universalidad y adaptación son objetivos progresivos, demostrados por arquitect
 
 ## Estado
 
-Fase inicial: workspace Rust modular con biblioteca de kernel `no_std`, validaciones iniciales de datos de arranque y comprobaciones automatizadas. Todavía no hay imagen arrancable, aplicaciones ni piloto implementados. Consulta [desarrollo y comandos](docs/DEVELOPMENT.md) para construir y comprobar la base.
+Fase inicial: kernel Rust modular que arranca mediante Limine/UEFI en QEMU, valida el mapa de memoria y emite diagnóstico serie. Las pruebas distinguen éxito, panic, bloqueo y argumentos inválidos. Todavía no hay shell, procesos aislados, aplicaciones ni piloto. Consulta [desarrollo](docs/DEVELOPMENT.md) y [arranque y pruebas](docs/BOOT.md) para ejecutar la base.
 
 ## Plan y participación
 

@@ -35,4 +35,6 @@ Repetir la revisión cuando cambie una dependencia o la forma de distribuirla. L
 
 ## Convención
 
+La imagen inicial de #8 incorpora Limine al volumen y bindings/runtime al ELF. El [inventario vigente](dependencies.md) identifica versiones y licencias; la imagen conserva sus avisos completos en /licenses. OVMF y QEMU siguen siendo herramientas externas. La ausencia inicial de terceros descrita arriba es histórica, no una descripción de esta imagen.
+
 Los archivos originales con sintaxis de comentarios usan `SPDX-License-Identifier: Apache-2.0`, conforme a [CONTRIBUTING.md](../CONTRIBUTING.md). Los avisos de copyright deben reflejar autoría real. El texto de LICENSE se mantiene sin modificaciones.

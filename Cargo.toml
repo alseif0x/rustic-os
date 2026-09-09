@@ -16,3 +16,6 @@ unsafe_op_in_unsafe_fn = "deny"
 
 [workspace.lints.clippy]
 undocumented_unsafe_blocks = "deny"
+
+[profile.release]
+panic = "abort"

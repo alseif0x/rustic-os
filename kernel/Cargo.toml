@@ -10,3 +10,16 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[features]
+boot-image = ["dep:limine"]
+
+[target.'cfg(target_os = "none")'.dependencies]
+limine = { version = "=0.5.0", optional = true }
+
+[[bin]]
+name = "rustic-os"
+path = "src/main.rs"
+required-features = ["boot-image"]
+test = false
+bench = false

@@ -16,7 +16,7 @@ Si falta rustup, obtenerlo de la [instalación oficial](https://rust-lang.github
 . "$HOME/.cargo/env"
 rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy --target x86_64-unknown-none
 ```
-rust-toolchain.toml selecciona esa versión exacta. No se requiere nightly ni crates de terceros. Cargo.lock está versionado; las comprobaciones usan --locked. El enlazador del target es rust-lld incluido en esa toolchain; todavía solo se genera una biblioteca, no un ELF arrancable.
+rust-toolchain.toml selecciona esa versión exacta; no se requiere nightly. Cargo.lock fija los bindings Limine y bitflags, usados solo por el ejecutable de arranque. Las comprobaciones usan --locked. rust-lld genera un ELF estático mediante kernel/linker.ld; la biblioteca pura se mantiene separada del ejecutable.
 
 ## Comandos ejecutables
 
@@ -55,11 +55,11 @@ python3 tools/environment.py fetch-bootloader
 
 install instala las versiones exactas de tools/environment.toml; verify rechaza paquetes o hashes de firmware diferentes y comprueba la máquina pc-q35-8.2. fetch-bootloader descarga Limine 12.8.0 y comprueba SHA-256 sin extraer ni ejecutar el archivo. .cache queda fuera del repositorio. Si una versión deja de estar disponible en apt, la instalación falla: actualizar la base con revisión/evidencia, no sustituir silenciosamente por latest. Las dependencias transitivas de Ubuntu y la imagen del runner no están fijadas por digest; esta base no promete reconstrucción hermética ni identidad binaria.
 
-La imagen FAT/EFI, bindings y revisión concreta del protocolo Limine usados por el kernel se incorporarán y verificarán en #8. No hay todavía comando run ni imagen arrancable.
+La imagen FAT32/UEFI ya se construye y arranca. Los [comandos de arranque y sus límites](BOOT.md) incluyen ejecución individual y pruebas de éxito, panic, bloqueo y argumentos inválidos.
 
 ## CI y prueba negativa
 
-.github/workflows/check.yml ejecuta el mismo cargo xtask check en ubuntu-24.04, para push y pull_request. Acciones fijadas por SHA, token contents:read, checkout sin credenciales persistentes y sin secretos de proyecto. Registra versión de toolchain, logs y biblioteca no_std como artefactos con retención de 14 días. QEMU no se instala en esta CI porque aún no arranca una VM.
+.github/workflows/check.yml ejecuta el mismo cargo xtask check en ubuntu-24.04, para push y pull_request. Acciones fijadas por SHA, token contents:read, checkout sin credenciales persistentes y sin secretos de proyecto. Registra versión de toolchain, logs y biblioteca no_std como artefactos con retención de 14 días. Un job separado instala QEMU/OVMF fijados, prueba el ejecutor y arranca las cuatro variantes, conservando imágenes y evidencia.
 
 Después, tools/check-failure.sh introduce un test que falla deliberadamente y exige que cargo xtask check lo rechace. La prueba identifica el marcador esperado para no aceptar como evidencia un error de compilación o de herramientas. Ejecutarla solo en checkout desechable: formatea y añade temporalmente el fixture, retirado al salir.
 
@@ -67,4 +67,4 @@ Después, tools/check-failure.sh introduce un test que falla deliberadamente y e
 bash tools/check-failure.sh
 ```
 
-El mismo usuario de CI podría modificar código de una PR; el flujo limita permisos y no suministra credenciales de publicación. La CI del arranque llegará en #8/#21.
+El mismo usuario de CI podría modificar código de una PR; el flujo limita permisos y no suministra credenciales de publicación. #21 ampliará el ejecutor aislado más allá de esta comprobación inicial de arranque.

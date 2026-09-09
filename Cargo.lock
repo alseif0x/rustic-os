@@ -3,8 +3,26 @@
 version = 4
 
 [[package]]
+name = "bitflags"
+version = "2.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da"
+
+[[package]]
+name = "limine"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af6d2ee42712e7bd2c787365cd1dab06ef59a61becbf87bec7b32b970bd2594b"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
 name = "rustic-kernel"
 version = "0.1.0"
+dependencies = [
+ "limine",
+]
 
 [[package]]
 name = "xtask"

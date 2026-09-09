@@ -43,5 +43,23 @@ pub(super) fn run() -> Result<(), String> {
     for args in commands {
         command::cargo(root, args)?;
     }
+    command::cargo(
+        root,
+        &[
+            "clippy",
+            "-p",
+            "rustic-kernel",
+            "--bin",
+            "rustic-os",
+            "--features",
+            "boot-image",
+            "--target",
+            "x86_64-unknown-none",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    )?;
     Ok(())
 }
