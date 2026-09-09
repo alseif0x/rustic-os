@@ -14,6 +14,7 @@ Tras #8, Cargo.lock contiene rustic-kernel, xtask, limine 0.5.0 y bitflags 2.13.
 | mtools / dosfstools / xorriso | Versiones exactas en tools/environment.toml, Ubuntu noble | Utilidades externas; conservar sus términos si se distribuyen en el futuro. |
 | Limine | 12.8.0, [release oficial](https://github.com/Limine-Bootloader/Limine/releases/tag/v12.8.0) | BOOTX64.EFI extraído del archivo verificado e incorporado a la imagen. LICENSE BSD-2-Clause de Mintsuki y colaboradores se copia íntegra a /licenses/LIMINE.txt. |
 | checkout / upload-artifact | SHA en workflow; repositorios oficiales actions | Acciones remotas de CI, no vendorizadas. No proporcionan una licencia al código del proyecto. |
+| Docker Engine / Ubuntu container | Engine 29.7.2 validado localmente; Ubuntu 24.04 amd64 con digest en tools/sandbox_support/prepare.py | Herramientas externas de #21. Imagen construida localmente, sin publicación en registro; cada paquete conserva sus avisos. La identidad final se guarda por trabajo. |
 
 tools/environment.toml conserva URL/hash del archivo Limine, hashes de OVMF y revisión del protocolo. OVMF no se empaqueta en la imagen ni en los artefactos de CI. Los avisos originales de dependencias se conservan en licenses/ y dentro de la imagen; esos textos no se relicencian bajo Apache-2.0.
 

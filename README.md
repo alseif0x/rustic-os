@@ -12,6 +12,8 @@ Universalidad y adaptación son objetivos progresivos, demostrados por arquitect
 
 Fase inicial: kernel Rust modular que arranca mediante Limine/UEFI en QEMU, valida el mapa de memoria y emite diagnóstico serie. Las pruebas distinguen éxito, panic, bloqueo y argumentos inválidos. Todavía no hay shell, procesos aislados, aplicaciones ni piloto. Consulta [desarrollo](docs/DEVELOPMENT.md) y [arranque y pruebas](docs/BOOT.md) para ejecutar la base.
 
+El [ejecutor aislado](docs/EXECUTOR.md) construye revisiones Git y comprueba el arranque en contenedores separados, sin red durante los trabajos y con límites de recursos, cancelación y resultados JSON.
+
 ## Plan y participación
 
 - [Plan vigente: requisitos, hitos, riesgos y reglas de ejecución](https://github.com/alseif0x/rustic-os/issues/1).

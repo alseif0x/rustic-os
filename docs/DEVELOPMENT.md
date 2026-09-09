@@ -67,4 +67,4 @@ Después, tools/check-failure.sh introduce un test que falla deliberadamente y e
 bash tools/check-failure.sh
 ```
 
-El mismo usuario de CI podría modificar código de una PR; el flujo limita permisos y no suministra credenciales de publicación. #21 ampliará el ejecutor aislado más allá de esta comprobación inicial de arranque.
+El mismo usuario de CI podría modificar código de una PR; el flujo limita permisos y no suministra credenciales de publicación. El [ejecutor de #21](EXECUTOR.md) añade compilación y VM en contenedores separados, restricciones de recursos y red, cancelación y manifiestos. Su job de CI comprueba además fallos reales y repetición limpia.

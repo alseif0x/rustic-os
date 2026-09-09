@@ -35,6 +35,25 @@ jobs:
             target/x86_64-unknown-none/debug/librustic_kernel.rlib
           if-no-files-found: error
           retention-days: 14
+  sandbox:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare reviewed toolchain
+        run: python3 tools/sandbox.py prepare
+      - name: Verify isolated builds and VM failures
+        run: python3 tools/sandbox.py test --revision "$(git rev-parse HEAD)"
+      - name: Preserve isolated execution evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sandbox-evidence
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
   boot:
     runs-on: ubuntu-24.04
     timeout-minutes: 15

@@ -39,9 +39,21 @@ def build(mode):
          "boot-image", "--target", "x86_64-unknown-none", "--release", "--locked"],
         cwd=ROOT, env=env, check=True,
     )
+    kernel = ROOT / "target/x86_64-unknown-none/release/rustic-os"
+    provenance = {
+        "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "source_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
+        "rustc": subprocess.check_output(["rustc", "--version", "--verbose"], text=True),
+    }
+    return package(kernel, mode, build_id, provenance)
+
+
+def package(kernel, mode, build_id, provenance):
+    """Package a prebuilt ELF using trusted reference files, without compiling."""
+    if mode not in ("ok", "panic", "hang", "invalid"):
+        raise ValueError("unsupported fixture")
     directory = OUTPUT / mode
     directory.mkdir(parents=True, exist_ok=True)
-    kernel = ROOT / "target/x86_64-unknown-none/release/rustic-os"
     header = kernel.read_bytes()[:64]
     if header[:6] != b"\x7fELF\x02\x01" or header[16:20] != b"\x02\x00\x3e\x00":
         raise RuntimeError("expected a static x86_64 ELF executable")
@@ -79,12 +91,10 @@ def build(mode):
     shutil.copyfile(kernel, directory / "kernel.elf")
     metadata = {
         "mode": mode, "build_id": build_id,
-        "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
-        "source_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
+        **provenance,
         "kernel_sha256": environment.digest(kernel),
         "image_sha256": environment.digest(image),
         "environment": environment.CONFIG,
-        "rustc": subprocess.check_output(["rustc", "--version", "--verbose"], text=True),
     }
     (directory / "image.json").write_text(json.dumps(metadata, indent=2) + "\n")
     return image
