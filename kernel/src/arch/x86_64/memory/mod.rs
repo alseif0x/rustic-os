@@ -2,6 +2,8 @@
 //! R0 memory owner. Physical bookkeeping, table mechanics and fixtures stay separate.
 mod bootstrap;
 mod copy;
+mod dma;
+pub(crate) use dma::DmaRegion;
 mod cpu;
 mod physical;
 mod space;
@@ -72,7 +74,7 @@ impl Memory {
     pub(crate) fn verify(&mut self) {
         tests::verify(self);
     }
-    pub(crate) fn verify_user_oom(&mut self, remaining: usize, test: impl FnOnce(&mut Self)) {
+    pub(crate) fn verify_frame_budget(&mut self, remaining: usize, test: impl FnOnce(&mut Self)) {
         tests::with_free_frames(self, remaining, test);
     }
     pub(crate) fn fault(&mut self, mode: rustic_kernel::boot::BootMode) -> ! {

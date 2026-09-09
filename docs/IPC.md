@@ -126,7 +126,7 @@ zero remaining resources and equal free-frame counters; a partial log or
 misclassified error cannot become success.
 
 R0 retains one CPU, 256 MiB, QEMU 8.2.2 q35/qemu64/TCG, OVMF 2024.02 and
-Rust 1.98.1. New acceptance is integrated into the 13 VM and 17 isolated scenarios.
+Rust 1.98.1. At #34 acceptance these checks were integrated into 13 VM and 17 isolated scenarios; [block storage](BLOCK.md) later expands both suites.
 A local sample measures 3,648 bytes for the manager with broker and states,
 compared with 1,040 in #10; the four processes still use 52 frames for their
 pages/tables. The first boot with IPC took around 8.9 seconds including self-tests.

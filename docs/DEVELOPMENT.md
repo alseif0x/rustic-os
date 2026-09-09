@@ -74,7 +74,7 @@ The FAT32/UEFI image can already be built and booted. [Boot commands and limits]
 
 ## CI and negative testing
 
-.github/workflows/check.yml runs the same cargo xtask check on ubuntu-24.04 for push and pull_request. Actions are pinned by SHA, the token has contents:read permissions, checkout does not persist credentials, and no project secrets are supplied. Toolchain versions, logs and the no_std library are retained as artifacts for 14 days. A separate job installs pinned QEMU/OVMF, tests the runner and boots all thirteen scenarios, preserving images and evidence.
+.github/workflows/check.yml runs the same cargo xtask check on ubuntu-24.04 for push and pull_request. Actions are pinned by SHA, the token has contents:read permissions, checkout does not persist credentials, and no project secrets are supplied. Toolchain versions, logs and the no_std library are retained as artifacts for 14 days. A separate job installs pinned QEMU/OVMF, tests the runner and boots all eighteen scenarios, preserving images and evidence.
 
 Next, tools/check-failure.sh introduces a deliberately failing test and requires cargo xtask check to reject it. The check identifies the expected marker so a compilation or tooling error cannot count as evidence. Run it only in a disposable checkout: it formats and temporarily adds the fixture, removing it on exit.
 
@@ -89,3 +89,5 @@ The same CI user could modify PR code; the workflow limits permissions and suppl
 #11 adds [the native SDK and manifest](SDK.md). Run `python3 tools/application.py` to build the independent ELF and binary manifest. `cargo xtask check` requires Python 3.11+ (the reference uses Python 3.12), compiles/lints the guest application and passes its artifact directory explicitly when checking the kernel acceptance image. It still does not need QEMU or bootloader downloads. Host builds do not expose the SDK instruction boundary.
 
 The image builder and isolated worker compile the application before the kernel with the `sdk-test` feature. Direct source fingerprints cover application sources, linker script, descriptor and the host manifest encoder. The sandbox exports bounded ELF/manifest artifacts with hashes alongside the containing kernel.
+
+#35 adds [block storage](BLOCK.md), with PCI I/O, DMA, queue mechanics and request validation in separate modules. No toolchain or Cargo dependency is added. Full direct and isolated suites now contain 18 and 22 scenarios. Rebuild reviewed sandbox infrastructure before using the new modes.

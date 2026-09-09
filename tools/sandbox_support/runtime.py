@@ -15,13 +15,14 @@ def name(job_id, phase):
 
 def create(image, job_id, phase, directory):
     container = name(job_id, phase)
+    file_limit = 4294967296 if phase == "boot" else 268435456
     args = [
         "docker", "create", "--name", container, "--label", "rusticos.job=" + job_id,
         "--label", "rusticos.phase=" + phase, "--read-only", "--network", "none",
         "--cap-drop", "ALL", "--security-opt", "no-new-privileges=true",
         "--user", "1000:1000", "--cpus", "2", "--memory", "2g", "--memory-swap", "2g",
         "--pids-limit", "128", "--log-driver", "none", "--ulimit", "core=0",
-        "--ulimit", "nofile=256:256", "--ulimit", "fsize=268435456:268435456",
+        "--ulimit", "nofile=256:256", "--ulimit", f"fsize={file_limit}:{file_limit}",
         "--tmpfs", "/work:rw,exec,nosuid,nodev,size=1073741824,uid=1000,gid=1000,mode=0700",
         "--tmpfs", "/tmp:rw,nosuid,nodev,size=134217728,uid=1000,gid=1000,mode=0700",
         image,

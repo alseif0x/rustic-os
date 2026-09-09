@@ -43,6 +43,23 @@ pub(crate) fn run() -> ! {
     let mut memory = arch::memory::Memory::initialize(layout, adapter::memory_regions())
         .unwrap_or_else(|error| panic!("memory initialization: {error:?}"));
     match mode {
+        BootMode::BlockPersist
+        | BootMode::BlockReadOnly
+        | BootMode::BlockError
+        | BootMode::BlockTimeout
+        | BootMode::BlockMissing => {
+            crate::drivers::block::verify(&mut memory, mode);
+            if let Some(mut serial) = Serial::take() {
+                writeln!(
+                    serial,
+                    "RUSTIC SUCCESS component=boot build={}",
+                    diagnostic::BUILD
+                )
+                .unwrap();
+                serial.flush();
+            }
+            arch::test_exit(0x10)
+        }
         BootMode::MemoryReadOnly
         | BootMode::MemoryNx
         | BootMode::MemoryUnmapped

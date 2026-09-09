@@ -27,9 +27,10 @@ The goal is agent control without mandatory screen interpretation. A graphical i
 | [Native processes](docs/PROCESSES.md) | Static ELF loading, ring 3 execution, timer preemption, fault containment and resource reclamation |
 | [Native Rust SDK](docs/SDK.md) | Independent Rust ELF applications, versioned manifests and typed IPC clients |
 | [IPC and handles](docs/IPC.md) | Versioned messages, kernel-provided sender identity, validated buffers, ownership, waits and closure |
+| [Block storage](docs/BLOCK.md) | Bounded VirtIO reads/writes, flush, restart persistence, device errors and DMA recovery |
 | [Isolated test executor](docs/EXECUTOR.md) | Exact Git revisions, offline jobs, resource limits, cancellation and structured evidence |
 
-The IPC implementation was accepted with **27 Rust tests, 19 Python tests, 13 VM scenarios and 17 isolated executor scenarios**, including real user-mode exchanges and rejected invalid operations. See the [recorded CI run](https://github.com/alseif0x/rustic-os/actions/runs/34407198755) and [acceptance evidence](https://github.com/alseif0x/rustic-os/issues/34). These are checks of the current reference configuration, not production security guarantees.
+The current acceptance suite covers **37 Rust tests, 26 Python tests, 18 VM scenarios and 22 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [storage acceptance](https://github.com/alseif0x/rustic-os/issues/35) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees.
 
 The current VM uses **x86_64, one CPU and 256 MiB RAM**. Process and IPC limits are deliberately small; see their contracts before building on them.
 
@@ -113,7 +114,7 @@ Modules follow ownership and trust boundaries. Entry points compose components; 
 | H4 — Desktop and browser | Graphical interaction and a browser engine running inside RusticOS | Planned |
 | H5 — Experimental v0.1 | Verified candidates, activation, recovery and integrated acceptance | Planned |
 
-**Next:** [bounded virtual block-device I/O](https://github.com/alseif0x/rustic-os/issues/35), to establish verified storage before the file service, authority and shell. The [native SDK](docs/SDK.md) now runs independently compiled Rust applications over the existing ABI.
+**Next:** [define the authority policy](https://github.com/alseif0x/rustic-os/issues/5), then implement the [persistent file service](https://github.com/alseif0x/rustic-os/issues/12) over the tested block driver. The native SDK and sector storage are available; file permissions, supervision and shell remain ahead.
 
 The experimental v0.1 target includes a native console, optional agent, locally running browser engine and a verifiable change/recovery cycle. The model, compiler and test environment may be external, with that dependency declared. Broad hardware support and universal application compatibility are long-term research goals, not current promises.
 

@@ -36,3 +36,7 @@ External component review sources: LICENSE from the hash-verified Limine archive
 `rustic-abi` 0.1.0 is an original crate in this repository under Apache-2.0, without external dependencies or unsafe code. It contains process/IPC constants, errors and the application manifest contract; the kernel and SDK consume it independently. Cargo.lock adds only that path dependency: limine and bitflags versions/checksums remain unchanged. Existing image notices remain sufficient; no new third-party material is included.
 
 The original `rustic-sdk` and `rustic-sdk-probe` packages added for #11 also use Apache-2.0. They add only path dependencies on the shared ABI/SDK, without external crates. The test kernel embeds the separately linked application ELF; the existing Rust runtime notice also covers that application.
+
+## Block storage implementation
+
+#35 adds original Apache-2.0 driver/DMA code, following the [VirtIO specification](https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html) legacy PCI contract. The [virtio-drivers README](https://github.com/rcore-os/virtio-drivers) was reviewed as a reuse option; the crate was not incorporated and no source was copied. The [transport decision](BLOCK.md) records the tradeoff. Existing QEMU/OVMF packages and Cargo dependencies remain unchanged. Sparse test disks contain only generated fixtures.

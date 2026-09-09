@@ -3,6 +3,7 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+pub mod block;
 pub mod boot;
 pub mod ipc;
 pub mod memory;

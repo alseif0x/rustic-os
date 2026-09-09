@@ -20,7 +20,7 @@ pub(crate) fn with_free_frames(
     assert_eq!(
         memory.free_frames(),
         remaining,
-        "failed image load leaked frames"
+        "failed operation leaked frames"
     );
     while head != 0 {
         let next = memory.physical.read(head, 0);

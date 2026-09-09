@@ -12,7 +12,7 @@ pub(super) fn advance() {
     });
 }
 
-pub(super) fn ticks() -> u64 {
+pub(crate) fn ticks() -> u64 {
     TICKS.load(Ordering::Relaxed)
 }
 

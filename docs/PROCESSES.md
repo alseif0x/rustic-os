@@ -151,7 +151,7 @@ The `ok` scenario requires process evidence in addition to IRQ and memory:
   the real inventory until 0, 5 or 9 pages remain forces failures during root
   creation or partial segment/stack loading. The exact free counter is restored.
 
-The suites still have 13 VM and 17 executor scenarios: process acceptance and
+At #10 acceptance the suites had 13 VM and 17 executor scenarios: process acceptance and
 contained negative cases are integrated into `ok`. Kernel faults in other
 scenarios remain expected terminal events. Validation/policy contracts also
 have host tests; those tests do not replace ring 3 execution.

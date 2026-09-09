@@ -3,16 +3,20 @@
 from .process_evidence import verified as process_verified
 from .ipc_evidence import verified as ipc_verified
 from .sdk_evidence import verified as sdk_verified
+from .block_evidence import MODES as BLOCK_MODES, verified as block_verified
 MEMORY_FAULTS = {"memory-ro": (3, "MemoryReadOnly"), "memory-nx": (17, "MemoryNx"),
                  "memory-unmapped": (0, "MemoryUnmapped"), "memory-text-alias": (3, "MemoryTextAlias"),
                  "memory-guard": (0, "MemoryGuard")}
 EXPECTED = {"ok": "success", "panic": "panic", "hang": "timeout", "invalid": "fatal",
             "exception": "exception", "gp": "exception", "doublefault": "exception", "timer-stall": "timeout"}
 EXPECTED.update({mode: "exception" for mode in MEMORY_FAULTS})
+EXPECTED.update({mode: "success" for mode in BLOCK_MODES})
 MODES = tuple(EXPECTED)
 
 
 def reached(mode, serial):
+    if mode in BLOCK_MODES:
+        return block_verified(mode, serial, records)
     if mode == "ok":
         return ("RUSTIC IRQ verified=1 breakpoint=1 spurious=2 waits=3 cancelled=1 race_waits=100" in serial
                 and memory_verified(serial) and process_verified(serial, records) and ipc_verified(serial, records)

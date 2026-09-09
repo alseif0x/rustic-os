@@ -46,13 +46,13 @@ python3 tools/boot.py test --timeout 30
 | memory-nx | #PF for prohibited execution, error 0x11 and expected CR2 | 39 | 1 |
 | memory-unmapped / memory-guard | #PF for absent address, error 0 and expected CR2 | 39 | 1 |
 
-The isa-debug-exit device transforms the value written by the kernel into (value × 2) + 1; these codes are specific to the R0 test. Any unexpected combination returns 2. The full suite returns 0 only if all thirteen cases match their expected results and markers. A firmware timeout before reaching the fixture does not pass the hang test. `ok` checks [interrupts and waits](INTERRUPTS.md), [memory](MEMORY.md), [ring 3 processes](PROCESSES.md) and [IPC](IPC.md) before SUCCESS.
+The isa-debug-exit device transforms the value written by the kernel into (value × 2) + 1; these codes are specific to the R0 test. Any unexpected combination returns 2. The full suite returns 0 only if all eighteen cases match their expected results and markers. A firmware timeout before reaching the fixture does not pass the hang test. `ok` checks [interrupts and waits](INTERRUPTS.md), [memory](MEMORY.md), [ring 3 processes](PROCESSES.md), [IPC](IPC.md) and the [SDK](SDK.md) before SUCCESS. Separate [block scenarios](BLOCK.md) verify storage and restart persistence.
 
 30 seconds is the initial local budget; CI uses 45 seconds to absorb runner variation. Early positive boots took around 4 seconds; the later IPC acceptance sample took 8.626 seconds including guest self-tests (see #34). These are configuration-specific observations, not universal performance targets. The host kills only the QEMU process created by that run, waits for it to exit and also removes it if the runner is interrupted.
 
 ## Evidence
 
-Each fixture directory retains image.json (versions/configuration, commit and checkout state, source identifier and hashes), kernel.elf, rustic-os.img, serial.log, qemu.log and result.json (command, duration, timeout and status). suite.json is written only after all thirteen cases finish. Logs are reset for each run; previous success is not reused.
+Each fixture directory retains image.json (versions/configuration, commit and checkout state, source identifier and hashes), kernel.elf, rustic-os.img, serial.log, qemu.log and result.json (command, duration, timeout and status). suite.json is written only after all eighteen cases finish. Logs are reset for each run; previous success is not reused.
 
 The direct build id identifies the kernel's Rust/assembly sources, shared ABI sources/manifests and build configuration; in the isolated executor it identifies the candidate commit. It does not replace the SHA-256 hash of the ELF or image. The image contains FAT filesystem timestamps: binary identity between rebuilds is not promised. The environment is also not hermetic because of the Ubuntu baseline and its transitive dependencies.
 
@@ -69,6 +69,10 @@ Limine bindings 0.5.0 use base revision 3 with Limine loader 12.8.0 and a reques
 
 The bootloader and its pointers are trusted: the bindings rely on their validity and lifetime. Checks cover response availability, revision, nonempty/nonoverflowing ranges, ordering/nonoverlap, a 4096-entry limit and usable memory. Boot-data validation alone does not protect against a malicious loader or install owned page tables.
 
-The kernel enters with interrupts disabled, validates boot data and installs its own GDT/TSS/IDT and PIC/PIT before enabling IRQ0, on one CPU. It then prepares [allocation and owned page tables](MEMORY.md), also protecting aliases and the emergency guard. Bootloader memory stays reserved. Testing uses a read-only disk, disposable OVMF variables and no personal disk or directory.
+The kernel enters with interrupts disabled, validates boot data and installs its own GDT/TSS/IDT and PIC/PIT before enabling IRQ0, on one CPU. It then prepares [allocation and owned page tables](MEMORY.md), also protecting aliases and the emergency guard. Bootloader memory stays reserved. Testing uses a read-only boot disk, disposable OVMF variables and no personal disk or directory. Block scenarios add a separately created sparse 4 GiB test disk.
 
 Licenses for Limine, the bindings, bitflags and Rust are included in the image. OVMF and QEMU remain external. See the [component inventory](dependencies.md). #33 adds [exceptions and time](INTERRUPTS.md), #9 [memory and protections](MEMORY.md), and #10 [native processes and isolation](PROCESSES.md). Minimal calls are documented in [PROCESS-ABI.md](PROCESS-ABI.md).
+
+## Block-device scenarios
+
+The additional modes are `block-persist`, `block-readonly`, `block-error`, `block-timeout` and `block-missing`. They require successful guest checks (QEMU exit 33) plus the host oracle. Persistence starts two separate VMs with one freshly created disposable disk. Phase logs, selected disk bytes and hashes are retained; the sparse disk itself is removed. See [BLOCK.md](BLOCK.md) for the contract and limits.

@@ -6,6 +6,7 @@ mod arch;
 #[path = "boot/entry.rs"]
 mod boot;
 mod diagnostic;
+mod drivers;
 #[path = "process/runtime/mod.rs"]
 mod process;
 

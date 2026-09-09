@@ -2,6 +2,7 @@
 pub(crate) mod interrupts;
 mod io;
 pub(crate) mod memory;
+pub(crate) mod pci;
 mod serial;
 
 pub(crate) use serial::Serial;

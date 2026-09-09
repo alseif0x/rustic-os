@@ -27,9 +27,18 @@ def classify(returncode, timed_out, serial, build_id):
 
 
 def run(image, timeout):
+    from .block_evidence import MODES
+    from . import block_runner
+    metadata = json.loads((Path(image).resolve().parent / "image.json").read_text())
+    if metadata["mode"] in MODES:
+        return block_runner.run(image, timeout, run_once)
+    return run_once(image, timeout)
+
+
+def run_once(image, timeout, storage=(), output=None):
     image = Path(image).resolve()
-    directory = image.parent
-    metadata = json.loads((directory / "image.json").read_text())
+    directory = output or image.parent
+    metadata = json.loads((image.parent / "image.json").read_text())
     if environment.digest(image) != metadata["image_sha256"]:
         raise RuntimeError("image changed since construction")
     config = environment.CONFIG
@@ -50,6 +59,7 @@ def run(image, timeout):
             "-display", "none", "-serial", f"file:{serial_path}", "-monitor", "none",
             "-nic", "none", "-no-reboot",
         ]
+        command += list(storage)
         with (directory / "qemu.log").open("w") as log:
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
             try:

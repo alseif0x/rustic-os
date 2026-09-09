@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! One CPU, ring 0: own descriptor tables, PIC/PIT, interrupt-safe clock and waits.
 mod clock;
+pub(crate) use clock::ticks;
 mod dispatch;
 mod frame;
 mod mask;

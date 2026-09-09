@@ -14,6 +14,11 @@ pub enum BootMode {
     MemoryUnmapped,
     MemoryTextAlias,
     MemoryGuard,
+    BlockPersist,
+    BlockReadOnly,
+    BlockError,
+    BlockTimeout,
+    BlockMissing,
 }
 
 impl BootMode {
@@ -32,6 +37,11 @@ impl BootMode {
             b"mode=memory-unmapped" => Some(Self::MemoryUnmapped),
             b"mode=memory-text-alias" => Some(Self::MemoryTextAlias),
             b"mode=memory-guard" => Some(Self::MemoryGuard),
+            b"mode=block-persist" => Some(Self::BlockPersist),
+            b"mode=block-readonly" => Some(Self::BlockReadOnly),
+            b"mode=block-error" => Some(Self::BlockError),
+            b"mode=block-timeout" => Some(Self::BlockTimeout),
+            b"mode=block-missing" => Some(Self::BlockMissing),
             _ => None,
         }
     }

@@ -127,6 +127,31 @@ impl<'a> FrameAllocator<'a> {
         Ok(())
     }
 
+    /// Bounded contiguous DMA allocation. Search and validation precede mutation.
+    pub fn allocate_contiguous(&mut self, count: usize) -> Result<u64, FrameError> {
+        if count == 0 || count > 4 {
+            return Err(FrameError::InvalidRange);
+        }
+        let mut run = 0;
+        for frame in 0..self.managed.len() * 64 {
+            let mask = 1u64 << (frame % 64);
+            if self.managed[frame / 64] & !self.allocated[frame / 64] & mask != 0 {
+                run += 1;
+                if run == count {
+                    let first = frame + 1 - count;
+                    for owned in first..=frame {
+                        self.allocated[owned / 64] |= 1 << (owned % 64);
+                    }
+                    self.free -= count;
+                    return Ok(first as u64 * PAGE_SIZE);
+                }
+            } else {
+                run = 0;
+            }
+        }
+        Err(FrameError::Exhausted)
+    }
+
     fn locate(&self, address: u64) -> Result<(usize, u64), FrameError> {
         if !address.is_multiple_of(PAGE_SIZE) {
             return Err(FrameError::InvalidRange);

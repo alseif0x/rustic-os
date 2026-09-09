@@ -11,7 +11,7 @@ static mut ALLOCATED: [u64; WORDS] = [0; WORDS];
 
 pub(super) struct Physical {
     pub(super) frames: FrameAllocator<'static>,
-    hhdm: u64,
+    pub(super) hhdm: u64,
 }
 
 impl Physical {

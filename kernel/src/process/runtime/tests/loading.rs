@@ -21,7 +21,7 @@ pub(super) fn verify(manager: &mut Manager, memory: &mut Memory) -> usize {
     ));
     assert_eq!(memory.free_frames(), before);
     for remaining in [0, 5, 9] {
-        memory.verify_user_oom(remaining, |memory| {
+        memory.verify_frame_budget(remaining, |memory| {
             assert_eq!(
                 manager.create(memory, image(false), [0; 3]),
                 Err(Error::Memory(crate::arch::memory::Error::Frames(
