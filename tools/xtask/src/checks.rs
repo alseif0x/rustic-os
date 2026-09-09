@@ -43,7 +43,39 @@ pub(super) fn run() -> Result<(), String> {
     for args in commands {
         command::cargo(root, args)?;
     }
+    let application = std::process::Command::new("python3")
+        .args(["tools/application.py"])
+        .current_dir(root)
+        .status()
+        .map_err(|error| error.to_string())?;
+    if !application.success() {
+        return Err("native application build failed".to_owned());
+    }
     command::cargo(
+        root,
+        &[
+            "clippy",
+            "-p",
+            "rustic-sdk-probe",
+            "--features",
+            "native",
+            "--target",
+            "x86_64-unknown-none",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    )?;
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| root.join("target"));
+    let native = root
+        .join(target)
+        .join("native")
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    command::cargo_env(
         root,
         &[
             "clippy",
@@ -52,7 +84,7 @@ pub(super) fn run() -> Result<(), String> {
             "--bin",
             "rustic-os",
             "--features",
-            "boot-image",
+            "sdk-test",
             "--target",
             "x86_64-unknown-none",
             "--locked",
@@ -60,6 +92,7 @@ pub(super) fn run() -> Result<(), String> {
             "-D",
             "warnings",
         ],
+        &[("RUSTIC_APPLICATION_DIRECTORY", &native)],
     )?;
     Ok(())
 }

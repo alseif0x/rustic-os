@@ -30,5 +30,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustic-sdk"
+version = "0.1.0"
+dependencies = [
+ "rustic-abi",
+]
+
+[[package]]
+name = "rustic-sdk-probe"
+version = "0.1.0"
+dependencies = [
+ "rustic-sdk",
+]
+
+[[package]]
 name = "xtask"
 version = "0.1.0"

@@ -2,6 +2,7 @@
 fn main() {
     println!("cargo:rerun-if-changed=linker.ld");
     println!("cargo:rerun-if-env-changed=RUSTIC_BUILD_ID");
+    println!("cargo:rerun-if-env-changed=RUSTIC_APPLICATION_DIRECTORY");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("none")
         && std::env::var_os("CARGO_FEATURE_BOOT_IMAGE").is_some()
     {

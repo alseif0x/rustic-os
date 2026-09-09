@@ -3,10 +3,15 @@ use std::{path::Path, process::Command};
 
 /// Inherits diagnostics and fails on spawn errors, nonzero exit, or signals.
 pub(super) fn cargo(root: &Path, args: &[&str]) -> Result<(), String> {
+    cargo_env(root, args, &[])
+}
+
+pub(super) fn cargo_env(root: &Path, args: &[&str], env: &[(&str, &Path)]) -> Result<(), String> {
     let executable = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     eprintln!("cargo {}", args.join(" "));
     let status = Command::new(executable)
         .args(args)
+        .envs(env.iter().copied())
         .current_dir(root)
         .status()
         .map_err(|error| format!("cannot run cargo: {error}"))?;

@@ -10,6 +10,7 @@ import tarfile
 import tempfile
 
 import environment
+import application
 from .scenarios import MODES
 
 ROOT = environment.ROOT
@@ -22,6 +23,8 @@ def source_id():
     paths += sorted((ROOT / "kernel").rglob("*.S"))
     paths += sorted((ROOT / "crates").rglob("*.rs"))
     paths += sorted((ROOT / "crates").rglob("Cargo.toml"))
+    paths += sorted(path for path in (ROOT / "apps").rglob("*") if path.is_file())
+    paths += [ROOT / "tools/application.py"]
     paths += [ROOT / name for name in ("kernel/linker.ld", "Cargo.toml", "Cargo.lock", "kernel/Cargo.toml", "rust-toolchain.toml", ".cargo/config.toml")]
     for path in paths:
         digest.update(str(path.relative_to(ROOT)).encode())
@@ -38,15 +41,18 @@ def build(mode):
     build_id = source_id()
     env = os.environ.copy()
     env["RUSTIC_BUILD_ID"] = build_id
+    env["RUSTIC_APPLICATION_DIRECTORY"] = str(application.build(ROOT, env))
     subprocess.run(
         ["cargo", "build", "-p", "rustic-kernel", "--bin", "rustic-os", "--features",
-         "boot-image", "--target", "x86_64-unknown-none", "--release", "--locked"],
+         "sdk-test", "--target", "x86_64-unknown-none", "--release", "--locked"],
         cwd=ROOT, env=env, check=True,
     )
     kernel = ROOT / "target/x86_64-unknown-none/release/rustic-os"
     provenance = {
         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "source_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
+        "application_elf_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "sdk-probe.elf"),
+        "application_manifest_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "app.manifest"),
         "rustc": subprocess.check_output(["rustc", "--version", "--verbose"], text=True),
     }
     return package(kernel, mode, build_id, provenance)

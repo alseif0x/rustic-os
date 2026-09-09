@@ -4,7 +4,7 @@
 
 Date: 2026-09-09. Reviewed by the implementing agent; no independent review. Complements [LICENSING.md](LICENSING.md).
 
-Cargo.lock contains the original rustic-kernel, rustic-abi and xtask packages, plus limine 0.5.0 and bitflags 2.13.1. Original code is Apache-2.0; dependency crates retain their licenses. The boot image includes Limine's BOOTX64.EFI and the project's ELF; OVMF firmware remains external.
+Cargo.lock contains the original rustic-kernel, rustic-abi, rustic-sdk, rustic-sdk-probe and xtask packages, plus limine 0.5.0 and bitflags 2.13.1. Original code is Apache-2.0; dependency crates retain their licenses. The boot image includes Limine's BOOTX64.EFI and the project's ELF; OVMF firmware remains external.
 
 | Component | Version / source | Use and distribution |
 | --- | --- | --- |
@@ -33,4 +33,6 @@ External component review sources: LICENSE from the hash-verified Limine archive
 
 ## Original shared contracts
 
-`rustic-abi` 0.1.0 is an original crate in this repository under Apache-2.0, without external dependencies or unsafe code. It contains process/IPC constants and errors; the kernel uses it and the SDK will reuse it. Cargo.lock adds only that path dependency: limine and bitflags versions/checksums remain unchanged. Existing image notices remain sufficient; no new third-party material is included.
+`rustic-abi` 0.1.0 is an original crate in this repository under Apache-2.0, without external dependencies or unsafe code. It contains process/IPC constants, errors and the application manifest contract; the kernel and SDK consume it independently. Cargo.lock adds only that path dependency: limine and bitflags versions/checksums remain unchanged. Existing image notices remain sufficient; no new third-party material is included.
+
+The original `rustic-sdk` and `rustic-sdk-probe` packages added for #11 also use Apache-2.0. They add only path dependencies on the shared ABI/SDK, without external crates. The test kernel embeds the separately linked application ELF; the existing Rust runtime notice also covers that application.

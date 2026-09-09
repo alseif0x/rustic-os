@@ -37,3 +37,5 @@ its resources and consumes its result. An unknown or already reaped PID
 produces an error. The [IPC](IPC.md) extension adds owner-bound handles and
 attenuable rights. Grants/transfers and cancellation by PID remain in the
 trusted launcher API, without exposing arbitrary authority through a syscall.
+
+The [native SDK](SDK.md) provides guest-only wrappers and a Rust entry macro for this ABI. It preserves the three integer bootstrap arguments and checks process/IPC versions before calling application code. Its manifest does not change authority or add syscalls.

@@ -3,6 +3,8 @@ mod execution;
 mod faults;
 mod ipc;
 mod loading;
+#[cfg(feature = "sdk-test")]
+mod sdk;
 use super::{Error, manager::Manager};
 use crate::arch::{Serial, memory::Memory};
 use core::fmt::Write;
@@ -47,6 +49,8 @@ pub(crate) fn verify(memory: &mut Memory) {
     let preemptions = execution::verify(&mut manager, memory);
     let faults = faults::verify(&mut manager, memory);
     ipc::verify(&mut manager, memory);
+    #[cfg(feature = "sdk-test")]
+    sdk::verify(&mut manager, memory);
     assert_eq!(memory.free_frames(), before);
     let mut serial = Serial::take().expect("process diagnostic owner");
     writeln!(serial, "RUSTIC PROCESS_MEMORY slots=4 peak_frames={peak_frames} metadata_bytes={} entry_stack_bytes=20480 oom_cases=3", core::mem::size_of::<Manager>()).unwrap();

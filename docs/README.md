@@ -20,6 +20,7 @@ Start with the [project overview](../README.md) for current capabilities and the
 | [Memory](MEMORY.md) | Frames, page tables, ownership and protection |
 | [Processes](PROCESSES.md) | ELF loading, user mode, scheduling and fault containment |
 | [Process ABI](PROCESS-ABI.md) | Calling convention, version, exit, identity and diagnostics |
+| [Native SDK and manifests](SDK.md) | Application entry, public IPC clients, versioned admission and a runnable Rust template |
 | [IPC](IPC.md) | Message format, handles, buffers, waits and resource lifetime |
 
 ## Requirements and design

@@ -37,8 +37,11 @@ def build(revision):
     env.update(CARGO_HOME="/work/cargo", CARGO_TARGET_DIR="/work/target",
                CARGO_NET_OFFLINE="true", CARGO_BUILD_JOBS="2", RUSTIC_BUILD_ID=revision[:16], HOME="/work/home")
     (WORK / "home").mkdir()
+    sys.path.insert(0, str(REFERENCE / "tools"))
+    import application
+    env["RUSTIC_APPLICATION_DIRECTORY"] = str(application.build(source, env, offline=True))
     command = ["cargo", "build", "-p", "rustic-kernel", "--bin", "rustic-os",
-               "--features", "boot-image", "--target", "x86_64-unknown-none", "--release", "--locked", "--offline", "-vv"]
+               "--features", "sdk-test", "--target", "x86_64-unknown-none", "--release", "--locked", "--offline", "-vv"]
     return subprocess.call(command, cwd=source, env=env)
 
 

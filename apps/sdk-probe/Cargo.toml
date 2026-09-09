@@ -1,29 +1,21 @@
 # SPDX-License-Identifier: Apache-2.0
 [package]
-name = "rustic-kernel"
+name = "rustic-sdk-probe"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish.workspace = true
-
 [lints]
 workspace = true
-
 [features]
-boot-image = ["dep:limine"]
-sdk-test = ["boot-image"]
-
+native = []
 [dependencies]
-rustic-abi = { path = "../crates/abi" }
-
-[target.'cfg(target_os = "none")'.dependencies]
-limine = { version = "=0.5.0", optional = true }
-
+rustic-sdk = { path = "../../crates/sdk" }
 [[bin]]
-name = "rustic-os"
+name = "sdk-probe"
 path = "src/main.rs"
-required-features = ["boot-image"]
+required-features = ["native"]
 test = false
 bench = false

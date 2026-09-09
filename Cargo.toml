@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 [workspace]
-members = ["kernel", "crates/abi", "tools/xtask"]
+members = ["kernel", "crates/abi", "crates/sdk", "apps/sdk-probe", "tools/xtask"]
 resolver = "3"
 
 [workspace.package]

@@ -83,3 +83,9 @@ bash tools/check-failure.sh
 ```
 
 The same CI user could modify PR code; the workflow limits permissions and supplies no publishing credentials. The [#21 executor](EXECUTOR.md) adds builds and VMs in separate containers, resource/network restrictions, cancellation and manifests. Its CI job also checks real failures and clean repetition.
+
+## Native application SDK
+
+#11 adds [the native SDK and manifest](SDK.md). Run `python3 tools/application.py` to build the independent ELF and binary manifest. `cargo xtask check` requires Python 3.11+ (the reference uses Python 3.12), compiles/lints the guest application and passes its artifact directory explicitly when checking the kernel acceptance image. It still does not need QEMU or bootloader downloads. Host builds do not expose the SDK instruction boundary.
+
+The image builder and isolated worker compile the application before the kernel with the `sdk-test` feature. Direct source fingerprints cover application sources, linker script, descriptor and the host manifest encoder. The sandbox exports bounded ELF/manifest artifacts with hashes alongside the containing kernel.

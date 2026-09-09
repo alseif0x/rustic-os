@@ -25,6 +25,7 @@ The goal is agent control without mandatory screen interpretation. A graphical i
 | [Interrupts and time](docs/INTERRUPTS.md) | CPU exception handling, emergency stack, timer interrupts and bounded waits |
 | [Memory protection](docs/MEMORY.md) | Physical frames, owned page tables, write/execute permissions and separate address spaces |
 | [Native processes](docs/PROCESSES.md) | Static ELF loading, ring 3 execution, timer preemption, fault containment and resource reclamation |
+| [Native Rust SDK](docs/SDK.md) | Independent Rust ELF applications, versioned manifests and typed IPC clients |
 | [IPC and handles](docs/IPC.md) | Versioned messages, kernel-provided sender identity, validated buffers, ownership, waits and closure |
 | [Isolated test executor](docs/EXECUTOR.md) | Exact Git revisions, offline jobs, resource limits, cancellation and structured evidence |
 
@@ -94,6 +95,8 @@ See [boot commands and expected results](docs/BOOT.md) and the [isolated executo
 | --- | --- |
 | [`kernel/`](kernel/) | Pure kernel contracts plus architecture-specific boot, memory and process execution |
 | [`crates/abi/`](crates/abi/) | Shared `no_std` binary contracts, independent of kernel implementation |
+| [`crates/sdk/`](crates/sdk/) | Native application startup, process calls and typed IPC clients |
+| [`apps/sdk-probe/`](apps/sdk-probe/) | Independently compiled Rust application and manifest template |
 | [`tools/`](tools/) | Host-side checks, image construction, QEMU execution and sandbox orchestration |
 | [`docs/`](docs/README.md) | Requirements, architecture decisions, subsystem contracts and evidence guides |
 
@@ -110,7 +113,7 @@ Modules follow ownership and trust boundaries. Entry points compose components; 
 | H4 — Desktop and browser | Graphical interaction and a browser engine running inside RusticOS | Planned |
 | H5 — Experimental v0.1 | Verified candidates, activation, recovery and integrated acceptance | Planned |
 
-**Next:** [native Rust SDK and application manifest](https://github.com/alseif0x/rustic-os/issues/11), using the existing ABI to compile and run an independent Rust application inside the guest.
+**Next:** [bounded virtual block-device I/O](https://github.com/alseif0x/rustic-os/issues/35), to establish verified storage before the file service, authority and shell. The [native SDK](docs/SDK.md) now runs independently compiled Rust applications over the existing ABI.
 
 The experimental v0.1 target includes a native console, optional agent, locally running browser engine and a verifiable change/recovery cycle. The model, compiler and test environment may be external, with that dependency declared. Broad hardware support and universal application compatibility are long-term research goals, not current promises.
 

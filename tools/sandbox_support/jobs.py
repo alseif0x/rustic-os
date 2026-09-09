@@ -125,6 +125,9 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
             if phase == "build":
                 state["artifacts"].append(collect(container, "/work/target/x86_64-unknown-none/release/rustic-os",
                                                   directory / "kernel.elf", 16 * 1024 * 1024))
+                for name, maximum in (("sdk-probe.elf", 1024 * 1024), ("app.manifest", 128)):
+                    state["artifacts"].append(collect(container, "/work/target/native/" + name,
+                                                      directory / name, maximum))
             else:
                 sizes = {"result.json": 65536, "image.json": 65536, "serial.log": 1048576,
                          "qemu.log": 1048576, "rustic-os.img": 67108864}
