@@ -6,6 +6,9 @@ mod physical;
 mod space;
 mod tables;
 mod tests;
+mod user;
+
+pub(crate) use user::UserSpace;
 
 use core::marker::PhantomData;
 use physical::Physical;
@@ -67,6 +70,9 @@ impl Memory {
 
     pub(crate) fn verify(&mut self) {
         tests::verify(self);
+    }
+    pub(crate) fn verify_user_oom(&mut self, remaining: usize, test: impl FnOnce(&mut Self)) {
+        tests::with_free_frames(self, remaining, test);
     }
     pub(crate) fn fault(&mut self, mode: rustic_kernel::boot::BootMode) -> ! {
         tests::fault(self, mode)

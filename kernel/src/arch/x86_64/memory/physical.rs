@@ -96,6 +96,24 @@ impl Physical {
         self.frames.release(frame).map_err(Into::into)
     }
 
+    pub(super) fn initialize_bytes(&mut self, frame: u64, offset: usize, data: &[u8]) {
+        assert!(self.frames.is_allocated(frame));
+        assert!(
+            offset
+                .checked_add(data.len())
+                .is_some_and(|end| end <= PAGE_SIZE as usize)
+        );
+        // SAFETY: Loader owns a fresh page in an inactive user root, no data
+        // references escape, source is disjoint kernel bytes, and bounds fit.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                data.as_ptr(),
+                self.pointer(frame).cast::<u8>().add(offset),
+                data.len(),
+            )
+        }
+    }
+
     pub(super) fn empty(&self, table: u64) -> bool {
         (0..512).all(|index| self.read(table, index) == 0)
     }

@@ -58,6 +58,12 @@ ISR 44, 0
 ISR 45, 0
 ISR 46, 0
 ISR 47, 0
+ISR 128, 0
+ISR 129, 0
+.global rustic_user_roundtrip
+rustic_user_roundtrip:
+    int 129
+    ret
 .global rustic_isr_default
 rustic_isr_default:
     push 0

@@ -2,13 +2,13 @@
 use core::marker::PhantomData;
 
 /// CPU-local guard. Nesting preserves IF; it must never move to another CPU.
-pub(super) struct Mask {
+pub(crate) struct Mask {
     enabled: bool,
     _local: PhantomData<*mut ()>,
 }
 
 impl Mask {
-    pub(super) fn acquire() -> Self {
+    pub(crate) fn acquire() -> Self {
         let flags: u64;
         // SAFETY: Ring 0, one R0 CPU. Stack is valid; CLI fences compiler memory operations.
         unsafe { core::arch::asm!("pushfq", "pop {}", "cli", out(reg) flags) };

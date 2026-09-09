@@ -5,7 +5,7 @@
 
 El kernel asigna y libera marcos físicos de 4 KiB, construye tablas de páginas propias y cambia entre espacios de direcciones con datos independientes. La base sigue siendo x86_64, cuatro niveles de paginación, una CPU y QEMU q35/TCG con 256 MiB. Se rechazan LA57, PCID y CPU sin NX. No hay nuevas dependencias Cargo ni cambio de toolchain.
 
-El asignador mínimo tiene granularidad de página. No hay aún `GlobalAlloc`, `Box`, heap de tamaños variables, procesos de usuario, planificador, swapping o NUMA. Los cambios de CR3 de la prueba suceden en ring 0; la protección frente a aplicaciones que ejecuten en ring 3 se comprobará en #10. La infraestructura de memoria de este corte prepara esa separación sin declararla ya demostrada entre aplicaciones.
+El asignador mínimo tiene granularidad de página. No hay aún `GlobalAlloc`, `Box`, heap de tamaños variables, swapping o NUMA. Las pruebas propias de este subsistema cambian CR3 en ring 0; #10 añade por separado [procesos y planificación con pruebas en ring 3](PROCESSES.md).
 
 ## Responsabilidades y propiedad
 
@@ -49,7 +49,7 @@ Los mapeos nuevos se restringen a páginas alineadas de la mitad canónica infer
 
 Una asignación que agota memoria durante la creación de tablas elimina las entradas añadidas y devuelve todos los marcos de esa operación. Desmapear invalida la traducción activa antes de reutilizar el marco, retira tablas vacías y recarga la raíz para invalidar también las cachés de recorrido. No existen otros CPUs que necesiten un TLB shootdown; introducirlos exige otra política de sincronización.
 
-Los espacios secundarios comparten las tablas superiores del kernel y poseen su raíz, tablas inferiores y páginas de datos. Las tablas superiores quedan fijas tras el bootstrap; no se proporciona una API para mutarlas después. Destruir un espacio inactivo devuelve sus recursos inferiores y raíz, nunca las tablas superiores compartidas. Se rechaza destruir el espacio activo o la raíz del kernel. La destrucción es explícita; #10 deberá vincularla a la vida del proceso. No se implementa todavía conteo de referencias, páginas compartidas, copy-on-write ni un recolector de espacios abandonados.
+Los espacios secundarios comparten las tablas superiores del kernel y poseen su raíz, tablas inferiores y páginas de datos. Las tablas superiores quedan fijas tras el bootstrap; no se proporciona una API para mutarlas después. Destruir un espacio inactivo devuelve sus recursos inferiores y raíz, nunca las tablas superiores compartidas. Se rechaza destruir el espacio activo o la raíz del kernel. La destrucción es explícita; #10 la vincula a la recogida del proceso terminado. No se implementa todavía conteo de referencias, páginas compartidas, copy-on-write ni un recolector de espacios abandonados.
 
 Si falla la construcción inicial de tablas, el arranque termina con diagnóstico antes de activar la nueva raíz. Esa ruta terminal no intenta continuar como un kernel parcialmente inicializado. La reversión y recuperación de recursos se comprueban para las operaciones ordinarias posteriores.
 
@@ -77,6 +77,6 @@ Cinco fixtures deben producir #PF (vector 14), CR2 igual a la dirección anuncia
 | `memory-text-alias` | Escribir código mediante su alias HHDM | 0x3 |
 | `memory-guard` | Leer la guarda de la pila de emergencia | 0x0 |
 
-Se usan instrucciones de prueba explícitas, sin formar referencias Rust inválidas. Un acceso permitido por error acaba en UD2 y no satisface el resultado esperado. Un #DF, otra dirección, otro código o un timeout tampoco pasan como prueba de protección. Son fallos terminales de la VM de prueba; la supervivencia de un segundo proceso tras un fallo de aplicación queda para #10.
+Se usan instrucciones de prueba explícitas, sin formar referencias Rust inválidas. Un acceso permitido por error acaba en UD2 y no satisface el resultado esperado. Un #DF, otra dirección, otro código o un timeout tampoco pasan como prueba de protección. Son fallos terminales de la VM de prueba; la supervivencia de un segundo proceso tras un fallo de aplicación se comprueba por separado en [#10](PROCESSES.md).
 
 La suite directa tiene 13 escenarios y la aislada 17, conservando los anteriores de #8/#21/#33. Los resultados y logs quedan en los mismos directorios de evidencia; cada imagen conserva revisión, configuración y hashes. Una muestra inicial con 256 MiB registró 52.795 marcos administrados, 15 marcos de tablas propias y 52.780 libres antes y después del agotamiento; metadatos de 65.536 bytes. El arranque completo, con autopruebas, tardó unos 6,3 segundos. Son medidas de esa revisión/R0, no umbrales universales. La issue enlaza el commit y CI de cierre; revisión por el agente implementador, sin revisión independiente.

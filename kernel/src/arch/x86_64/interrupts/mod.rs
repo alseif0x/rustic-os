@@ -2,18 +2,25 @@
 //! One CPU, ring 0: own descriptor tables, PIC/PIT, interrupt-safe clock and waits.
 mod clock;
 mod dispatch;
+mod frame;
 mod mask;
 mod pic;
 mod pit;
 mod segments;
 mod table;
 mod tests;
+mod user;
+mod user_cpu;
+
+pub(crate) use frame::Frame;
+pub(crate) use user::Event as UserEvent;
+pub(crate) use user::run as run_user;
 
 use core::{
     marker::PhantomData,
     sync::atomic::{AtomicBool, Ordering},
 };
-use mask::Mask;
+pub(crate) use mask::Mask;
 use rustic_kernel::time::Deadline;
 
 core::arch::global_asm!(include_str!("entry.S"));
@@ -38,6 +45,7 @@ pub(crate) fn initialize() -> Option<Controller> {
         return None;
     }
     let guard = Mask::acquire();
+    user_cpu::initialize();
     // SAFETY: Unique R0 bootstrap CPU, IF=0; static storage lives forever.
     unsafe {
         segments::initialize();
@@ -74,4 +82,8 @@ impl Controller {
     pub(crate) fn fault(&mut self, mode: rustic_kernel::boot::BootMode) -> ! {
         tests::fault(mode)
     }
+}
+
+pub(crate) fn user_guard() -> u64 {
+    segments::user_guard()
 }

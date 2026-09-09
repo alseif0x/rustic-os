@@ -7,7 +7,7 @@ El kernel instala GDT, TSS e IDT propias, atiende el temporizador PIT mediante e
 
 | Módulo | Responsabilidad |
 | --- | --- |
-| `arch/x86_64/interrupts/segments.rs` | GDT de ring 0, TSS y pila de emergencia de 16 KiB |
+| `arch/x86_64/interrupts/segments.rs` | GDT de kernel/usuario, TSS y pilas de emergencia/entrada de 16 KiB |
 | `table.rs` / `entry.S` | IDT y puente de registros entre CPU y ABI de Rust |
 | `dispatch.rs` | Clasificación de vectores, tick, reconocimiento y diagnóstico terminal |
 | `pic.rs` / `pit.rs` | Puertos del PIC y del canal 0 del PIT, respectivamente |
@@ -21,11 +21,11 @@ El punto de entrada continúa componiendo módulos. Un token de controlador excl
 
 ## Contrato de CPU y seguridad de memoria
 
-La GDT contiene descriptores de código/datos de kernel y una TSS de 104 bytes. La IDT tiene 256 puertas de interrupción de ring 0. Los vectores 0–47 tienen entradas identificadas; los demás terminan como vector inesperado 255. El vector 8 usa IST1 y una pila estática independiente. La reserva explícita de GDT/TSS/IDT/pila es 24.720 bytes (incluida la guarda añadida en #9), sin contar alineación, código ni contadores. #9 añade una guarda desmapeada a esta pila y tablas de páginas propias; véase [MEMORY.md](MEMORY.md).
+La GDT contiene descriptores de código/datos de kernel y una TSS de 104 bytes. La IDT tiene 256 puertas de interrupción. Los vectores 0–47 tienen entradas identificadas; #10 añade 0x80 (DPL 3) y 0x81 (DPL 0) para el puente de usuario. Los demás terminan como vector inesperado 255. El vector 8 usa IST1 y una pila estática independiente. La reserva explícita de GDT/TSS/IDT/pilas es 45.216 bytes tras #10: dos pilas de 16 KiB con guarda de 4 KiB, siete entradas GDT, TSS e IDT. No cuenta alineación, código ni contadores. #9 añade una guarda desmapeada a esta pila y tablas de páginas propias; véase [MEMORY.md](MEMORY.md).
 
 La entrada ensamblador normaliza el código de error, conserva los 15 registros generales, limpia DF antes de llamar a Rust, alinea la pila para la llamada y retorna mediante IRETQ. El marco tiene 176 bytes; tamaño y offsets críticos se comprueban al compilar. Los registros y flags del contexto interrumpido se restauran al retornar. Las puertas deshabilitan interrupciones enmascarables durante el handler.
 
-Se usa el ABI soft-float y sin red zone de [x86_64-unknown-none](https://doc.rust-lang.org/rustc/platform-support/x86_64-unknown-none.html). Los stubs no guardan SIMD/FPU; se rechaza la compilación con SSE/SSE2/AVX habilitados. Introducir SIMD, ring 3, SMP, cambio de contexto, FS/GS por proceso o recuperación de fallos exige revisar este puente y sus pruebas antes de usarlo. Los detalles de IDT, marcos de excepción, TSS/IST e IRETQ se basan en el volumen 3 del [manual Intel SDM](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html).
+Se usa el ABI soft-float y sin red zone de [x86_64-unknown-none](https://doc.rust-lang.org/rustc/platform-support/x86_64-unknown-none.html). Los stubs no guardan SIMD/FPU; se rechaza la compilación con SSE/SSE2/AVX habilitados. #10 revisa este puente para [ring 3, captura de contexto y contención de fallos](PROCESSES.md), manteniendo deshabilitado FP/SIMD por proceso. Introducir SIMD, SMP o FS/GS por proceso exige una nueva revisión de estado y pruebas. Los detalles de IDT, marcos de excepción, TSS/IST e IRETQ se basan en el volumen 3 del [manual Intel SDM](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html).
 
 Las tablas se escriben mediante punteros crudos durante una única inicialización con IF=0. Permanecen mapeadas durante toda la vida del kernel; no se entregan referencias mutables persistentes. El único cambio posterior es el fixture terminal que invalida deliberadamente la puerta de #GP para provocar #DF. No se reclama memoria del cargador.
 

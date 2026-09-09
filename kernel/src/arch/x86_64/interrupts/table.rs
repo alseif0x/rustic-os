@@ -45,6 +45,8 @@ static mut IDT: [Gate; 256] = [Gate::EMPTY; 256];
 unsafe extern "C" {
     static rustic_isr_table: [u64; 48];
     fn rustic_isr_default();
+    fn rustic_isr_128();
+    fn rustic_isr_129();
 }
 
 /// Unique bootstrap caller, IF=0, owned GDT/TSS already loaded.
@@ -60,6 +62,10 @@ pub(super) unsafe fn initialize() {
             };
             core::ptr::addr_of_mut!(IDT[vector]).write(Gate::new(address, u8::from(vector == 8)));
         }
+        let mut syscall = Gate::new(rustic_isr_128 as *const () as u64, 0);
+        syscall.flags = 0xee; // Interrupt gate DPL=3, the only user-callable gate.
+        core::ptr::addr_of_mut!(IDT[128]).write(syscall);
+        core::ptr::addr_of_mut!(IDT[129]).write(Gate::new(rustic_isr_129 as *const () as u64, 0));
         let descriptor = Descriptor {
             limit: (size_of::<[Gate; 256]>() - 1) as u16,
             base: core::ptr::addr_of!(IDT) as u64,

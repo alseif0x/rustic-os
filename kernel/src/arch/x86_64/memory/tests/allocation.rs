@@ -3,6 +3,33 @@ use super::super::Error;
 use super::{Memory, page, read, write};
 use rustic_kernel::memory::{FrameError, PagePermissions};
 
+pub(crate) fn with_free_frames(
+    memory: &mut Memory,
+    remaining: usize,
+    test: impl FnOnce(&mut Memory),
+) {
+    let initial = memory.free_frames();
+    assert!(remaining < initial);
+    let mut head = 0;
+    while memory.free_frames() > remaining {
+        let frame = memory.physical.frames.allocate().unwrap();
+        memory.physical.write(frame, 0, head);
+        head = frame;
+    }
+    test(memory);
+    assert_eq!(
+        memory.free_frames(),
+        remaining,
+        "failed image load leaked frames"
+    );
+    while head != 0 {
+        let next = memory.physical.read(head, 0);
+        memory.physical.release(head).unwrap();
+        head = next;
+    }
+    assert_eq!(memory.free_frames(), initial);
+}
+
 pub(super) fn pages(memory: &mut Memory) {
     let before = memory.physical.frames.free_count();
     for _ in 0..16 {

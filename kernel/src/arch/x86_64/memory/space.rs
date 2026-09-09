@@ -16,6 +16,9 @@ pub(super) struct AddressSpace {
 }
 
 impl AddressSpace {
+    pub(super) fn is_active(&self) -> bool {
+        self.root == cpu::root()
+    }
     pub(super) fn from_kernel(root: u64) -> Self {
         Self {
             root,

@@ -60,6 +60,7 @@ pub(crate) fn run() -> ! {
         BootMode::Ok => {
             interrupts.verify();
             memory.verify();
+            crate::process::verify(&mut memory);
             if let Some(mut serial) = Serial::take() {
                 let _ = writeln!(
                     serial,

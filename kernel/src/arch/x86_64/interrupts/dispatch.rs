@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use super::{clock, pic, segments};
+use super::{clock, frame::Frame, pic, segments, user};
 use crate::{
     arch::{self, Serial},
     diagnostic,
@@ -12,39 +12,29 @@ use core::{
 pub(super) static BREAKPOINTS: AtomicU64 = AtomicU64::new(0);
 pub(super) static SPURIOUS: AtomicU64 = AtomicU64::new(0);
 
-/// Matches entry.S: 15 saved GPRs, vector, normalized error, CPU frame.
-#[repr(C)]
-pub(super) struct Frame {
-    registers: [u64; 15],
-    vector: u64,
-    error: u64,
-    rip: u64,
-    cs: u64,
-    flags: u64,
-    rsp: u64,
-    ss: u64,
-}
-
-const _: () = assert!(core::mem::size_of::<Frame>() == 176);
-const _: () = assert!(core::mem::offset_of!(Frame, vector) == 120);
-const _: () = assert!(core::mem::offset_of!(Frame, rip) == 136);
-
 // SAFETY: Unique assembly entry symbol. Stub supplies an aligned live frame and
-// preserves all GPRs, DF, IF and the target's no-SIMD ABI. No userspace entry yet.
+// preserves all GPRs, DF, IF and the target's no-SIMD ABI. User transitions use the scoped exchange bridge.
 #[unsafe(no_mangle)]
-extern "C" fn rustic_interrupt(frame: &Frame) {
+extern "C" fn rustic_interrupt(frame: &mut Frame) {
+    if (32..=47).contains(&frame.vector) {
+        if !pic::acknowledge(frame.vector) {
+            SPURIOUS.fetch_add(1, Ordering::Relaxed);
+        } else if frame.vector == 32 {
+            clock::advance();
+        } else {
+            fatal(frame);
+        }
+        if user::dispatch(frame) {
+            return;
+        }
+        return;
+    }
+    if user::dispatch(frame) {
+        return;
+    }
     match frame.vector {
         3 => {
             BREAKPOINTS.fetch_add(1, Ordering::Relaxed);
-        }
-        32..=47 => {
-            if !pic::acknowledge(frame.vector) {
-                SPURIOUS.fetch_add(1, Ordering::Relaxed);
-            } else if frame.vector == 32 {
-                clock::advance();
-            } else {
-                fatal(frame);
-            }
         }
         _ => fatal(frame),
     }

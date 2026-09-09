@@ -10,13 +10,15 @@ Universalidad y adaptación son objetivos progresivos, demostrados por arquitect
 
 ## Estado
 
-Fase inicial: kernel Rust modular que arranca mediante Limine/UEFI en QEMU, valida el mapa de memoria y emite diagnóstico serie. Las pruebas distinguen éxito, panic, bloqueo y argumentos inválidos. Todavía no hay shell, procesos aislados, aplicaciones ni piloto. Consulta [desarrollo](docs/DEVELOPMENT.md) y [arranque y pruebas](docs/BOOT.md) para ejecutar la base.
+Fase inicial: kernel Rust modular que arranca mediante Limine/UEFI en QEMU, valida el mapa de memoria y emite diagnóstico serie. Las pruebas distinguen éxito, panic, bloqueo y argumentos inválidos. Ya ejecuta aplicaciones de prueba en modo usuario con aislamiento; todavía no hay shell, aplicaciones de producto ni piloto. Consulta [desarrollo](docs/DEVELOPMENT.md) y [arranque y pruebas](docs/BOOT.md) para ejecutar la base.
 
 El [ejecutor aislado](docs/EXECUTOR.md) construye revisiones Git y comprueba el arranque en contenedores separados, sin red durante los trabajos y con límites de recursos, cancelación y resultados JSON.
 
 El kernel incorpora [excepciones, interrupciones y reloj](docs/INTERRUPTS.md): tablas de CPU propias, pila de emergencia para doble fallo, temporizador y esperas acotadas por plazos. Las pruebas verifican estas funciones dentro de QEMU antes de informar éxito.
 
-La [gestión de memoria](docs/MEMORY.md) añade marcos de 4 KiB, tablas de páginas propias, permisos de escritura/ejecución y espacios de direcciones independientes. Se prueban agotamiento, recuperación, limpieza al reutilizar y fallos de protección; los procesos de usuario siguen pendientes.
+La [gestión de memoria](docs/MEMORY.md) añade marcos de 4 KiB, tablas de páginas propias, permisos de escritura/ejecución y espacios de direcciones independientes. Se prueban agotamiento, recuperación, limpieza al reutilizar y fallos de protección; la ejecución de usuario se verifica en la capa de procesos.
+
+El subsistema de [procesos nativos](docs/PROCESSES.md) valida ELF estáticos, crea espacios privados, reparte la CPU por turnos y contiene fallos de aplicaciones en ring 3. Las pruebas comprueban un programa no cooperante, accesos prohibidos y recuperación de recursos. El [ABI mínimo](docs/PROCESS-ABI.md) ofrece versión, salida, identidad y diagnóstico entero; IPC y handles continúan en #34.
 
 ## Plan y participación
 

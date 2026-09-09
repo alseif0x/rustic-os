@@ -43,7 +43,7 @@ python3 tools/boot.py test --timeout 30
 | memory-nx | #PF por ejecución prohibida, error 0x11 y CR2 esperado | 39 | 1 |
 | memory-unmapped / memory-guard | #PF por dirección ausente, error 0 y CR2 esperado | 39 | 1 |
 
-El dispositivo isa-debug-exit transforma el valor escrito por el kernel en (valor × 2) + 1; estos códigos son exclusivos de la prueba R0. Cualquier combinación inesperada devuelve 2. La suite completa devuelve 0 solo si los trece casos coinciden con sus resultados y marcadores esperados. Un timeout de firmware sin alcanzar el fixture no pasa la prueba de bloqueo. `ok` comprueba [interrupciones y esperas](INTERRUPTS.md) y [memoria](MEMORY.md) antes de SUCCESS.
+El dispositivo isa-debug-exit transforma el valor escrito por el kernel en (valor × 2) + 1; estos códigos son exclusivos de la prueba R0. Cualquier combinación inesperada devuelve 2. La suite completa devuelve 0 solo si los trece casos coinciden con sus resultados y marcadores esperados. Un timeout de firmware sin alcanzar el fixture no pasa la prueba de bloqueo. `ok` comprueba [interrupciones y esperas](INTERRUPTS.md), [memoria](MEMORY.md) y [procesos en ring 3](PROCESSES.md) antes de SUCCESS.
 
 30 segundos es el presupuesto local inicial, con arranques positivos observados en torno a 4 segundos; CI usa 45 segundos para absorber variación de runner. No constituye un objetivo de rendimiento universal. El anfitrión mata únicamente el proceso QEMU creado por esa ejecución y espera su salida; también lo retira ante interrupción del ejecutor.
 
@@ -68,4 +68,4 @@ El bootloader y sus punteros son de confianza: los bindings dependen de su valid
 
 El kernel entra con interrupciones deshabilitadas, valida el arranque e instala GDT/TSS/IDT y PIC/PIT propios antes de habilitar IRQ0, en una CPU. Después prepara [asignación y tablas de páginas propias](MEMORY.md), protegiendo también alias y la guarda de emergencia. Conserva reservada la memoria del cargador. La prueba usa disco de solo lectura, variables OVMF desechables y ningún disco o directorio personal.
 
-Las licencias de Limine, los bindings, bitflags y Rust se incluyen en la imagen. OVMF y QEMU permanecen externos. Véase [inventario de componentes](dependencies.md). #33 añade [excepciones y tiempo](INTERRUPTS.md) y #9 [memoria y protecciones](MEMORY.md). Los procesos continúan en #10.
+Las licencias de Limine, los bindings, bitflags y Rust se incluyen en la imagen. OVMF y QEMU permanecen externos. Véase [inventario de componentes](dependencies.md). #33 añade [excepciones y tiempo](INTERRUPTS.md) y #9 [memoria y protecciones](MEMORY.md). #10 incorpora [procesos nativos y aislamiento](PROCESSES.md); las llamadas mínimas se documentan en [PROCESS-ABI.md](PROCESS-ABI.md).

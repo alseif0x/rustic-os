@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 mod allocation;
+pub(super) use allocation::with_free_frames;
 mod faults;
 mod spaces;
 mod splitting;

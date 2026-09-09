@@ -5,4 +5,5 @@
 
 pub mod boot;
 pub mod memory;
+pub mod process;
 pub mod time;

@@ -82,13 +82,17 @@ pub(super) fn build(memory: &mut Physical, layout: BootMemory) -> Result<Address
             }),
         )?;
     }
-    let guard = crate::arch::interrupts::emergency_guard();
-    tables::protect(memory, root, guard, None)?;
-    tables::protect(
-        memory,
-        root,
-        layout.hhdm + layout.physical_base + guard - start,
-        None,
-    )?;
+    for guard in [
+        crate::arch::interrupts::emergency_guard(),
+        crate::arch::interrupts::user_guard(),
+    ] {
+        tables::protect(memory, root, guard, None)?;
+        tables::protect(
+            memory,
+            root,
+            layout.hhdm + layout.physical_base + guard - start,
+            None,
+        )?;
+    }
     Ok(AddressSpace::from_kernel(root))
 }
