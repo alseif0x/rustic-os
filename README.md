@@ -116,7 +116,7 @@ Modules follow ownership and trust boundaries. Entry points compose components; 
 | H4 — Desktop and browser | Graphical interaction and a browser engine running inside RusticOS | Planned |
 | H5 — Experimental v0.1 | Verified candidates, activation, recovery and integrated acceptance | Planned |
 
-**Next:** [define authority](https://github.com/alseif0x/rustic-os/issues/5) and [service contracts](https://github.com/alseif0x/rustic-os/issues/6), then provide [bounded block access](https://github.com/alseif0x/rustic-os/issues/44) to the user-mode [file service](https://github.com/alseif0x/rustic-os/issues/12). The native SDK and sector storage are available; the service bridge, file permissions, supervision and shell remain ahead.
+**Next:** [define service contracts](https://github.com/alseif0x/rustic-os/issues/6) for the first scoped workspace mission, then provide [bounded block access](https://github.com/alseif0x/rustic-os/issues/44) to the user-mode [file service](https://github.com/alseif0x/rustic-os/issues/12). The [authority decision](docs/architecture/ADR-0002-authority-and-delegation.md) adopts explicit resource/action grants shared by all clients; enforcement, supervision and shell remain ahead. Fixed permission tiers and a general delegation framework are not prerequisites.
 
 The experimental v0.1 target includes a native console, optional agent, locally running browser engine and a verifiable change/recovery cycle. The model, compiler and test environment may be external, with that dependency declared. Broad hardware support and universal application compatibility are long-term research goals, not current promises.
 

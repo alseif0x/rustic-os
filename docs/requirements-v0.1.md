@@ -89,14 +89,16 @@ Initial accessibility: keyboard navigation, visible focus, queryable names/roles
 
 ## Data and authority
 
-Manual mode without a model; hybrid and automatic modes under #24, independent of #5 permission profiles. The owner delegates scopes and can revoke them. Discovery grants no authority. Identity is bound to sessions/handles, never trusted from model arguments.
+Manual mode without a model; hybrid and automatic modes under #24, independent of explicit resource/action grants and confirmation policy. [ADR-0002](architecture/ADR-0002-authority-and-delegation.md) replaces the earlier Low/Medium/Total planning labels with shared authority for all clients. No replacement tiers or mandatory templates are required. The owner delegates scopes and can revoke them. Discovery grants no authority. Identity is bound to sessions/handles, never trusted from model arguments.
 
-Each provider connection declares its destination and transmitted data. Use synthetic test fixtures; keep secrets out of prompts/logs; select content before egress and record metadata without storing credentials. Web/file content grants no new privileged instructions. Screenshots are limited to the authorized selection. Exact policies and credential storage are implemented in #5/#13/#23.
+Each provider connection declares its destination and transmitted data. Use synthetic test fixtures; keep secrets out of prompts/logs; select content before egress and record metadata without storing credentials. Web/file content grants no new privileged instructions. Screenshots are limited to the authorized selection. #5 records the policy decision; enforcement and credential handling are implementation work in #13/#23 and their service dependencies.
 
 ## Open decisions and issue ownership
 
-#3 adopts architecture/boot. #4 pins tools and the versioned machine. #5 defines Low/Medium/Total and consent rules. #6 defines contracts. #7 selects the engine/fonts and web gaps. #20 sets measured budgets. #33 defines timing. #39 pins MCP SDK/client/transport. #42 selects the executor channel. Decisions about components not yet implemented do not block the initial definition.
+#3 adopts architecture/boot. #4 pins tools and the versioned machine. #5 adopts minimum shared authority and mode/confirmation separation in ADR-0002. #6 defines contracts. #7 selects the engine/fonts and web gaps. #20 sets measured budgets. #33 defines timing. #39 pins MCP SDK/client/transport. #42 selects the executor channel. Decisions about components not yet implemented do not block the initial definition.
 
 Changing target hardware, required scope or component location requires recording the reason and impact in #1 and updating this document. Evidence-based test-parameter adjustments must not be presented as a new universal capability.
 
 Architecture review on 2026-09-10: #44 makes the existing requirement for user-mode file-service access to the kernel block driver an explicit prerequisite of #12. #5/#6 precede that interface; #20 records the service topology and capacity gaps before integrated H1 acceptance. This clarifies implementation order without changing mandatory v0.1 outcomes. The [systems roadmap](architecture/systems-roadmap.md) records the rationale and separately labels optional research experiments.
+
+Authority refinement on 2026-09-10: the owner asked to reconsider both the old permission labels and the approach itself. H1 will prove scoped file work, helper restriction, revocation and manual progress with a deterministic client. A general delegation framework and template UI are not prerequisites. Full owner delegation and the original manual/agent/recovery outcomes are preserved; authority enforcement is not claimed from the decision document.

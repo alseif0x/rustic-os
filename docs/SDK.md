@@ -54,7 +54,7 @@ Names contain 1–31 ASCII bytes, start with a lowercase letter, and otherwise a
 
 Admission rejects a mismatch between the manifest's executable name and the trusted launcher's selected name, unavailable requests, invalid manifest/ABI versions and invalid ELF before execution. Name and version are descriptive metadata, not authenticated publisher identity. This manifest provides no signature, package integrity or installation system.
 
-**Requests never grant authority.** The caller supplies the available feature set for admission and must separately provision actual handles. The test launcher creates an endpoint for each process and supplies its token. Diagnostics are already a bounded ambient syscall; the diagnostic request states a requirement, not a new per-app enforcement mechanism. Supervisor identities, persisted grants and revocation policy remain #5/#13.
+**Requests never grant authority.** The caller supplies the available feature set for admission and must separately provision actual handles. The test launcher creates an endpoint for each process and supplies its token. Diagnostics are already a bounded ambient syscall; the diagnostic request states a requirement, not a new per-app enforcement mechanism. [ADR-0002](architecture/ADR-0002-authority-and-delegation.md) defines the authority baseline; supervisor identities, grants and revocation enforcement remain #13.
 
 ## Build and run the example
 

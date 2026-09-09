@@ -79,4 +79,4 @@ The isolated worker uses the same trusted disk runner. Its logical per-file limi
 
 ## Next boundary
 
-The file service is #12, after the authority decision in #5. IPC still has a 64-byte payload limit. Define a bounded, authorized service transfer protocol when files need it; do not turn a disk sector or numeric PCI address into implicit user authority. Application SDK, filesystem consistency and product permission policy stay above this driver.
+The file service is #12, after #44 provides bounded user-mode access under [ADR-0002](architecture/ADR-0002-authority-and-delegation.md) and #6's contracts. IPC still has a 64-byte payload limit. Define a bounded, authorized service transfer protocol; do not turn a disk sector or numeric PCI address into implicit user authority. Application SDK, filesystem consistency and product permission policy stay above this driver.
