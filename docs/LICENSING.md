@@ -21,6 +21,8 @@ La publicación inicial contiene LICENSE y documentación original. No incorpora
 
 ## NOTICE
 
+La entrega del workspace añade código original y herramientas de desarrollo externas. El [inventario de dependencias](dependencies.md) registra sus versiones, procedencia y límites de distribución; la sección de base inicial anterior se conserva como historial de la publicación de licencia.
+
 No se incorpora un archivo NOTICE inicial: no hay atribuciones de componentes de terceros incluidos que deban recogerse en él. Esta decisión corresponde solo al contenido de esta publicación. Cuando se introduzca material con avisos requeridos, se preservarán y se añadirá NOTICE u otra atribución según corresponda; Apache-2.0 no autoriza eliminarlos.
 
 ## Revisión antes de añadir una dependencia

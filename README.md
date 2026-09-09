@@ -10,7 +10,7 @@ Universalidad y adaptación son objetivos progresivos, demostrados por arquitect
 
 ## Estado
 
-Fase inicial: planificación y base documental. El kernel, las aplicaciones y los agentes descritos aún están pendientes de implementación. No hay una imagen arrancable ni instrucciones de compilación verificadas; se incorporarán al resolver las tareas del entorno y arranque.
+Fase inicial: workspace Rust modular con biblioteca de kernel `no_std`, validaciones iniciales de datos de arranque y comprobaciones automatizadas. Todavía no hay imagen arrancable, aplicaciones ni piloto implementados. Consulta [desarrollo y comandos](docs/DEVELOPMENT.md) para construir y comprobar la base.
 
 ## Plan y participación
 

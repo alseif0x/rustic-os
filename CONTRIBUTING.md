@@ -10,7 +10,7 @@ Elige una tarea con dependencias resueltas, acuerda su responsable y la revisió
 
 El plan puede mejorar: explica problema, propuesta, alternativas, coste de mantenimiento, experimento y criterios de éxito. Actualiza las dependencias y requisitos afectados. No mantengas una decisión solo porque exista en un documento.
 
-Todavía no hay comandos de construcción o pruebas del SO verificados. Se documentarán en la [preparación del workspace #4](https://github.com/alseif0x/rustic-os/issues/4) y el [arranque #8](https://github.com/alseif0x/rustic-os/issues/8).
+Ejecuta `cargo xtask check` según [la guía de desarrollo](docs/DEVELOPMENT.md). Comprueba formato, lints, tests del anfitrión y compilación de la biblioteca `no_std`. El arranque del SO se incorpora en #8; estas comprobaciones no lo sustituyen. Aplica las reglas de módulos/submódulos y separación de responsabilidades de [AGENTS.md](AGENTS.md).
 
 ## Criterios de cambio
 
