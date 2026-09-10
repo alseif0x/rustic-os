@@ -48,7 +48,7 @@ A2A addresses collaboration among independent agents and their tasks; it does no
 
 [Shared service contracts v1](../SERVICE-CONTRACTS.md) replaces the earlier provisional argument names and example. The canonical catalog retains capabilities.list, capabilities.describe, files.read, files.replace, operations.get, operations.cancel, events.read and system.status. It specifies bounded binary data, typed errors, current-authority/version checks, receipts, cancellation, retry epochs and lookup when the first response is lost. Generated descriptors use these same schemas.
 
-The host suite validates message shapes and correlated examples; it does not implement a backend or prove guest effects. #43 compares adapters over a stateful backend; #44/#12 implement the native storage boundary, #13 authority and #22 the complete guest mission. The native product path need not wait for the host comparison to begin storage work.
+The host suite validates message shapes and correlated examples; it does not implement a backend or prove guest effects. #43 compares adapters over a stateful backend. #44 implements [native user-mode block access](../BLOCK-ACCESS.md); #12 adds files, #13 authority and #22 the complete guest mission. The native product path need not wait for the host comparison to begin storage work.
 
 ## Expansion by product area
 
@@ -90,4 +90,4 @@ Record IPC/encoding candidates and runtime requirements; do not extrapolate host
 
 #3/#34 assign IPC, ABI and encoding with measurements and portability; the initial kernel implementation is now documented in [IPC.md](../IPC.md). #6 now specifies the initial schemas and service semantics in [SERVICE-CONTRACTS](../SERVICE-CONTRACTS.md); new product operations are specified with their actual services. #39 owns client/SDK pairing, MCP revision and transport. #43 owns comparative evidence. No library or transport is yet claimed to be best for the product integration: this proposal establishes the boundaries and how to decide.
 
-The [systems roadmap review](systems-roadmap.md), dated 2026-09-10, extends this proposal with stage gates, explicit block-to-user access (#44), service-capacity planning and bounded experiments for task continuity. Its [finite operation model](operation-model.md) illustrates why commit-time resource and authority checks and a recovery contract matter. It does not resolve #5/#6 or implement the #43 adapter comparison.
+The [systems roadmap review](systems-roadmap.md), dated 2026-09-10, extends this proposal with stage gates, explicit block-to-user access (#44), service-capacity planning and bounded experiments for task continuity. Its [finite operation model](operation-model.md) illustrates why commit-time resource and authority checks and a recovery contract matter. The research model itself does not resolve #5/#6 or implement the #43 adapter comparison; #5/#6 are now separately accepted decisions in ADR-0002/ADR-0003.

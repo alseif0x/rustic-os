@@ -70,9 +70,7 @@ The two initial applications are assembled from `fixture.S` as immutable ELF
 files embedded in the boot image. The kernel validates their bytes, allocates
 independent pages and copies code; it does not call their labels as ring 0
 functions. They contain original native instructions and no third-party runtime.
-A Rust application is not yet compiled through an SDK. The same loader receives
-a byte slice and knows nothing about the embedded location; external boot modules
-or files will provide a later source.
+The [native SDK](SDK.md) now builds separate Rust IPC and [block-access](BLOCK-ACCESS.md) probes through the same loader. The loader receives a byte slice and knows nothing about the embedded location; external boot modules or files will provide a later source.
 
 Every page is cleared before content is loaded. Only the file interval belonging
 to that page is copied, preserving zeroes in BSS and at edges. An error frees all
