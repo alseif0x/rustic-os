@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rusticos:services:v1:files.replace",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "$defs": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "workspace": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "resource": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "expected_version": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "data": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/bytes"
+        },
+        "retry": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/retry"
+        }
+      },
+      "required": [
+        "workspace",
+        "resource",
+        "expected_version",
+        "data",
+        "retry"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "$ref": "urn:rusticos:services:v1:types#/$defs/operation"
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "method": {
+          "const": "files.replace"
+        },
+        "params": {
+          "$ref": "#/$defs/input"
+        }
+      },
+      "required": [
+        "version",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "method": {
+              "const": "files.replace"
+            },
+            "result": {
+              "$ref": "#/$defs/output"
+            }
+          },
+          "required": [
+            "version",
+            "method",
+            "result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "method": {
+              "const": "files.replace"
+            },
+            "error": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/error"
+            }
+          },
+          "required": [
+            "version",
+            "method",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

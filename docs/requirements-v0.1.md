@@ -95,7 +95,7 @@ Each provider connection declares its destination and transmitted data. Use synt
 
 ## Open decisions and issue ownership
 
-#3 adopts architecture/boot. #4 pins tools and the versioned machine. #5 adopts minimum shared authority and mode/confirmation separation in ADR-0002. #6 defines contracts. #7 selects the engine/fonts and web gaps. #20 sets measured budgets. #33 defines timing. #39 pins MCP SDK/client/transport. #42 selects the executor channel. Decisions about components not yet implemented do not block the initial definition.
+#3 adopts architecture/boot. #4 pins tools and the versioned machine. #5 adopts minimum shared authority and mode/confirmation separation in ADR-0002. #6 specifies the initial [service contracts](SERVICE-CONTRACTS.md); their host schema checks do not satisfy M1 guest acceptance. #7 selects the engine/fonts and web gaps. #20 sets measured budgets. #33 defines timing. #39 pins MCP SDK/client/transport. #42 selects the executor channel. Decisions about components not yet implemented do not block the initial definition.
 
 Changing target hardware, required scope or component location requires recording the reason and impact in #1 and updating this document. Evidence-based test-parameter adjustments must not be presented as a new universal capability.
 

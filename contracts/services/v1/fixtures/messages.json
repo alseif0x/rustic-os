@@ -1,0 +1,1125 @@
+[
+  {
+    "id": "list_request",
+    "direction": "request",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "capabilities.list",
+      "params": {
+        "cursor": null,
+        "limit": 8
+      }
+    }
+  },
+  {
+    "id": "list_response",
+    "direction": "response",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "capabilities.list",
+      "result": {
+        "items": [
+          {
+            "method": "capabilities.list",
+            "version": 1,
+            "availability": "available"
+          },
+          {
+            "method": "capabilities.describe",
+            "version": 1,
+            "availability": "available"
+          },
+          {
+            "method": "files.read",
+            "version": 1,
+            "availability": "available"
+          },
+          {
+            "method": "files.replace",
+            "version": 1,
+            "availability": "available"
+          },
+          {
+            "method": "operations.get",
+            "version": 1,
+            "availability": "available"
+          },
+          {
+            "method": "operations.cancel",
+            "version": 1,
+            "availability": "available"
+          },
+          {
+            "method": "events.read",
+            "version": 1,
+            "availability": "available"
+          },
+          {
+            "method": "system.status",
+            "version": 1,
+            "availability": "available"
+          }
+        ],
+        "next_cursor": null,
+        "service_instance": "registry1"
+      }
+    }
+  },
+  {
+    "id": "describe_request",
+    "direction": "request",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "capabilities.describe",
+      "params": {
+        "method": "files.replace",
+        "version": 1
+      }
+    }
+  },
+  {
+    "id": "describe_response",
+    "direction": "response",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "capabilities.describe",
+      "result": {
+        "capability": {
+          "method": "files.replace",
+          "version": 1,
+          "availability": "available"
+        },
+        "contract_id": "urn:rusticos:services:v1:files.replace",
+        "contract_sha256": "ba4bae7c582ef57581d9951a607976ac675c329771b9c3c0a122b51ef0262ce6",
+        "max_inline_bytes": 1024,
+        "max_page_items": 16,
+        "receipt_capacity": 64
+      }
+    }
+  },
+  {
+    "id": "observe_v1_request",
+    "direction": "request",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": null,
+        "offset": 0,
+        "length": 1024
+      }
+    }
+  },
+  {
+    "id": "observe_v1_response",
+    "direction": "response",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "result": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "version": "v1",
+        "size": 12,
+        "offset": 0,
+        "data": "T2xkIGNvbnRlbnQK",
+        "range_sha256": "d7fdb24d671e6157ebad50b2190a56717a05e72f57254197d89863a2048b80b3",
+        "eof": true,
+        "retry_epoch": "epoch1"
+      }
+    }
+  },
+  {
+    "id": "replace_v1_request",
+    "direction": "request",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": "v1",
+        "data": "SGVsbG8gUnVzdGljT1MK",
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        }
+      }
+    }
+  },
+  {
+    "id": "replace_v1_response",
+    "direction": "response",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": false,
+        "state": "succeeded",
+        "effect": "committed",
+        "receipt": {
+          "workspace": "ws_a",
+          "resource": "file_a",
+          "previous_version": "v1",
+          "version": "v2",
+          "size": 15,
+          "sha256": "152e259dc5d9da7765a471404dcd67fa6ad82b52d2995258a2eb036ac6610e85",
+          "retry": {
+            "epoch": "epoch1",
+            "key": "mission_step1"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "recover_lost_initial_reply_request",
+    "direction": "request",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "operations.get",
+      "params": {
+        "workspace": "ws_a",
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        }
+      }
+    }
+  },
+  {
+    "id": "recover_lost_initial_reply_response",
+    "direction": "response",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "operations.get",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": false,
+        "state": "succeeded",
+        "effect": "committed",
+        "receipt": {
+          "workspace": "ws_a",
+          "resource": "file_a",
+          "previous_version": "v1",
+          "version": "v2",
+          "size": 15,
+          "sha256": "152e259dc5d9da7765a471404dcd67fa6ad82b52d2995258a2eb036ac6610e85",
+          "retry": {
+            "epoch": "epoch1",
+            "key": "mission_step1"
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "too_late_to_cancel_request",
+    "direction": "request",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "operations.cancel",
+      "params": {
+        "operation_id": "op1"
+      }
+    }
+  },
+  {
+    "id": "too_late_to_cancel_response",
+    "direction": "response",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "operations.cancel",
+      "result": {
+        "disposition": "too_late",
+        "operation": {
+          "operation_id": "op1",
+          "service_instance": "files1",
+          "cancel_requested": false,
+          "state": "succeeded",
+          "effect": "committed",
+          "receipt": {
+            "workspace": "ws_a",
+            "resource": "file_a",
+            "previous_version": "v1",
+            "version": "v2",
+            "size": 15,
+            "sha256": "152e259dc5d9da7765a471404dcd67fa6ad82b52d2995258a2eb036ac6610e85",
+            "retry": {
+              "epoch": "epoch1",
+              "key": "mission_step1"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "events_request",
+    "direction": "request",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "events.read",
+      "params": {
+        "workspace": "ws_a",
+        "cursor": null,
+        "limit": 8,
+        "max_wait_ms": 0
+      }
+    }
+  },
+  {
+    "id": "events_response",
+    "direction": "response",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "events.read",
+      "result": {
+        "items": [],
+        "next_cursor": "events1_start",
+        "service_instance": "events1"
+      }
+    }
+  },
+  {
+    "id": "status_request",
+    "direction": "request",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "system.status",
+      "params": {
+        "fields": [
+          "health"
+        ]
+      }
+    }
+  },
+  {
+    "id": "status_response",
+    "direction": "response",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "system.status",
+      "result": {
+        "service_instance": "supervisor1",
+        "observation_id": "observation1",
+        "health": "healthy"
+      }
+    }
+  },
+  {
+    "id": "verify_v2_request",
+    "direction": "request",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": "v2",
+        "offset": 0,
+        "length": 1024
+      }
+    }
+  },
+  {
+    "id": "verify_v2_response",
+    "direction": "response",
+    "valid": true,
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "result": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "version": "v2",
+        "size": 15,
+        "offset": 0,
+        "data": "SGVsbG8gUnVzdGljT1MK",
+        "range_sha256": "152e259dc5d9da7765a471404dcd67fa6ad82b52d2995258a2eb036ac6610e85",
+        "eof": true,
+        "retry_epoch": "epoch1"
+      }
+    }
+  },
+  {
+    "id": "forged_subject",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": "v1",
+        "data": "SGVsbG8gUnVzdGljT1MK",
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        },
+        "subject": "owner"
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "missing_precondition",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "data": "SGVsbG8gUnVzdGljT1MK",
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "missing_retry_key",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": "v1",
+        "data": "SGVsbG8gUnVzdGljT1MK"
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "unknown_method_field",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": "v1",
+        "data": "SGVsbG8gUnVzdGljT1MK",
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        }
+      },
+      "authority": "root"
+    },
+    "valid": false
+  },
+  {
+    "id": "unsupported_version",
+    "direction": "request",
+    "message": {
+      "version": 2,
+      "method": "files.replace",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": "v1",
+        "data": "SGVsbG8gUnVzdGljT1MK",
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "oversized_decoded_content",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": "v1",
+        "data": "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg=",
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "noncanonical_base64_pad_bits",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": "v1",
+        "data": "Zh==",
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "wrong_base64",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": "v1",
+        "data": "***=",
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "zero_read_length",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": null,
+        "offset": 0,
+        "length": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "negative_offset",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": null,
+        "offset": -1,
+        "length": 1024
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "range_overflow",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": null,
+        "offset": 9007199254740991,
+        "length": 1024
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "unsafe_integer",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": null,
+        "offset": 9007199254740992,
+        "length": 1024
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "textual_path_instead_of_id",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "../outside",
+        "expected_version": null,
+        "offset": 0,
+        "length": 1024
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "empty_resource_id",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "",
+        "expected_version": null,
+        "offset": 0,
+        "length": 1024
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "boolean_byte_length",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "expected_version": null,
+        "offset": 0,
+        "length": true
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "incorrect_range_hash",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "result": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "version": "v1",
+        "size": 12,
+        "offset": 0,
+        "data": "T2xkIGNvbnRlbnQK",
+        "range_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "eof": true,
+        "retry_epoch": "epoch1"
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "incorrect_eof",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "result": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "version": "v1",
+        "size": 12,
+        "offset": 0,
+        "data": "T2xkIGNvbnRlbnQK",
+        "range_sha256": "d7fdb24d671e6157ebad50b2190a56717a05e72f57254197d89863a2048b80b3",
+        "eof": false,
+        "retry_epoch": "epoch1"
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "range_outside_size",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "result": {
+        "workspace": "ws_a",
+        "resource": "file_a",
+        "version": "v1",
+        "size": 1,
+        "offset": 0,
+        "data": "T2xkIGNvbnRlbnQK",
+        "range_sha256": "d7fdb24d671e6157ebad50b2190a56717a05e72f57254197d89863a2048b80b3",
+        "eof": true,
+        "retry_epoch": "epoch1"
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "success_without_receipt",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": false,
+        "state": "succeeded",
+        "effect": "committed"
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "cancelled_with_committed_effect",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": false,
+        "state": "cancelled",
+        "effect": "committed",
+        "receipt": {
+          "workspace": "ws_a",
+          "resource": "file_a",
+          "previous_version": "v1",
+          "version": "v2",
+          "size": 15,
+          "sha256": "152e259dc5d9da7765a471404dcd67fa6ad82b52d2995258a2eb036ac6610e85",
+          "retry": {
+            "epoch": "epoch1",
+            "key": "mission_step1"
+          }
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "queued_with_receipt",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": false,
+        "state": "queued",
+        "effect": "committed",
+        "receipt": {
+          "workspace": "ws_a",
+          "resource": "file_a",
+          "previous_version": "v1",
+          "version": "v2",
+          "size": 15,
+          "sha256": "152e259dc5d9da7765a471404dcd67fa6ad82b52d2995258a2eb036ac6610e85",
+          "retry": {
+            "epoch": "epoch1",
+            "key": "mission_step1"
+          }
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "lookup_ambiguous",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "operations.get",
+      "params": {
+        "workspace": "ws_a",
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        },
+        "operation_id": "op1"
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "lookup_without_workspace",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "operations.get",
+      "params": {
+        "retry": {
+          "epoch": "epoch1",
+          "key": "mission_step1"
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "cancel_success_claimed_requested",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "operations.cancel",
+      "result": {
+        "disposition": "requested",
+        "operation": {
+          "operation_id": "op1",
+          "service_instance": "files1",
+          "cancel_requested": false,
+          "state": "succeeded",
+          "effect": "committed",
+          "receipt": {
+            "workspace": "ws_a",
+            "resource": "file_a",
+            "previous_version": "v1",
+            "version": "v2",
+            "size": 15,
+            "sha256": "152e259dc5d9da7765a471404dcd67fa6ad82b52d2995258a2eb036ac6610e85",
+            "retry": {
+              "epoch": "epoch1",
+              "key": "mission_step1"
+            }
+          }
+        }
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "excessive_page_limit",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "capabilities.list",
+      "params": {
+        "cursor": null,
+        "limit": 17
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "unbounded_wait",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "events.read",
+      "params": {
+        "workspace": "ws_a",
+        "cursor": null,
+        "limit": 8,
+        "max_wait_ms": 1001
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "duplicate_status_fields",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "system.status",
+      "params": {
+        "fields": [
+          "health",
+          "health"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "unknown_status_field",
+    "direction": "request",
+    "message": {
+      "version": 1,
+      "method": "system.status",
+      "params": {
+        "fields": [
+          "passwords"
+        ]
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "queued_operation",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": false,
+        "state": "queued",
+        "effect": "none"
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "running_operation",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": false,
+        "state": "running",
+        "effect": "none"
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "cancel_request_not_final",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "operations.cancel",
+      "result": {
+        "disposition": "requested",
+        "operation": {
+          "operation_id": "op1",
+          "service_instance": "files1",
+          "cancel_requested": true,
+          "state": "running",
+          "effect": "none"
+        }
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "cancelled_before_commit",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "operations.get",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": true,
+        "state": "cancelled",
+        "effect": "none"
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "failure_without_effect",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "operations.get",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": false,
+        "state": "failed",
+        "effect": "none",
+        "failure": "version_conflict"
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "reconciling_unknown",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "operations.get",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": false,
+        "state": "reconciling",
+        "effect": "unknown"
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "denied",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "error": {
+        "code": "access_denied",
+        "effect": "none",
+        "next_action": "stop"
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "conflict",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "error": {
+        "code": "version_conflict",
+        "effect": "none",
+        "next_action": "refresh"
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "expired_retry_epoch",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "error": {
+        "code": "expired_epoch",
+        "effect": "unknown",
+        "next_action": "reconcile"
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "lost_receipt",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "operations.get",
+      "error": {
+        "code": "outcome_unknown",
+        "effect": "unknown",
+        "next_action": "reconcile"
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "expired_cursor",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "events.read",
+      "error": {
+        "code": "cursor_expired",
+        "effect": "none",
+        "next_action": "refresh"
+      }
+    },
+    "valid": true
+  },
+  {
+    "id": "blind_retry_unknown",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "error": {
+        "code": "outcome_unknown",
+        "effect": "unknown",
+        "next_action": "retry_same"
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "expired_epoch_false_no_effect",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "files.replace",
+      "error": {
+        "code": "expired_epoch",
+        "effect": "none",
+        "next_action": "retry_same"
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "missing_receipt_false_not_found",
+    "direction": "response",
+    "message": {
+      "version": 1,
+      "method": "operations.get",
+      "error": {
+        "code": "not_found",
+        "effect": "none",
+        "next_action": "refresh"
+      }
+    },
+    "valid": false
+  },
+  {
+    "id": "resource_with_final_newline",
+    "direction": "request",
+    "valid": false,
+    "message": {
+      "version": 1,
+      "method": "files.read",
+      "params": {
+        "workspace": "ws_a",
+        "resource": "file_a\n",
+        "expected_version": null,
+        "offset": 0,
+        "length": 1024
+      }
+    }
+  },
+  {
+    "id": "failed_but_outcome_unknown",
+    "direction": "response",
+    "valid": false,
+    "message": {
+      "version": 1,
+      "method": "operations.get",
+      "result": {
+        "operation_id": "op1",
+        "service_instance": "files1",
+        "cancel_requested": false,
+        "state": "failed",
+        "effect": "none",
+        "failure": "outcome_unknown"
+      }
+    }
+  }
+]

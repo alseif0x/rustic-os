@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rusticos:services:v1:events.read",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "$defs": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "workspace": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "cursor": {
+          "oneOf": [
+            {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "max_wait_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      },
+      "required": [
+        "workspace",
+        "cursor",
+        "limit",
+        "max_wait_ms"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rusticos:services:v1:types#/$defs/event"
+          },
+          "maxItems": 16
+        },
+        "next_cursor": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "service_instance": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        }
+      },
+      "required": [
+        "items",
+        "next_cursor",
+        "service_instance"
+      ],
+      "additionalProperties": false
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "method": {
+          "const": "events.read"
+        },
+        "params": {
+          "$ref": "#/$defs/input"
+        }
+      },
+      "required": [
+        "version",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "method": {
+              "const": "events.read"
+            },
+            "result": {
+              "$ref": "#/$defs/output"
+            }
+          },
+          "required": [
+            "version",
+            "method",
+            "result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "method": {
+              "const": "events.read"
+            },
+            "error": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/error"
+            }
+          },
+          "required": [
+            "version",
+            "method",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

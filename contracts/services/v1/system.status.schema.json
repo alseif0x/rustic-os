@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rusticos:services:v1:system.status",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "$defs": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "health",
+              "platform",
+              "services"
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "service_instance": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "observation_id": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "health": {
+          "enum": [
+            "healthy",
+            "degraded",
+            "recovering"
+          ]
+        },
+        "platform": {
+          "enum": [
+            "R0"
+          ]
+        },
+        "services": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "enum": [
+                  "files",
+                  "registry",
+                  "events",
+                  "supervisor"
+                ]
+              },
+              "state": {
+                "enum": [
+                  "ready",
+                  "degraded",
+                  "unavailable"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "state"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 4
+        }
+      },
+      "required": [
+        "service_instance",
+        "observation_id"
+      ],
+      "additionalProperties": false
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "method": {
+          "const": "system.status"
+        },
+        "params": {
+          "$ref": "#/$defs/input"
+        }
+      },
+      "required": [
+        "version",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "method": {
+              "const": "system.status"
+            },
+            "result": {
+              "$ref": "#/$defs/output"
+            }
+          },
+          "required": [
+            "version",
+            "method",
+            "result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "method": {
+              "const": "system.status"
+            },
+            "error": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/error"
+            }
+          },
+          "required": [
+            "version",
+            "method",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

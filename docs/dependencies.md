@@ -44,3 +44,18 @@ The original `rustic-sdk` and `rustic-sdk-probe` packages added for #11 also use
 ## Architecture research tooling
 
 The finite operation model in `tools/research/operation_model` is original Apache-2.0 Python code using only the reference host's standard library. The [research agenda](architecture/systems-roadmap.md) cites prior work for design comparison; no source from those projects or papers is copied or distributed. No new package, Rust crate or guest runtime is introduced.
+
+## Host service contract checks — 2026-09-10
+
+The original `tools/contracts` code and schemas use Apache-2.0. The validator uses these external Python packages from PyPI in a local/CI virtual environment. [requirements.txt](../tools/contracts/requirements.txt) pins every version and downloaded wheel SHA-256 for Ubuntu 24.04 amd64 / CPython 3.12. No wheel, environment, package source or compiled extension is included in the repository, boot image, executor image or exported evidence. Generated descriptors contain original project schemas.
+
+| Package / source | Version | License and installed notice | Role |
+| --- | --- | --- | --- |
+| [jsonschema](https://github.com/python-jsonschema/jsonschema) | 4.26.0 | MIT; dist-info/licenses/COPYING | Draft 2020-12 validation |
+| [attrs](https://github.com/python-attrs/attrs) | 26.1.0 | MIT; dist-info/licenses/LICENSE | Validator data structures |
+| [jsonschema-specifications](https://github.com/python-jsonschema/jsonschema-specifications) | 2025.9.1 | MIT; dist-info/licenses/COPYING | Offline meta-schema registry |
+| [referencing](https://github.com/python-jsonschema/referencing) | 0.37.0 | MIT; dist-info/licenses/COPYING | Local reference resolution |
+| [rpds-py](https://github.com/crate-py/rpds) | 2026.6.3 | MIT; dist-info/licenses/LICENSE | Host persistent structures, external native wheel |
+| [typing_extensions](https://github.com/python/typing_extensions) | 4.16.0 | PSF-2.0; dist-info/licenses/LICENSE | Host type support |
+
+Implementer reviewed the installed metadata and supplied license files against the selected distributions; no independent audit. Their original notices remain in the environment. External development use introduces no new linked guest license obligation; bundling any of these packages later requires preserving the complete package notices and reviewing compiled transitive components. Other architectures/Python versions need their own reviewed wheel hashes rather than bypassing the hash check. Cargo.lock and existing boot-image notices are unchanged.

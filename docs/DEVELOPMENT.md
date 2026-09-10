@@ -10,7 +10,7 @@ Install the basic tools with apt (administrator privileges required):
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y build-essential curl python3 git
+sudo apt-get install -y build-essential curl python3 python3-venv git
 ```
 
 If rustup is missing, follow the [official installation guide](https://rust-lang.github.io/rustup/installation/index.html). This baseline used the official installer with --profile minimal --no-modify-path. Activate the environment with:
@@ -91,3 +91,7 @@ The same CI user could modify PR code; the workflow limits permissions and suppl
 The image builder and isolated worker compile the application before the kernel with the `sdk-test` feature. Direct source fingerprints cover application sources, linker script, descriptor and the host manifest encoder. The sandbox exports bounded ELF/manifest artifacts with hashes alongside the containing kernel.
 
 #35 adds [block storage](BLOCK.md), with PCI I/O, DMA, queue mechanics and request validation in separate modules. No toolchain or Cargo dependency is added. Full direct and isolated suites now contain 18 and 22 scenarios. Rebuild reviewed sandbox infrastructure before using the new modes.
+
+## Logical service contracts
+
+The [service contract guide](SERVICE-CONTRACTS.md) provides the commands for the separate Python 3.12 host validator and descriptor exporter. Install its exact hashed wheels into `.cache/contracts-venv`; no package is added to the kernel, SDK or sandbox image. CI checks 62 messages, nine exchanges and 14 message/descriptor tests and preserves their results. This is separate from the runner tests, finite operation model and actual guest acceptance.

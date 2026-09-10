@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rusticos:services:v1:capabilities.describe",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "$defs": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/method"
+        },
+        "version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "method",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "capability": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/capability"
+        },
+        "contract_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "contract_sha256": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/sha256"
+        },
+        "max_inline_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "max_page_items": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "receipt_capacity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        }
+      },
+      "required": [
+        "capability",
+        "contract_id",
+        "contract_sha256",
+        "max_inline_bytes",
+        "max_page_items",
+        "receipt_capacity"
+      ],
+      "additionalProperties": false
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "method": {
+          "const": "capabilities.describe"
+        },
+        "params": {
+          "$ref": "#/$defs/input"
+        }
+      },
+      "required": [
+        "version",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "method": {
+              "const": "capabilities.describe"
+            },
+            "result": {
+              "$ref": "#/$defs/output"
+            }
+          },
+          "required": [
+            "version",
+            "method",
+            "result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 1
+            },
+            "method": {
+              "const": "capabilities.describe"
+            },
+            "error": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/error"
+            }
+          },
+          "required": [
+            "version",
+            "method",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

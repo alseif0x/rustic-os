@@ -29,6 +29,7 @@ Start with the [project overview](../README.md) for current capabilities and the
 - [Experimental v0.1 requirements](requirements-v0.1.md): scope, reference profiles and acceptance scenarios.
 - [Kernel and boot decision](architecture/ADR-0001-kernel-and-boot.md): chosen architecture, alternatives and review conditions.
 - [Minimum shared authority decision](architecture/ADR-0002-authority-and-delegation.md): resource/action grants, session/helper scope, owner control and the removal of mandatory permission tiers; [20 reviewed cases](architecture/authority-cases.md) specify future runtime checks.
+- [Shared service contracts](SERVICE-CONTRACTS.md): eight specified operations, executable schema/examples and generated descriptors; [ADR-0003](architecture/ADR-0003-service-contracts.md) explains the decision and [16 scenarios](architecture/service-contract-cases.md) assign future stateful/guest conformance.
 - [Agent integration proposal](architecture/agent-integration.md): service APIs, tools, MCP and proposed experiments.
 - [Systems roadmap and research agenda](architecture/systems-roadmap.md): stage gates, architectural gaps and bounded experiments for human/agent workflows.
 - [Operation-boundary experiment](architecture/operation-model.md): finite host model of edit/revocation races and retry after a crash; not guest implementation evidence.

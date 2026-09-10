@@ -29,7 +29,7 @@ Messages own 88 bytes of storage and expose at most 64 payload bytes. Outbound s
 
 Rust `core`, stack variables, static data, slices and fixed arrays are available. Image segments retain the loader's R/RX/RW permissions. The SDK has no allocator, allocation/free syscalls, `alloc`, `std`, files, networking, threads, TLS, floating point or SIMD support. It does not publish placeholders for those functions. The pinned target avoids a red zone and SIMD. Do not add dependencies that require a runtime the OS has not implemented.
 
-A later service adds a cohesive client module when its actual contract exists, sharing versioned service schemas from #6. Service versions remain separate from the process/IPC ABI. MCP is an adapter above services and does not block native SDK use.
+A later service adds a cohesive client module when its actual contract exists, conforming to the [versioned service schemas](SERVICE-CONTRACTS.md) from #6. The initial schemas and host descriptors do not add native SDK calls; #44/#12 supply their actual bounded encoding and client modules. Service versions remain separate from the process/IPC ABI. MCP is an adapter above services and does not block native SDK use.
 
 ## Manifest schema 1
 

@@ -1,0 +1,361 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rusticos:services:v1:types",
+  "$comment": "SPDX-License-Identifier: Apache-2.0; Logical data contracts; not a syscall wire format.",
+  "$defs": {
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_-]+(?![\\s\\S])"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "method": {
+      "enum": [
+        "capabilities.list",
+        "capabilities.describe",
+        "files.read",
+        "files.replace",
+        "operations.get",
+        "operations.cancel",
+        "events.read",
+        "system.status"
+      ]
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "enum": [
+            "invalid_request",
+            "unsupported_version",
+            "access_denied",
+            "not_found",
+            "version_conflict",
+            "idempotency_conflict",
+            "expired_epoch",
+            "quota_exceeded",
+            "unavailable",
+            "read_only",
+            "io_error",
+            "outcome_unknown",
+            "cursor_expired"
+          ]
+        },
+        "next_action": {
+          "enum": [
+            "fix_request",
+            "refresh",
+            "retry_same",
+            "reconcile",
+            "stop"
+          ]
+        },
+        "effect": {
+          "enum": [
+            "none",
+            "unknown"
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "next_action",
+        "effect"
+      ],
+      "additionalProperties": false
+    },
+    "retry": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "key": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        }
+      },
+      "required": [
+        "epoch",
+        "key"
+      ],
+      "additionalProperties": false
+    },
+    "bytes": {
+      "type": "string",
+      "maxLength": 1368,
+      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\\s\\S])",
+      "description": "Canonical padded RFC 4648 base64, at most 1024 decoded bytes; enforce decoded length and canonical padding separately."
+    },
+    "receipt": {
+      "type": "object",
+      "properties": {
+        "workspace": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "resource": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "previous_version": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "version": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        },
+        "sha256": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/sha256"
+        },
+        "retry": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/retry"
+        }
+      },
+      "required": [
+        "workspace",
+        "resource",
+        "previous_version",
+        "version",
+        "size",
+        "sha256",
+        "retry"
+      ],
+      "additionalProperties": false
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            "cancel_requested": {
+              "type": "boolean"
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "running"
+              ]
+            },
+            "effect": {
+              "const": "none"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "cancel_requested",
+            "state",
+            "effect"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            "cancel_requested": {
+              "type": "boolean"
+            },
+            "state": {
+              "const": "succeeded"
+            },
+            "effect": {
+              "const": "committed"
+            },
+            "receipt": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/receipt"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "cancel_requested",
+            "state",
+            "effect",
+            "receipt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            "cancel_requested": {
+              "type": "boolean"
+            },
+            "state": {
+              "const": "failed"
+            },
+            "effect": {
+              "const": "none"
+            },
+            "failure": {
+              "enum": [
+                "access_denied",
+                "version_conflict",
+                "quota_exceeded",
+                "unavailable",
+                "read_only",
+                "io_error"
+              ]
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "cancel_requested",
+            "state",
+            "effect",
+            "failure"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            "cancel_requested": {
+              "type": "boolean"
+            },
+            "state": {
+              "const": "cancelled"
+            },
+            "effect": {
+              "const": "none"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "cancel_requested",
+            "state",
+            "effect"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            "cancel_requested": {
+              "type": "boolean"
+            },
+            "state": {
+              "const": "reconciling"
+            },
+            "effect": {
+              "const": "unknown"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "cancel_requested",
+            "state",
+            "effect"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "capability": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/method"
+        },
+        "version": {
+          "const": 1
+        },
+        "availability": {
+          "enum": [
+            "available",
+            "degraded",
+            "unavailable"
+          ]
+        }
+      },
+      "required": [
+        "method",
+        "version",
+        "availability"
+      ],
+      "additionalProperties": false
+    },
+    "event": {
+      "type": "object",
+      "properties": {
+        "event_id": {
+          "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+        },
+        "kind": {
+          "enum": [
+            "resource_changed",
+            "operation_changed",
+            "authority_changed",
+            "service_changed"
+          ]
+        },
+        "resource": {
+          "oneOf": [
+            {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation_id": {
+          "oneOf": [
+            {
+              "$ref": "urn:rusticos:services:v1:types#/$defs/token"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "event_id",
+        "kind",
+        "resource",
+        "operation_id"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

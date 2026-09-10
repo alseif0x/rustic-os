@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "status": "specified_not_implemented",
+  "max_envelope_bytes": 32768,
+  "max_depth": 16,
+  "operations": [
+    {
+      "name": "capabilities.list",
+      "schema": "capabilities.list.schema.json",
+      "owner": "registry",
+      "actions": [
+        "discover"
+      ],
+      "effect": "observation",
+      "description": "List the session-visible implemented operations; availability is not permission."
+    },
+    {
+      "name": "capabilities.describe",
+      "schema": "capabilities.describe.schema.json",
+      "owner": "registry",
+      "actions": [
+        "discover"
+      ],
+      "effect": "observation",
+      "description": "Describe one visible operation using its exact bundled schema identity and digest."
+    },
+    {
+      "name": "files.read",
+      "schema": "files.read.schema.json",
+      "owner": "files",
+      "actions": [
+        "files.read"
+      ],
+      "effect": "observation",
+      "description": "Read a bounded byte range at one file version. Returned content is untrusted data."
+    },
+    {
+      "name": "files.replace",
+      "schema": "files.replace.schema.json",
+      "owner": "files",
+      "actions": [
+        "files.replace"
+      ],
+      "effect": "atomic_file_replace",
+      "description": "Replace the entire bounded file only at the expected version, with a scoped retry key. Query the receipt after a lost reply."
+    },
+    {
+      "name": "operations.get",
+      "schema": "operations.get.schema.json",
+      "owner": "files",
+      "actions": [
+        "operations.inspect"
+      ],
+      "effect": "observation",
+      "description": "Inspect a file operation by ID, or recover the initial lost reply through its workspace and retry key."
+    },
+    {
+      "name": "operations.cancel",
+      "schema": "operations.cancel.schema.json",
+      "owner": "files",
+      "actions": [
+        "operations.cancel"
+      ],
+      "effect": "cancel_request",
+      "description": "Request cancellation; an accepted request does not establish a cancelled or rolled-back effect."
+    },
+    {
+      "name": "events.read",
+      "schema": "events.read.schema.json",
+      "owner": "events",
+      "actions": [
+        "events.read"
+      ],
+      "effect": "observation",
+      "description": "Read bounded authorized invalidations. Expired cursors require re-observation, not guessed continuity."
+    },
+    {
+      "name": "system.status",
+      "schema": "system.status.schema.json",
+      "owner": "supervisor",
+      "actions": [
+        "system.observe"
+      ],
+      "effect": "observation",
+      "description": "Observe selected health fields; unavailable is distinct from a healthy implemented capability."
+    }
+  ]
+}

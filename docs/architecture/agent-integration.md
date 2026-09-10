@@ -2,7 +2,7 @@
 
 # Agent integration: native contracts and adapters
 
-Date: 2026-09-09. Status: researched technical proposal, pending executable contracts and measurements in #6/#43. This is not an approved ABI or implemented functionality. Kernel IPC was subsequently implemented in #34; the product integration and adapter experiments below remain proposed.
+Date: 2026-09-09; updated 2026-09-10. Status: integration proposal with the first logical contracts now specified by #6/[ADR-0003](ADR-0003-service-contracts.md). Stateful backend/adapter measurements remain #43. Kernel IPC is implemented in #34; service APIs and adapters are not implemented by this document.
 
 ## Conclusion and scope
 
@@ -44,49 +44,11 @@ Pin the protocol version and test actual SDK/client compatibility rather than au
 
 A2A addresses collaboration among independent agents and their tasks; it does not replace file, process or window APIs. It remains a future option, without a new v0.1 dependency. [A2A and MCP](https://a2a-protocol.org/dev/topics/a2a-and-mcp/).
 
-## First proposed vertical contract
+## First specified vertical contract
 
-Provisional logical names, not final URLs or syscalls. The eight operations must exist first in a deterministic backend (#43), then against real services (#22). Fixtures may precreate the workspace and file: this is not yet intended as a complete file API.
+[Shared service contracts v1](../SERVICE-CONTRACTS.md) replaces the earlier provisional argument names and example. The canonical catalog retains capabilities.list, capabilities.describe, files.read, files.replace, operations.get, operations.cancel, events.read and system.status. It specifies bounded binary data, typed errors, current-authority/version checks, receipts, cancellation, retry epochs and lookup when the first response is lost. Generated descriptors use these same schemas.
 
-| Method | Main input | Observable output |
-| --- | --- | --- |
-| capabilities.list | filter, cursor, limit | visible capabilities, version, availability, next cursor |
-| capabilities.describe | capability_id, supported version | schema, effects, required permissions, limits |
-| files.read | workspace_id, resource_id, bounded range | content, version, hash, explicit truncation |
-| files.replace | workspace_id, resource_id, expected_version, bounded content, idempotency_key | operation or receipt with new version and hash |
-| operations.get | operation_id | status, progress, known effects, evidence |
-| operations.cancel | operation_id | accepted/rejected cancellation request; current status |
-| events.read | scope, cursor, limit, maximum wait | authorized changes, cursor or resynchronization indication |
-| system.status | selected fields | health and active profile/capabilities, observation time |
-
-Example files.replace arguments:
-
-```json
-{
-  "workspace_id": "ws-demo",
-  "resource_id": "file-demo",
-  "expected_version": "v7",
-  "content_utf8": "Hello RusticOS\n",
-  "idempotency_key": "mission-demo-step-2"
-}
-```
-
-Identity and rights are not arguments the model can invent: they come from authenticated sessions/handles. Identifiers are references, not permissions. Resolve and authorize the resource within its workspace; check the precondition and apply the change atomically in the service.
-
-Asynchronous acceptance returns operation_id; a completed operation returns status, resource_id, version/hash and an audit reference. The mission verifies the result through files.read and the expected version/hash. It never infers success solely from model-generated text.
-
-## Semantics to settle before expanding the catalog
-
-- Input/output schemas with limits on size, depth, ranges and allowed fields; documented effects and errors.
-- Execution states: queued, running, succeeded, failed or cancelled. Distinguish cancel_requested from the final result. A disconnection may leave the client unaware of the outcome: reconcile through operation_id/key before retrying.
-- Idempotency scoped by identity, scope and key; define retention. The same key with different arguments produces a conflict. Do not promise exactly-once external effects.
-- Cancellation stops work where possible; it does not undo already committed effects. Report partial effects and actual compensation options.
-- Distinguishable errors: invalid_argument, permission_denied, not_found, version_conflict, unavailable, resource_exhausted; indicate retryability without leaking other owners' resources.
-- Paginated events, cursors, bounded retention, backpressure and resynchronization after loss. Do not promise an eternal log or exactly-once delivery.
-- Time, result and resource budgets. Transport timeouts do not equal operation failure.
-- A canonical contract source with descriptor generation/validation. JSON Schema is a practical candidate for the tool boundary; it does not itself represent kernel handle transfer. Explicitly document mappings to IPC types, bytes, integers and versions.
-- Discovery by task and session: do not send hundreds of tools on every model request or confuse an available capability with an authorized one.
-- Authority in services/kernel, explicit policies and revocation. MCP describes exchanges; it cannot enforce OS authority by itself. [MCP specification](https://modelcontextprotocol.io/specification/2026-07-28).
+The host suite validates message shapes and correlated examples; it does not implement a backend or prove guest effects. #43 compares adapters over a stateful backend; #44/#12 implement the native storage boundary, #13 authority and #22 the complete guest mission. The native product path need not wait for the host comparison to begin storage work.
 
 ## Expansion by product area
 
@@ -126,6 +88,6 @@ Record IPC/encoding candidates and runtime requirements; do not extrapolate host
 
 ## Pending decisions
 
-#3/#34 assign IPC, ABI and encoding with measurements and portability; the initial kernel implementation is now documented in [IPC.md](../IPC.md). #6 owns executable schemas and final service semantics. #39 owns client/SDK pairing, MCP revision and transport. #43 owns comparative evidence. No library or transport is yet claimed to be best for the product integration: this proposal establishes the boundaries and how to decide.
+#3/#34 assign IPC, ABI and encoding with measurements and portability; the initial kernel implementation is now documented in [IPC.md](../IPC.md). #6 now specifies the initial schemas and service semantics in [SERVICE-CONTRACTS](../SERVICE-CONTRACTS.md); new product operations are specified with their actual services. #39 owns client/SDK pairing, MCP revision and transport. #43 owns comparative evidence. No library or transport is yet claimed to be best for the product integration: this proposal establishes the boundaries and how to decide.
 
 The [systems roadmap review](systems-roadmap.md), dated 2026-09-10, extends this proposal with stage gates, explicit block-to-user access (#44), service-capacity planning and bounded experiments for task continuity. Its [finite operation model](operation-model.md) illustrates why commit-time resource and authority checks and a recovery contract matter. It does not resolve #5/#6 or implement the #43 adapter comparison.

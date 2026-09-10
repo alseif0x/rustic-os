@@ -106,7 +106,7 @@ The useful design conclusion is that **resource state, authority state and effec
 
 ## Changes to the plan and limits on scope
 
-1. #5 is now specified by [ADR-0002](ADR-0002-authority-and-delegation.md): scoped session/helper grants and one deterministic file mission, without mandatory tiers or a general delegation framework. #6 defines the shared contracts next. The block access bridge #44 remains an explicit dependency of #12; file-format research can proceed before implementation dependencies close.
+1. #5 is now specified by [ADR-0002](ADR-0002-authority-and-delegation.md): scoped session/helper grants and one deterministic file mission, without mandatory tiers or a general delegation framework. #6 now specifies the [first shared contracts](../SERVICE-CONTRACTS.md), with host schema/message checks and stateful conformance assigned to the service owners. The block access bridge #44 remains an explicit dependency of #12; file-format research can proceed before implementation dependencies close.
 2. Run #20's initial measurement work before integrated H1 acceptance and review service topology before adding each long-lived service. Keep recovery/control capacity explicit.
 3. Add commit-time authority/version races, lost responses and receipt consistency to the owning contracts and tests. Do not close #5/#6/#43 from this model.
 4. Start #7's bounded browser feasibility work before expanding a desktop port. It may discover prerequisites; it does not justify abandoning the existing kernel.
