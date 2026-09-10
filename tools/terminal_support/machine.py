@@ -18,9 +18,18 @@ def disk(path, initialize=False):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     flags = os.O_RDWR | os.O_NOFOLLOW | (os.O_CREAT | os.O_EXCL if initialize else 0)
-    fd = os.open(path, flags, 0o600)
+    # A separate lock coordinates launchers. DrvFS translates flock on the data
+    # file into locks that conflict with QEMU's own byte-range drive locking.
+    # Keep QEMU's drive locks enabled; do not weaken them to mask that conflict.
+    lock_path = path.with_name(path.name + ".lock")
+    lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    fd = None
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_info = os.fstat(lock_fd)
+        if not stat.S_ISREG(lock_info.st_mode) or lock_info.st_nlink != 1:
+            raise RuntimeError("terminal lock must be a dedicated regular file")
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fd = os.open(path, flags, 0o600)
         info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
             raise RuntimeError("terminal data must be a dedicated regular file")
@@ -30,7 +39,9 @@ def disk(path, initialize=False):
             raise RuntimeError("unexpected terminal disk size; refusing to modify it")
         yield path.resolve()
     finally:
-        os.close(fd)
+        if fd is not None:
+            os.close(fd)
+        os.close(lock_fd)
 
 @contextlib.contextmanager
 def machine(image, data, serial, log):

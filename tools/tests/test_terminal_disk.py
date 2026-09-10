@@ -15,10 +15,12 @@ class TerminalDisk(unittest.TestCase):
                 with path.open("r+b") as f:
                     f.seek(512)
                     f.write(b"owner")
-                with self.assertRaises(FileExistsError):
+                with self.assertRaises((FileExistsError, BlockingIOError)):
                     with disk(path,True): pass
                 with self.assertRaises(BlockingIOError):
                     with disk(path): pass
+            with self.assertRaises(FileExistsError):
+                with disk(path,True): pass
             with disk(path):
                 self.assertEqual(path.stat().st_size,SIZE)
                 with path.open("rb") as f:
