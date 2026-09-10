@@ -22,9 +22,10 @@ impl Device {
             super::diagnostics::Completion {
                 request: _request,
                 kind: pending.kind,
-                started: pending.started,
+                started: pending.budget.started(),
                 now: ticks(),
-                polls: pending.polls,
+                polls: pending.budget.polls(),
+                stalled_polls: pending.budget.stalled_polls(),
                 expected: self.index,
                 observed: self.dma.read(self.layout.used + 2, 2) as u16,
                 device_status,
@@ -51,9 +52,10 @@ impl Device {
                 super::diagnostics::Completion {
                     request: _request,
                     kind: pending.kind,
-                    started: pending.started,
+                    started: pending.budget.started(),
                     now: ticks(),
-                    polls: pending.polls,
+                    polls: pending.budget.polls(),
+                    stalled_polls: pending.budget.stalled_polls(),
                     expected: self.index,
                     observed,
                     device_status,
@@ -75,16 +77,16 @@ impl Device {
             self.pending = None;
             return Some(result);
         }
-        pending.polls += 1;
         let now = ticks();
-        if now.saturating_sub(pending.started) >= 25 || pending.polls >= 5_000_000 {
+        if pending.budget.expired_pending(now) {
             #[cfg(feature = "sdk-test")]
             super::diagnostics::Completion {
                 request: _request,
                 kind: pending.kind,
-                started: pending.started,
+                started: pending.budget.started(),
                 now,
-                polls: pending.polls,
+                polls: pending.budget.polls(),
+                stalled_polls: pending.budget.stalled_polls(),
                 expected: self.index,
                 observed,
                 device_status,

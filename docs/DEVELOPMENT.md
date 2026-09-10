@@ -111,6 +111,16 @@ python3 tools/terminal_test.py
 
 #44 adds [bounded user-mode disk access](BLOCK-ACCESS.md). The host builder/linter selects both `sdk-probe` and `block-probe`; both manifests and ELFs have separate hashes. Shared block codecs and pure ownership/queue tests run on the host, while two additional VM scenarios exercise actual copied sector calls, cancellation, process death and persistence. The regression inventory is 46 Rust and 30 runner tests, 20 direct VM scenarios and 24 isolated scenarios.
 
+## Delayed-device regression
+
+The separate delayed-device regression runs after the direct boot suite in CI:
+
+```sh
+python3 tools/latency_test.py --image artifacts/boot/recovery-test/rustic-os.img --output artifacts/latency/new-run
+```
+
+Use a new output directory; omit `--image` to build the current recovery image. It suspends an actual FLUSH for 0.6 seconds (successful bounded replacement) and six seconds (500-tick timeout, uncertain result and explicit recovery). The guest still uses its real VirtIO driver. A dedicated second QEMU exports the test disk through a private Unix NBD socket so the backend can resume independently of a guest device reset. This is a separate host fault topology, not a performance sample or a change to the ordinary R0 disk path. See [the block guide](BLOCK.md#delayed-device-regression) for evidence and limits.
+
 ## Repeated native measurements
 
 The [measurement guide](MEASUREMENTS.md) defines the separate #20 protocol, metric boundaries, environment identity and regression decision. Run `python3 tools/measure.py verify --host-label local-wsl-r0 --samples 5 --output artifacts/measurements/new-run` after activating the pinned Rust environment. The output directory must be new. Each successful check performs 36 actual VM boots: three batches, each with one excluded warmup and five measured repetitions, with two VMs per repetition. The CI measurements job uses its own same-job baseline; it does not compare GitHub timings to WSL.

@@ -21,6 +21,7 @@ impl<P: crate::rpc::Progress> Client<P> {
     // These observations retain the same Rpc peer/correlation stream as legacy
     // file calls, while rejecting noncanonical error responses as well as data.
     pub(super) fn observation(&mut self, mut request: Packet) -> Result<Packet, Error> {
+        self.require_binding()?;
         request.context = self.context;
         let response = self
             .rpc

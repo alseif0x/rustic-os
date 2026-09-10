@@ -5,7 +5,7 @@ import re
 PREFIX = "RUSTIC BLOCK_FAILURE "
 NUMBERS = {
     "request": 64, "kind": 32, "started": 64, "now": 64,
-    "elapsed_ticks": 64, "polls": 64, "expected": 16,
+    "elapsed_ticks": 64, "polls": 64, "stalled_polls": 64, "expected": 16,
     "observed": 16, "device_status": 8,
 }
 FIELDS = set(NUMBERS) | {"phase", "reason", "descriptor", "status"}
@@ -55,20 +55,20 @@ def verified(mode, serial):
                 return False
             if (value["started"] < previous_tick or value["now"] < value["started"]
                     or value["elapsed_ticks"] != value["now"] - value["started"]
-                    or value["expected"] != index):
+                    or value["expected"] != index or value["stalled_polls"] > value["polls"]):
                 return False
             previous_tick = value["now"]
             if reason == "Timeout":
                 if (value["descriptor"] != "None" or value["observed"] != index
-                        or not 1 <= value["polls"] <= 5_000_000
-                        or value["elapsed_ticks"] < 25 and value["polls"] < 5_000_000):
+                        or value["polls"] < 1 or value["stalled_polls"] > 5_000_000
+                        or value["elapsed_ticks"] < 500 and value["stalled_polls"] < 5_000_000):
                     return False
             else:
                 # A used entry is checked before the timeout; a late actual device
-                # error can therefore have elapsed >= 25 without being a Timeout.
+                # error can therefore have elapsed >= 500 without being a Timeout.
                 if (value["descriptor"] != "Some(0)"
                         or value["observed"] != (index + 1) % 65536
-                        or value["polls"] >= 5_000_000):
+                        or value["stalled_polls"] >= 5_000_000):
                     return False
                 index = value["observed"]
         return True

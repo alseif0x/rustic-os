@@ -12,6 +12,7 @@ pub(super) struct Completion {
     pub(super) started: u64,
     pub(super) now: u64,
     pub(super) polls: u64,
+    pub(super) stalled_polls: u64,
     pub(super) expected: u16,
     pub(super) observed: u16,
     pub(super) device_status: u8,
@@ -26,13 +27,14 @@ impl Completion {
             // Absent descriptor/status means no used entry was consumed, not status 0.
             let _ = writeln!(
                 serial,
-                "RUSTIC BLOCK_FAILURE phase=completion request={} kind={} reason={error:?} started={} now={} elapsed_ticks={} polls={} expected={} observed={} device_status={} descriptor={:?} status={:?}",
+                "RUSTIC BLOCK_FAILURE phase=completion request={} kind={} reason={error:?} started={} now={} elapsed_ticks={} polls={} stalled_polls={} expected={} observed={} device_status={} descriptor={:?} status={:?}",
                 self.request,
                 self.kind,
                 self.started,
                 self.now,
                 self.now.saturating_sub(self.started),
                 self.polls,
+                self.stalled_polls,
                 self.expected,
                 self.observed,
                 self.device_status,

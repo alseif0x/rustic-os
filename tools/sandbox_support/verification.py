@@ -29,7 +29,10 @@ def suite(revision):
     cases[8:8] = [(mode, revision, mode, 120, 30, "boot_failed") for mode in MEMORY_FAULTS]
     cases.insert(0, ("terminal-test", revision, "terminal-test", 120, 60, "success"))
     cases.insert(0, ("recovery-test", revision, "recovery-test", 120, 60, "success"))
-    cases[13:13] = [(mode, revision, mode, 120, 30, "success") for mode in BLOCK_MODES]
+    # Five deliberate device timeouts consume about 25 guest seconds under the
+    # 500-tick policy. Include boot/setup and control progress in its host budget.
+    cases[13:13] = [(mode, revision, mode, 120, 45 if mode == "block-user-faults" else 30, "success")
+                    for mode in BLOCK_MODES]
     for name, commit, mode, build_seconds, boot_seconds, expected in cases:
         result = execute(commit, mode, build_seconds, boot_seconds)
         if result["status"] != expected:

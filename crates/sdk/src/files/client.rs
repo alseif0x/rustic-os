@@ -34,6 +34,14 @@ impl<P: crate::rpc::Progress> Client<P> {
     pub fn token(&self) -> u64 {
         self.rpc.endpoint.token()
     }
+    /// Token zero represents an explicitly unbound client, not a failed exchange.
+    pub(super) fn require_binding(&self) -> Result<(), Error> {
+        if self.token() == 0 {
+            Err(Error::Unavailable)
+        } else {
+            Ok(())
+        }
+    }
     pub fn stat(&mut self, id: u32) -> Result<Metadata, Error> {
         let mut p = Packet::new(STAT);
         p.id = id;

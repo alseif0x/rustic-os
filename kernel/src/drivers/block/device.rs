@@ -3,12 +3,11 @@ use crate::arch::{
     memory::{DmaRegion, Memory},
     pci::BlockTransport,
 };
-use rustic_kernel::block::{Error, Geometry, queue::Layout};
+use rustic_kernel::block::{Error, Geometry, deadline::RequestBudget, queue::Layout};
 pub(super) struct Pending {
     pub(super) kind: u32,
     pub(super) length: usize,
-    pub(super) started: u64,
-    pub(super) polls: u64,
+    pub(super) budget: RequestBudget,
 }
 #[must_use = "call shutdown to confirm reset and release DMA ownership"]
 pub(crate) struct Device {

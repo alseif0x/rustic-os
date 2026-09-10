@@ -16,7 +16,8 @@ def summary(phase):
 
 def failure(**changes):
     value = {"phase": "completion", "request": 0, "kind": 0, "reason": "Timeout",
-             "started": 10, "now": 35, "elapsed_ticks": 25, "polls": 100,
+             "started": 10, "now": 510, "elapsed_ticks": 500, "polls": 100,
+             "stalled_polls": 0,
              "expected": 0, "observed": 0, "device_status": 7,
              "descriptor": "None", "status": "None"}
     value.update(changes)
@@ -48,9 +49,12 @@ class BlockDiagnostics(unittest.TestCase):
     def test_timeout_requires_no_used_entry_and_an_actual_expired_bound(self):
         self.assertTrue(self.admitted("block-timeout", failure(), "timeout"))
         self.assertTrue(self.admitted("block-timeout", failure(now=10, elapsed_ticks=0,
-                                                             polls=5_000_000), "timeout"))
-        for changes in [{"now": 34, "elapsed_ticks": 24}, {"polls": 0},
-                        {"polls": 5_000_001}, {"observed": 1}, {"expected": 1},
+                                                             polls=5_000_000, stalled_polls=5_000_000), "timeout"))
+        self.assertTrue(self.admitted("block-timeout", failure(polls=10_000_000), "timeout"))
+        for changes in [{"now": 509, "elapsed_ticks": 499}, {"polls": 0},
+                        {"now": 35, "elapsed_ticks": 25, "polls": 5_000_000},
+                        {"stalled_polls": 101}, {"stalled_polls": 5_000_001, "polls": 5_000_001},
+                        {"observed": 1}, {"expected": 1},
                         {"descriptor": "Some(0)"}, {"status": "Some(0)"},
                         {"reason": "Io"}, {"request": 1}, {"kind": 4}, {"device_status": 0}]:
             with self.subTest(changes=changes):
@@ -70,14 +74,14 @@ class BlockDiagnostics(unittest.TestCase):
 
     def test_observed_device_error_takes_precedence_over_elapsed_timeout(self):
         first, second = errors()
-        late = second.replace("now=13", "now=42").replace("elapsed_ticks=1", "elapsed_ticks=30")
+        late = second.replace("now=13", "now=612").replace("elapsed_ticks=1", "elapsed_ticks=600")
         self.assertTrue(self.admitted("block-error", first + "\n" + late, "error"))
 
     def test_malformed_duplicate_or_incoherent_fields_cannot_be_hidden(self):
         good = failure()
-        for bad in [good.replace(" now=35", ""), good + " polls=100", good + " extra=1",
+        for bad in [good.replace(" now=510", ""), good + " polls=100", good + " extra=1",
                     good + " incomplete", good.replace("polls=100", "polls=no"),
-                    good.replace("now=35", "now=9"), good.replace("elapsed_ticks=25", "elapsed_ticks=24"),
+                    good.replace("now=510", "now=9"), good.replace("elapsed_ticks=500", "elapsed_ticks=499"),
                     good.replace("observed=0", "observed=65536"), good.replace("request=0", "request=-1"),
                     good.replace("polls=100", "polls=+100"), good.replace("polls=100", "polls=0100"),
                     good.replace("started=10", "started=18446744073709551616"),

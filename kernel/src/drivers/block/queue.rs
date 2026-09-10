@@ -60,8 +60,7 @@ impl Device {
         self.pending = Some(super::device::Pending {
             kind,
             length: data.len(),
-            started: ticks(),
-            polls: 0,
+            budget: rustic_kernel::block::deadline::RequestBudget::new(ticks()),
         });
         fence(Ordering::SeqCst);
         self.dma.write(
