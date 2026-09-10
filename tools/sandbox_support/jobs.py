@@ -12,6 +12,7 @@ import uuid
 
 from . import runtime
 from .artifacts import collect, sha256
+from .boot_failure import collect as collect_boot_failure
 from .prepare import ROOT, STATE
 from .process import command
 from boot_support.scenarios import MODES
@@ -117,9 +118,17 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
             if (directory / "cancel.request").exists():
                 state["status"] = "cancelled"
                 break
-            info = runtime.inspect(container)
             if code:
-                state["status"] = "resource_limit" if info and info["State"]["OOMKilled"] else phase + "_failed"
+                state["status"] = phase + "_failed"
+                state["worker_exit_code"] = code
+                try:
+                    info = runtime.inspect(container)
+                    if info and info["State"]["OOMKilled"]:
+                        state["status"] = "resource_limit"
+                except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as error:
+                    state["worker_inspect_error"] = str(error)[:2000]
+                if phase == "boot":
+                    state["failure_evidence"] = collect_boot_failure(container, mode, directory)
                 break
             # Export bounded untrusted bytes; only the separate boot worker interprets the ELF.
             if phase == "build":

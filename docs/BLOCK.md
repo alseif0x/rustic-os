@@ -78,6 +78,12 @@ At #35 acceptance the suites contained **37 Rust tests, 26 Python tests, 18 dire
 
 The isolated worker uses the same trusted disk runner. Its logical per-file limit is 4 GiB to permit a sparse file; actual 1 GiB workspace/128 MiB temporary tmpfs quotas remain unchanged. Only bounded metadata/selected bytes are exported, never the raw persistence disk. Block persistence receives two per-VM timeout budgets plus the existing packaging margin.
 
+## Failure diagnostics
+
+The `sdk-test` image emits `RUSTIC BLOCK_FAILURE` only when a completion or start fails. Completion records retain the broker request ID (zero for direct kernel fixtures), operation kind, error, start/current tick, poll count, expected/observed ring index, device status and any observed descriptor/status byte. Start records include the owner, request, operation and sector. Payloads, DMA addresses and grant tokens are excluded. The driver owns these observations; the file server gains no UART authority.
+
+The existing timeout fixture must show an uncompleted request crossing the unchanged 25-tick or 5,000,000-poll limit. The error fixture must show the actual device I/O and unsupported statuses. Missing or inconsistent diagnostics fail acceptance. A completed request is still examined before the deadline, so an already completed I/O may succeed after delayed polling; holding completion observation is not equivalent to delaying the device itself. See [recovery failure evidence](FILE-RECOVERY.md#unexpected-failures-and-retained-evidence) for how these records help investigate an uncertain mutation.
+
 ## Next boundary
 
-The file service is #12, using #44's implemented [block API](BLOCK-ACCESS.md) under [ADR-0002](architecture/ADR-0002-authority-and-delegation.md). IPC still has a 64-byte payload limit. #12 must define its bounded file-service encoding and crash-consistency protocol; disk access alone does not implement paths or file permissions. SDK clients, filesystem consistency and product permission policy stay above this driver.
+The native [file service](FILES.md) uses #44's [block API](BLOCK-ACCESS.md) under [ADR-0002](architecture/ADR-0002-authority-and-delegation.md), with bounded file packets and [durable recovery receipts](FILE-RECOVERY.md) over 64-byte IPC. Stable [read references](FILES-READ.md) are implemented; logical mutation/operation integration remains in #12/#13/#22/#43, and #46 tracks an intermittent recovery failure. SDK clients, filesystem consistency and product permission policy stay above this driver.

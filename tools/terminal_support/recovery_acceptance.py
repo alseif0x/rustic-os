@@ -10,6 +10,7 @@ import zlib
 from boot_support.image import package
 from .machine import machine, disk, SIZE
 from .connection import Connection
+from .failure import preserve_failure
 from .oracle import snapshot
 from .recovery_cases import exercise, verify_final
 from .recovery_faults import CUTS
@@ -26,13 +27,20 @@ def verify(image, timeout=60, output=None):
     serials, logs, cases = [], [], []
     started = time.monotonic()
     @contextlib.contextmanager
+    def owned_disk(path, initialize=False, upgrade_recovery=False, *, evidence_name):
+        # The independent oracle also runs inside the disk lifetime. Sessions
+        # stop their VMs before this outer scope captures a failed oracle.
+        with disk(path, initialize, upgrade_recovery) as data:
+            with preserve_failure(data, output, evidence_name, metadata):
+                yield data
+    @contextlib.contextmanager
     def session(boot, data, name, fault=None):
         transcript, log = output / (name + ".serial.log"), output / (name + ".qemu.log")
         serials.append(transcript); logs.append(log)
-        with tempfile.TemporaryDirectory(prefix="rustic-recovery-uart-") as socket_dir:
+        with preserve_failure(data, output, name, metadata), tempfile.TemporaryDirectory(prefix="rustic-recovery-uart-") as socket_dir:
             sock = Path(socket_dir) / "uart.sock"
             with machine(boot, data, f"unix:{sock},server=on,wait=off", log, fault) as vm:
-                uart = Connection(sock, vm, transcript, timeout)
+                uart = Connection(sock, vm, transcript, timeout, output / (name + ".commands.jsonl"))
                 try:
                     uart.until()
                     yield uart
@@ -49,7 +57,7 @@ def verify(image, timeout=60, output=None):
     try:
         with tempfile.TemporaryDirectory(prefix="rustic-recovery-test-") as temporary:
             temporary = Path(temporary)
-            with disk(temporary / "data.raw", True) as data:
+            with owned_disk(temporary / "data.raw", True, evidence_name="reboot") as data:
                 base = {}
                 def capture(old, retry):
                     base.update(old=old, retry=retry, bytes=snapshot(data)[0])
@@ -65,7 +73,7 @@ def verify(image, timeout=60, output=None):
                 assert state["records"][0]["epoch"] == state["epoch"] == 2
                 cases.append({"case":"lost_reply_replay_conflict_quota_rotation_reboot", "verified":True, "sha256":state["selected_sha256"]})
             for name, cut in CUTS.items():
-                with disk(temporary / ("cut-" + name + ".raw"), True) as data:
+                with owned_disk(temporary / ("cut-" + name + ".raw"), True, evidence_name=name + "-reboot") as data:
                     with data.open("r+b") as f: f.write(base["bytes"])
                     with session(mount, data, name + "-fault", cut) as uart:
                         c = pid(uart, "session hello other")
@@ -94,7 +102,7 @@ def verify(image, timeout=60, output=None):
                     (output / (name + ".bin")).write_bytes(prefix)
                     cases.append({"case":name,"cut":cut,"committed":committed,"verified":True,"revocation_reports_recovery_required":True,"sha256":observed["selected_sha256"]})
             from .inflight_cases import exercise as inflight_exercise
-            cases.extend(inflight_exercise(session,mount,temporary,base,output))
+            cases.extend(inflight_exercise(session,mount,temporary,base,output,owned_disk))
             # Derive the old format from an independently inspected native volume; preserve its file bytes.
             legacy = bytearray(base["bytes"])
             legacy[512:1024] = bytes(512)
@@ -105,12 +113,12 @@ def verify(image, timeout=60, output=None):
                 struct.pack_into("<I",h,28,zlib.crc32(h))
                 legacy[sector*512:(sector+1)*512] = h
             path = temporary / "legacy.raw"
-            with disk(path, True) as data:
+            with owned_disk(path, True, evidence_name="legacy") as data:
                 with data.open("r+b") as f: f.write(legacy)
                 with session(mount, data, "legacy") as uart:
                     uart.command("cat hello", "before")
                     uart.command("retry-key hello 1", "Unsupported")
-            with disk(path, upgrade_recovery=True) as data:
+            with owned_disk(path, upgrade_recovery=True, evidence_name="upgrade") as data:
                 with session(mount, data, "upgrade") as uart:
                     uart.command("cat hello", "before")
                     uart.command("retry-key hello 1", "retry-key=")

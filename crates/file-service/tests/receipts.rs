@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#[path = "receipts/rotation.rs"]
+mod rotation;
 mod support;
 use rustic_abi::files::{
     recovery::{Receipt, Retry},

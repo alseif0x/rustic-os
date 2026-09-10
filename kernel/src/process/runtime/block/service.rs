@@ -61,7 +61,7 @@ impl Service {
                 .device
                 .as_mut()
                 .expect("active request owns device")
-                .poll(&mut data)
+                .poll_request(&mut data, id)
             {
                 let status = match result {
                     Ok(()) => Status::Success,
@@ -103,6 +103,15 @@ impl Service {
             };
             if let Err(error) = device.start(kind, request.sector, &request.data[..length], notify)
             {
+                #[cfg(feature = "sdk-test")]
+                crate::drivers::block::diagnostics::start_failure(
+                    request.id,
+                    request.owner,
+                    request.operation,
+                    request.sector,
+                    crate::arch::interrupts::ticks(),
+                    error,
+                );
                 self.broker
                     .finish(request.id, Status::Unavailable, [0; SECTOR]);
                 if error == DeviceError::Protocol {

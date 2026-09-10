@@ -24,6 +24,29 @@ def unpack_single(data, expected_name, maximum):
         return archive.extractfile(member).read()
 
 
+def unpack_bundle(data, allowed, maximum):
+    """Validate every member before the caller writes any fixed-name destination."""
+    if len(data) > maximum:
+        raise RuntimeError("artifact bundle size limit exceeded")
+    result = {}
+    total = 0
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+        for member in archive:
+            if (member.name not in allowed or member.name in result
+                    or not member.isfile() or member.issparse()):
+                raise RuntimeError("invalid bundle artifact path or type")
+            if not 0 <= member.size <= allowed[member.name]:
+                raise RuntimeError("bundle artifact size limit exceeded")
+            total += member.size
+            if total > maximum:
+                raise RuntimeError("artifact bundle payload limit exceeded")
+            payload = archive.extractfile(member).read()
+            if len(payload) != member.size:
+                raise RuntimeError("truncated bundle artifact")
+            result[member.name] = payload
+    return result
+
+
 def collect(container, remote, destination, maximum):
     transfer = destination.with_suffix(destination.suffix + ".transfer")
     try:

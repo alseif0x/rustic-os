@@ -2,6 +2,8 @@
 //! Bounded R0 block device with split submission/completion. Transport, DMA queue, requests and fixtures are separate.
 mod completion;
 mod device;
+#[cfg(feature = "sdk-test")]
+pub(crate) mod diagnostics;
 mod queue;
 mod request;
 mod tests;

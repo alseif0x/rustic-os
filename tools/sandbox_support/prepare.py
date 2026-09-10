@@ -29,7 +29,8 @@ def prepare():
             destination = reference / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, destination)
-        shutil.copytree(ROOT / "tools/sandbox_support/container", context / "controller")
+        shutil.copytree(ROOT / "tools/sandbox_support/container", context / "controller",
+                        ignore=shutil.ignore_patterns("__pycache__"))
         shutil.copyfile(context / "controller/Dockerfile", context / "Dockerfile")
         fingerprint = hashlib.sha256()
         for path in sorted(context.rglob("*")):

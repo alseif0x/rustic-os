@@ -1,15 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Actual submitted writes/flushes, abandoned owner reply, retained drain and remount."""
-from .machine import disk
 from .cases import pid, counters
 from .authority_cases import actor
 from .management_cases import start_restart, wait_job
 from .oracle import snapshot
 
-def exercise(session, mount, temporary, base, output):
+def exercise(session, mount, temporary, base, output, owned_disk):
     cases=[]
     for name,skip,committed in (("admitted_data",0,False),("admitted_final_flush",16,True)):
-        with disk(temporary/(name+".raw"),True) as data:
+        with owned_disk(temporary/(name+".raw"),True,evidence_name=name+"-reboot") as data:
             with data.open("r+b") as f:f.write(base["bytes"])
             with session(mount,data,name) as uart:
                 baseline=counters(uart)
