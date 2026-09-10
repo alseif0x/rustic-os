@@ -5,6 +5,7 @@
 
 pub mod block;
 pub mod boot;
+mod handles;
 pub mod ipc;
 pub mod memory;
 pub mod process;

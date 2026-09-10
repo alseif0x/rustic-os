@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Internal sector contract, independent of transport and filesystem policy.
+pub mod access;
 pub mod queue;
 pub const SECTOR: usize = 512;
 pub const MAX_BYTES: usize = SECTOR;
@@ -17,7 +18,7 @@ pub enum Error {
     Protocol,
     Reset,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Geometry {
     pub sectors: u64,
     pub read_only: bool,

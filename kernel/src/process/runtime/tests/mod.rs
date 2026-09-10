@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+#[cfg(feature = "sdk-test")]
+mod block_access;
+#[cfg(feature = "sdk-test")]
+pub(crate) use block_access::verify as verify_block;
 mod execution;
 mod faults;
 mod ipc;

@@ -43,6 +43,24 @@ pub(crate) fn run() -> ! {
     let mut memory = arch::memory::Memory::initialize(layout, adapter::memory_regions())
         .unwrap_or_else(|error| panic!("memory initialization: {error:?}"));
     match mode {
+        #[cfg(not(feature = "sdk-test"))]
+        BootMode::BlockUser | BootMode::BlockUserFaults => {
+            panic!("native block acceptance requires sdk-test");
+        }
+        #[cfg(feature = "sdk-test")]
+        BootMode::BlockUser | BootMode::BlockUserFaults => {
+            crate::process::verify_block(&mut memory, mode);
+            if let Some(mut serial) = Serial::take() {
+                writeln!(
+                    serial,
+                    "RUSTIC SUCCESS component=boot build={}",
+                    diagnostic::BUILD
+                )
+                .unwrap();
+                serial.flush();
+            }
+            arch::test_exit(0x10)
+        }
         BootMode::BlockPersist
         | BootMode::BlockReadOnly
         | BootMode::BlockError

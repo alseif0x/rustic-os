@@ -4,7 +4,8 @@ pub const SIZE: usize = 128;
 pub const VERSION: u16 = 1;
 pub const IPC: u64 = 1;
 pub const DIAGNOSTIC: u64 = 2;
-pub const KNOWN: u64 = IPC | DIAGNOSTIC;
+pub const BLOCK: u64 = 4;
+pub const KNOWN: u64 = IPC | DIAGNOSTIC | BLOCK;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {

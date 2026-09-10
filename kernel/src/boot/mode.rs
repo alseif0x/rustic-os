@@ -19,6 +19,8 @@ pub enum BootMode {
     BlockError,
     BlockTimeout,
     BlockMissing,
+    BlockUser,
+    BlockUserFaults,
 }
 
 impl BootMode {
@@ -42,6 +44,8 @@ impl BootMode {
             b"mode=block-error" => Some(Self::BlockError),
             b"mode=block-timeout" => Some(Self::BlockTimeout),
             b"mode=block-missing" => Some(Self::BlockMissing),
+            b"mode=block-user" => Some(Self::BlockUser),
+            b"mode=block-user-faults" => Some(Self::BlockUserFaults),
             _ => None,
         }
     }

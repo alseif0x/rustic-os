@@ -2,7 +2,7 @@
 
 # R0 process ABI — version 1.0
 
-Minimal #10 contract, preserved by the [#34 IPC/handle extension](IPC.md). The SDK remains in #11. The shared source of constants is `crates/abi`, with no kernel dependency.
+Minimal #10 contract, preserved by the [#34 IPC/handle extension](IPC.md) and the [#44 block extension](BLOCK-ACCESS.md). The [native SDK](SDK.md) wraps these contracts. The shared source of constants is `crates/abi`, with no kernel dependency.
 This is neither the Linux ABI nor an MCP interface. Identity comes from the process the kernel is executing; no argument can replace it.
 
 A static x86_64 ELF64 program enters at e_entry in ring 3, with CS=0x2b,
@@ -17,7 +17,7 @@ SYSCALL/SYSENTER are not supported entry points: the kernel disables these paths
 INT 0x80 uses RAX as the call number and RDI as the integer argument. It returns
 a 64-bit integer in RAX and preserves other general-purpose registers.
 RFLAGS preserves arithmetic flags and DF; the kernel sets IF and removes
-unsupported control flags before resuming. These calls contain no user
+unsupported control flags before resuming. The four base calls below contain no user
 pointers or buffers and do not modify caller memory.
 
 | RAX | Name | RDI | Result |

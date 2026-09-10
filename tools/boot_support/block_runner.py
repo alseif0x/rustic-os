@@ -43,7 +43,7 @@ def run(image, timeout, run_once):
             readonly = ",readonly=on" if mode == "block-readonly" else ""
             arguments = ["-drive", f"if=none,id=rusticdata,format=raw,cache=writeback,file={disk}{readonly}",
                          "-device", "virtio-blk-pci,drive=rusticdata,addr=0x6,disable-modern=on,disable-legacy=off,queue-size=8,num-queues=1,vectors=0,rerror=report,werror=report"]
-        for number in range(2 if mode == "block-persist" else 1):
+        for number in range(2 if mode in ("block-persist", "block-user") else 1):
             output = directory / f"phase-{number + 1}"
             output.mkdir(exist_ok=True)
             result = run_once(image, timeout, arguments, output)
@@ -52,7 +52,7 @@ def run(image, timeout, run_once):
             phases.append(result)
             if result["outcome"] != "success":
                 break
-            selected = inspect_disk(disk, mode == "block-persist")
+            selected = inspect_disk(disk, mode in ("block-persist", "block-user"))
         allocation = disk.stat().st_blocks * 512
     serial = "\n".join(serials)
     (directory / "serial.log").write_text(serial)

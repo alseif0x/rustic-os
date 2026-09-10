@@ -22,6 +22,13 @@ name = "rustic-abi"
 version = "0.1.0"
 
 [[package]]
+name = "rustic-block-probe"
+version = "0.1.0"
+dependencies = [
+ "rustic-sdk",
+]
+
+[[package]]
 name = "rustic-kernel"
 version = "0.1.0"
 dependencies = [

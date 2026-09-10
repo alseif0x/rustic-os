@@ -16,3 +16,21 @@ impl Device {
         self.submit(4, 0, &mut [], true)
     }
 }
+
+impl Device {
+    pub(super) fn submit(
+        &mut self,
+        kind: u32,
+        sector: u64,
+        data: &mut [u8],
+        notify: bool,
+    ) -> Result<(), Error> {
+        self.start(kind, sector, data, notify)?;
+        loop {
+            if let Some(result) = self.poll(data) {
+                return result;
+            }
+            core::hint::spin_loop();
+        }
+    }
+}

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Synchronous R0 block device. Transport, DMA queue, requests and fixtures are separate.
+//! Bounded R0 block device with split submission/completion. Transport, DMA queue, requests and fixtures are separate.
+mod completion;
 mod device;
 mod queue;
 mod request;

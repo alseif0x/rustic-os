@@ -9,7 +9,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = {"schema", "identity", "executable", "version", "process_abi", "ipc_version", "requests"}
-CAPABILITIES = {"ipc": 1, "diagnostic": 2}
+CAPABILITIES = {"ipc": 1, "diagnostic": 2, "block": 4}
 
 
 def encode(document):
@@ -35,14 +35,14 @@ def encode(document):
     return struct.pack("<8sHHIHHHHQ32s32s32s", b"RUSTAPP\0", 1, 128, 65536, 1, *version, bits, identity, executable, bytes(32))
 
 
-def build(root=ROOT, env=None, offline=False):
+def build_one(root, env, offline, name, manifest_name):
     env = (os.environ if env is None else env).copy()
-    descriptor = root / "apps/sdk-probe/app.toml"
+    descriptor = root / ("apps/" + name + "/app.toml")
     if descriptor.stat().st_size > 4096:
         raise ValueError("manifest text exceeds 4096 bytes")
     document = tomllib.loads(descriptor.read_text())
     manifest = encode(document)
-    command = ["cargo", "build", "-p", "rustic-sdk-probe", "--features", "native",
+    command = ["cargo", "build", "-p", "rustic-" + name, "--features", "native",
                "--target", "x86_64-unknown-none", "--release", "--locked"]
     if offline:
         command.append("--offline")
@@ -50,16 +50,22 @@ def build(root=ROOT, env=None, offline=False):
     target = Path(env.get("CARGO_TARGET_DIR", root / "target"))
     if not target.is_absolute():
         target = root / target
-    elf = target / "x86_64-unknown-none/release/sdk-probe"
+    elf = target / ("x86_64-unknown-none/release/" + name)
     if not 64 <= elf.stat().st_size <= 1024 * 1024:
         raise ValueError("application ELF exceeds loader budget")
     output = target / "native"
     output.mkdir(exist_ok=True)
-    for name, content in ((document["executable"], elf.read_bytes()), ("app.manifest", manifest)):
+    for name, content in ((document["executable"], elf.read_bytes()), (manifest_name, manifest)):
         destination = output / name
         if not destination.is_file() or destination.read_bytes() != content:
             destination.write_bytes(content)
     return output.resolve()
+
+
+def build(root=ROOT, env=None, offline=False):
+    output = build_one(root, env, offline, "sdk-probe", "app.manifest")
+    build_one(root, env, offline, "block-probe", "block-probe.manifest")
+    return output
 
 
 if __name__ == "__main__":

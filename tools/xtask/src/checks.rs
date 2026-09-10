@@ -39,6 +39,21 @@ pub(super) fn run() -> Result<(), String> {
             "-D",
             "warnings",
         ],
+        &[
+            "clippy",
+            "-p",
+            "rustic-kernel",
+            "--bin",
+            "rustic-os",
+            "--features",
+            "boot-image",
+            "--target",
+            "x86_64-unknown-none",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ],
     ];
     for args in commands {
         command::cargo(root, args)?;
@@ -57,6 +72,8 @@ pub(super) fn run() -> Result<(), String> {
             "clippy",
             "-p",
             "rustic-sdk-probe",
+            "-p",
+            "rustic-block-probe",
             "--features",
             "native",
             "--target",

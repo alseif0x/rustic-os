@@ -33,7 +33,7 @@ External component review sources: LICENSE from the hash-verified Limine archive
 
 ## Original shared contracts
 
-`rustic-abi` 0.1.0 is an original crate in this repository under Apache-2.0, without external dependencies or unsafe code. It contains process/IPC constants, errors and the application manifest contract; the kernel and SDK consume it independently. Cargo.lock adds only that path dependency: limine and bitflags versions/checksums remain unchanged. Existing image notices remain sufficient; no new third-party material is included.
+`rustic-abi` 0.1.0 is an original crate in this repository under Apache-2.0, without external dependencies or unsafe code. It contains process/IPC/block constants, errors, wire codecs and the application manifest contract; the kernel and SDK consume it independently. Cargo.lock adds only that path dependency: limine and bitflags versions/checksums remain unchanged. Existing image notices remain sufficient; no new third-party material is included.
 
 The original `rustic-sdk` and `rustic-sdk-probe` packages added for #11 also use Apache-2.0. They add only path dependencies on the shared ABI/SDK, without external crates. The test kernel embeds the separately linked application ELF; the existing Rust runtime notice also covers that application.
 
@@ -59,3 +59,5 @@ The original `tools/contracts` code and schemas use Apache-2.0. The validator us
 | [typing_extensions](https://github.com/python/typing_extensions) | 4.16.0 | PSF-2.0; dist-info/licenses/LICENSE | Host type support |
 
 Implementer reviewed the installed metadata and supplied license files against the selected distributions; no independent audit. Their original notices remain in the environment. External development use introduces no new linked guest license obligation; bundling any of these packages later requires preserving the complete package notices and reviewing compiled transitive components. Other architectures/Python versions need their own reviewed wheel hashes rather than bypassing the hash check. Cargo.lock and existing boot-image notices are unchanged.
+
+#44 adds the original Apache-2.0 `rustic-block-probe` path package and typed block codecs/SDK clients. It depends only on `rustic-sdk`; Cargo.lock retains all existing external versions and checksums. The separately linked probe uses the same Rust runtime notice as the SDK probe. No third-party code or additional package is introduced.

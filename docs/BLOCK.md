@@ -2,7 +2,7 @@
 
 # Bounded block storage
 
-Implemented for #35, before a filesystem or storage service. The kernel can discover the dedicated R0 virtual disk, read/write one sector, flush, reject invalid requests and reclaim DMA memory after a confirmed reset. No filesystem, paths, file permissions or user-visible block syscall is included.
+Implemented for #35, before a filesystem or storage service. The kernel can discover the dedicated R0 virtual disk, read/write one sector, flush, reject invalid requests and reclaim DMA memory after a confirmed reset. Filesystem policy remains outside this driver. #44 now adds [bounded user-mode access](BLOCK-ACCESS.md) and SDK clients above it.
 
 ## Transport decision and reference device
 
@@ -21,7 +21,7 @@ Reuse review considered [virtio-drivers](https://github.com/rcore-os/virtio-driv
 | Disk | Fresh sparse raw file, 4 GiB logical capacity, 8,388,608 sectors |
 | Host cache | writeback; real FLUSH command required by driver initialization |
 | Negotiated features | FLUSH and the offered read-only property only |
-| Completion | Synchronous polling; INTx disabled, MSI-X absent |
+| Completion | Bounded asynchronous polling; synchronous wrapper for driver acceptance; INTx disabled, MSI-X absent |
 | Request limit | One in flight, exactly 512 bytes per read/write |
 | DMA allocation | Three contiguous 4 KiB frames in the tested queue configuration |
 | Request budget | 25 PIT ticks or 5,000,000 polls, whichever is reached first |
@@ -35,8 +35,9 @@ Reuse review considered [virtio-drivers](https://github.com/rcore-os/virtio-driv
 | `arch/x86_64/pci.rs` | Exclusive fixed PCI function, bounded I/O BAR access and reset |
 | `arch/x86_64/memory/dma.rs` | Owned coherent DMA pages, checked volatile scalar accesses and explicit release |
 | `drivers/block/device.rs` | Device initialization, geometry and shutdown |
-| `drivers/block/queue.rs` | Descriptor publication, memory ordering, completion and timeout |
-| `drivers/block/request.rs` | Internal read/write/flush API |
+| `drivers/block/queue.rs` | Owned descriptor publication and memory ordering |
+| `drivers/block/completion.rs` | One bounded poll, completion validation and timeout |
+| `drivers/block/request.rs` | Synchronous internal read/write/flush wrapper over start/poll |
 | `drivers/block/tests.rs` | Guest acceptance and explicitly identified fault injection |
 | `tools/boot_support/block_runner.py` | Disposable disk lifetime, independent host oracle and separate VM boots |
 
@@ -73,10 +74,10 @@ The trusted host creates the disk itself; no disk path or QEMU flag is accepted 
 
 `block.json` records logical/allocated bytes, sector selection, selected-content SHA-256 and number of VM boots. `blocks.bin` preserves exactly those 2048 selected bytes. The checksum describes that selection, not the whole 4 GiB disk. Initial direct evidence occupied 8192 physical bytes; the disposable disk is removed after the scenario. This validates controlled restart, not sudden power loss or filesystem crash consistency.
 
-The full suites contain **37 Rust tests, 26 Python tests, 18 direct VM scenarios and 22 isolated scenarios**. Persistence adds a second VM boot within one scenario. Previous IRQ, memory, process, IPC and SDK cases remain required. [#35](https://github.com/alseif0x/rustic-os/issues/35) records the exact accepted revision, CI and measurements.
+At #35 acceptance the suites contained **37 Rust tests, 26 Python tests, 18 direct VM scenarios and 22 isolated scenarios**. [User-mode access](BLOCK-ACCESS.md) adds the current coverage. Persistence adds a second VM boot within one scenario. Previous IRQ, memory, process, IPC and SDK cases remain required. [#35](https://github.com/alseif0x/rustic-os/issues/35) records the exact accepted revision, CI and measurements.
 
 The isolated worker uses the same trusted disk runner. Its logical per-file limit is 4 GiB to permit a sparse file; actual 1 GiB workspace/128 MiB temporary tmpfs quotas remain unchanged. Only bounded metadata/selected bytes are exported, never the raw persistence disk. Block persistence receives two per-VM timeout budgets plus the existing packaging margin.
 
 ## Next boundary
 
-The file service is #12, after #44 provides bounded user-mode access under [ADR-0002](architecture/ADR-0002-authority-and-delegation.md) and #6's contracts. IPC still has a 64-byte payload limit. Define a bounded, authorized service transfer protocol; do not turn a disk sector or numeric PCI address into implicit user authority. Application SDK, filesystem consistency and product permission policy stay above this driver.
+The file service is #12, using #44's implemented [block API](BLOCK-ACCESS.md) under [ADR-0002](architecture/ADR-0002-authority-and-delegation.md). IPC still has a 64-byte payload limit. #12 must define its bounded file-service encoding and crash-consistency protocol; disk access alone does not implement paths or file permissions. SDK clients, filesystem consistency and product permission policy stay above this driver.

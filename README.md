@@ -28,9 +28,10 @@ The goal is agent control without mandatory screen interpretation. A graphical i
 | [Native Rust SDK](docs/SDK.md) | Independent Rust ELF applications, versioned manifests and typed IPC clients |
 | [IPC and handles](docs/IPC.md) | Versioned messages, kernel-provided sender identity, validated buffers, ownership, waits and closure |
 | [Block storage](docs/BLOCK.md) | Bounded VirtIO reads/writes, flush, restart persistence, device errors and DMA recovery |
+| [User-mode disk access](docs/BLOCK-ACCESS.md) | Typed SDK, scoped handles, asynchronous sector I/O, cancellation and process-death recovery |
 | [Isolated test executor](docs/EXECUTOR.md) | Exact Git revisions, offline jobs, resource limits, cancellation and structured evidence |
 
-The current acceptance suite covers **37 Rust tests, 26 Python tests, 18 VM scenarios and 22 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [storage acceptance](https://github.com/alseif0x/rustic-os/issues/35) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees. Separately, the [service contract suite](docs/SERVICE-CONTRACTS.md) validates 62 messages, nine exchanges and 14 host checks; those do not execute guest services.
+The current acceptance suite covers **46 Rust tests, 30 Python tests, 20 VM scenarios and 24 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [user-mode storage acceptance](https://github.com/alseif0x/rustic-os/issues/44) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees. Separately, the [service contract suite](docs/SERVICE-CONTRACTS.md) validates 62 messages, nine exchanges and 14 host checks; those do not execute guest services.
 
 The current VM uses **x86_64, one CPU and 256 MiB RAM**. Process and IPC limits are deliberately small; see their contracts before building on them.
 
@@ -98,8 +99,8 @@ See [boot commands and expected results](docs/BOOT.md) and the [isolated executo
 | --- | --- |
 | [`kernel/`](kernel/) | Pure kernel contracts plus architecture-specific boot, memory and process execution |
 | [`crates/abi/`](crates/abi/) | Shared `no_std` binary contracts, independent of kernel implementation |
-| [`crates/sdk/`](crates/sdk/) | Native application startup, process calls and typed IPC clients |
-| [`apps/sdk-probe/`](apps/sdk-probe/) | Independently compiled Rust application and manifest template |
+| [`crates/sdk/`](crates/sdk/) | Native application startup, process calls and typed IPC/block clients |
+| [`apps/`](apps/) | Independently compiled Rust applications for IPC and persistent block access |
 | [`contracts/`](contracts/services/v1/catalog.json) | Versioned logical service schemas, descriptor metadata and positive/negative examples |
 | [`tools/`](tools/) | Host-side checks, image construction, QEMU execution and sandbox orchestration |
 | [`docs/`](docs/README.md) | Requirements, architecture decisions, subsystem contracts and evidence guides |
@@ -117,7 +118,7 @@ Modules follow ownership and trust boundaries. Entry points compose components; 
 | H4 — Desktop and browser | Graphical interaction and a browser engine running inside RusticOS | Planned |
 | H5 — Experimental v0.1 | Verified candidates, activation, recovery and integrated acceptance | Planned |
 
-**Next:** provide [bounded block access](https://github.com/alseif0x/rustic-os/issues/44) to the user-mode [file service](https://github.com/alseif0x/rustic-os/issues/12), following the [specified service contracts](docs/SERVICE-CONTRACTS.md). The [authority decision](docs/architecture/ADR-0002-authority-and-delegation.md) adopts explicit resource/action grants shared by all clients; enforcement, supervision and shell remain ahead. Fixed permission tiers and a general delegation framework are not prerequisites.
+**Next:** build the user-mode [file service](https://github.com/alseif0x/rustic-os/issues/12) on the implemented [bounded block API](docs/BLOCK-ACCESS.md), following the [specified service contracts](docs/SERVICE-CONTRACTS.md). The [authority decision](docs/architecture/ADR-0002-authority-and-delegation.md) adopts explicit resource/action grants shared by all clients; enforcement, supervision and shell remain ahead. Fixed permission tiers and a general delegation framework are not prerequisites.
 
 The experimental v0.1 target includes a native console, optional agent, locally running browser engine and a verifiable change/recovery cycle. The model, compiler and test environment may be external, with that dependency declared. Broad hardware support and universal application compatibility are long-term research goals, not current promises.
 

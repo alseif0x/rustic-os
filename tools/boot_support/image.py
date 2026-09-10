@@ -53,6 +53,8 @@ def build(mode):
         "source_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
         "application_elf_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "sdk-probe.elf"),
         "application_manifest_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "app.manifest"),
+        "block_application_elf_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "block-probe.elf"),
+        "block_application_manifest_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "block-probe.manifest"),
         "rustc": subprocess.check_output(["rustc", "--version", "--verbose"], text=True),
     }
     return package(kernel, mode, build_id, provenance)

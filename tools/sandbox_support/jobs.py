@@ -107,7 +107,7 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
                       "/opt/controller/worker.py", phase, revision]
             if phase == "boot":
                 worker += [mode, str(boot_timeout)]
-            limit = build_timeout if phase == "build" else boot_timeout * (2 if mode == "block-persist" else 1) + 30
+            limit = build_timeout if phase == "build" else boot_timeout * (2 if mode in ("block-persist", "block-user") else 1) + 30
             try:
                 with input_path.open("rb") as stream:
                     code = command(worker, directory / (phase + ".log"), timeout=limit, stdin=stream)
@@ -125,7 +125,7 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
             if phase == "build":
                 state["artifacts"].append(collect(container, "/work/target/x86_64-unknown-none/release/rustic-os",
                                                   directory / "kernel.elf", 16 * 1024 * 1024))
-                for name, maximum in (("sdk-probe.elf", 1024 * 1024), ("app.manifest", 128)):
+                for name, maximum in (("sdk-probe.elf", 1024 * 1024), ("app.manifest", 128), ("block-probe.elf", 1024 * 1024), ("block-probe.manifest", 128)):
                     state["artifacts"].append(collect(container, "/work/target/native/" + name,
                                                       directory / name, maximum))
             else:

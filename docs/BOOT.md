@@ -45,14 +45,16 @@ python3 tools/boot.py test --timeout 30
 | memory-ro / memory-text-alias | #PF for prohibited write, error 0x3 and expected CR2 | 39 | 1 |
 | memory-nx | #PF for prohibited execution, error 0x11 and expected CR2 | 39 | 1 |
 | memory-unmapped / memory-guard | #PF for absent address, error 0 and expected CR2 | 39 | 1 |
+| block-persist / block-readonly / block-error / block-timeout / block-missing | Driver assertions and independent disk oracle | 33 | 0 |
+| block-user / block-user-faults | Native ring 3 disk access, persistence or denials/recovery, independent disk oracle | 33 | 0 |
 
-The isa-debug-exit device transforms the value written by the kernel into (value × 2) + 1; these codes are specific to the R0 test. Any unexpected combination returns 2. The full suite returns 0 only if all eighteen cases match their expected results and markers. A firmware timeout before reaching the fixture does not pass the hang test. `ok` checks [interrupts and waits](INTERRUPTS.md), [memory](MEMORY.md), [ring 3 processes](PROCESSES.md), [IPC](IPC.md) and the [SDK](SDK.md) before SUCCESS. Separate [block scenarios](BLOCK.md) verify storage and restart persistence.
+The isa-debug-exit device transforms the value written by the kernel into (value × 2) + 1; these codes are specific to the R0 test. Any unexpected combination returns 2. The full suite returns 0 only if all twenty cases match their expected results and markers. A firmware timeout before reaching the fixture does not pass the hang test. `ok` checks [interrupts and waits](INTERRUPTS.md), [memory](MEMORY.md), [ring 3 processes](PROCESSES.md), [IPC](IPC.md) and the [SDK](SDK.md) before SUCCESS. Separate [block scenarios](BLOCK.md) and [user-mode access scenarios](BLOCK-ACCESS.md) verify storage, caller isolation and restart persistence.
 
 30 seconds is the initial local budget; CI uses 45 seconds to absorb runner variation. Early positive boots took around 4 seconds; the later IPC acceptance sample took 8.626 seconds including guest self-tests (see #34). These are configuration-specific observations, not universal performance targets. The host kills only the QEMU process created by that run, waits for it to exit and also removes it if the runner is interrupted.
 
 ## Evidence
 
-Each fixture directory retains image.json (versions/configuration, commit and checkout state, source identifier and hashes), kernel.elf, rustic-os.img, serial.log, qemu.log and result.json (command, duration, timeout and status). suite.json is written only after all eighteen cases finish. Logs are reset for each run; previous success is not reused.
+Each fixture directory retains image.json (versions/configuration, commit and checkout state, source identifier and hashes), kernel.elf, rustic-os.img, serial.log, qemu.log and result.json (command, duration, timeout and status). suite.json is written only after all twenty cases finish. Logs are reset for each run; previous success is not reused.
 
 The direct build id identifies the kernel's Rust/assembly sources, shared ABI sources/manifests and build configuration; in the isolated executor it identifies the candidate commit. It does not replace the SHA-256 hash of the ELF or image. The image contains FAT filesystem timestamps: binary identity between rebuilds is not promised. The environment is also not hermetic because of the Ubuntu baseline and its transitive dependencies.
 

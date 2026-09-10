@@ -17,6 +17,7 @@ pub(super) struct Manager {
     pub(super) table: Table,
     pub(super) processes: [Option<Process>; CAPACITY],
     pub(super) broker: Broker,
+    pub(super) block: super::block::Service,
 }
 impl Manager {
     pub(super) fn new() -> Self {
@@ -24,6 +25,7 @@ impl Manager {
             table: Table::new(),
             processes: [const { None }; CAPACITY],
             broker: Broker::new(),
+            block: super::block::Service::new(),
         }
     }
     pub(super) fn create(
@@ -62,6 +64,7 @@ impl Manager {
     }
     /// Execute one event outside IRQ context, then apply lifecycle policy.
     pub(super) fn step(&mut self, memory: &mut Memory) -> Result<Option<Pid>, Error> {
+        self.block.tick(memory);
         self.refresh_waiters();
         let Some((slot, pid)) = self.table.schedule()? else {
             return Ok(None);
@@ -75,7 +78,7 @@ impl Manager {
                 }
                 Action::Resume
             }
-            128 => syscall::dispatch(process, &mut self.broker, pid.0, memory),
+            128 => syscall::dispatch(process, &mut self.broker, &mut self.block, pid.0, memory),
             vector => {
                 let exit = Exit::Fault {
                     vector,
@@ -120,6 +123,7 @@ impl Manager {
             .unwrap()
             .pending = None;
         self.broker.close_owner(pid.0);
+        self.block.broker.close_owner(pid.0);
         self.refresh_waiters();
         Ok(())
     }

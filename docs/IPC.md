@@ -5,7 +5,7 @@
 ## Binary contract
 
 The extension uses INT 0x80; #10 numbers 0–3 and QUERY=0x00010000 are preserved.
-`crates/abi` is the source of constants, independent of the kernel and future SDK.
+`crates/abi` is the source of constants, independent of the kernel and SDK.
 Discover this extension through INFO; SYSCALL/SYSENTER remain disabled.
 
 | RAX | Operation | RDI | RSI | RDX | Result |
@@ -137,5 +137,7 @@ Available review: implementing agent, without an independent audit. This does
 not establish SMP, DMA to buffers, shared memory, a name service, message-attached
 transfers or product authority. Internal launcher grants and cancellations are
 not an open application API; #13 must give them an authority context before
-exposure. Reliable IPC does not yet establish files, shell, SDK or an agent.
+exposure. Reliable IPC does not establish files, shell or an agent. The native SDK now wraps this contract.
 The next increment, #11, will consume the ABI for Rust applications.
+
+#44 reuses the owner/rights table in `kernel/src/handles/` with disjoint type domains. IPC tokens retain domain 0; block tokens use domain 1. Each call resolves the complete opaque token in its own object table and validates the current owner, preventing cross-type interpretation. IPC limits and wire version remain unchanged. Readiness for both typed waits is coordinated in `process/runtime/waiters.rs`.

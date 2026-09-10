@@ -4,6 +4,12 @@ use crate::arch::{
     pci::BlockTransport,
 };
 use rustic_kernel::block::{Error, Geometry, queue::Layout};
+pub(super) struct Pending {
+    pub(super) kind: u32,
+    pub(super) length: usize,
+    pub(super) started: u64,
+    pub(super) polls: u64,
+}
 #[must_use = "call shutdown to confirm reset and release DMA ownership"]
 pub(crate) struct Device {
     pub(super) transport: BlockTransport,
@@ -12,6 +18,7 @@ pub(crate) struct Device {
     pub(super) geometry: Geometry,
     pub(super) index: u16,
     pub(super) failed: bool,
+    pub(super) pending: Option<Pending>,
 }
 impl Device {
     pub(crate) fn geometry(&self) -> Geometry {
@@ -72,6 +79,7 @@ impl Device {
             geometry,
             index: 0,
             failed,
+            pending: None,
         };
         if failed {
             device.shutdown(memory)?;

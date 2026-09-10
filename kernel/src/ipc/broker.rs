@@ -20,7 +20,7 @@ impl Broker {
     pub const fn new() -> Self {
         Self {
             channels: [const { None }; 4],
-            handles: Table::new(),
+            handles: Table::new(0, ALL, rustic_abi::ipc::TRANSFER),
             next_channel: 1,
         }
     }
@@ -53,7 +53,7 @@ impl Broker {
             Ok(id) => id,
             Err(error) => {
                 self.handles.remove(a, first)?;
-                return Err(error);
+                return Err(error.into());
             }
         };
         self.channels[slot] = Some(Channel::new(self.next_channel));
@@ -61,7 +61,10 @@ impl Broker {
         Ok((first, second))
     }
     pub fn check(&self, owner: u64, handle: u64, right: u8) -> Result<(), Error> {
-        self.handles.resolve(owner, handle, right).map(|_| ())
+        self.handles
+            .resolve(owner, handle, right)
+            .map(|_| ())
+            .map_err(Into::into)
     }
     pub fn send(&mut self, owner: u64, handle: u64, bytes: &[u8]) -> Result<(), Error> {
         let endpoint = self.handles.resolve(owner, handle, WRITE)?;
@@ -109,7 +112,9 @@ impl Broker {
         target: u64,
         rights: u8,
     ) -> Result<u64, Error> {
-        self.handles.transfer(owner, handle, target, rights)
+        self.handles
+            .transfer(owner, handle, target, rights)
+            .map_err(Into::into)
     }
     pub fn counts(&self) -> (usize, usize) {
         (self.channels.iter().flatten().count(), self.handles.count())

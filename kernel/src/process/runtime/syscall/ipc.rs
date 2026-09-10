@@ -18,7 +18,7 @@ pub(super) fn dispatch(
     if number == WAIT {
         return match broker.peek(owner, handle) {
             Ok(_) => Action::Return(0),
-            Err(Error::WouldBlock) => Action::Block(handle),
+            Err(Error::WouldBlock) => Action::Block(super::super::record::Pending::Ipc(handle)),
             Err(error) => Action::Return(error.code()),
         };
     }

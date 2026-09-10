@@ -3,5 +3,6 @@
 #![no_std]
 #![forbid(unsafe_code)]
 pub mod application;
+pub mod block;
 pub mod ipc;
 pub mod process;

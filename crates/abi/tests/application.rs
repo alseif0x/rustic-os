@@ -65,3 +65,14 @@ fn rejects_paths_non_ascii_hidden_suffixes_and_unterminated_names() {
     bytes[32..64].fill(b'a');
     assert_eq!(Manifest::parse(&bytes).unwrap_err(), Error::Identity);
 }
+
+#[test]
+fn block_feature_is_admitted_independently_of_ipc() {
+    use rustic_abi::application::{BLOCK, DIAGNOSTIC, IPC, KNOWN};
+    let mut bytes = manifest();
+    bytes[24..32].copy_from_slice(&(BLOCK | DIAGNOSTIC).to_le_bytes());
+    let parsed = Manifest::parse(&bytes).unwrap();
+    assert!(parsed.admitted(KNOWN));
+    assert!(parsed.admitted(BLOCK | DIAGNOSTIC));
+    assert!(!parsed.admitted(IPC | DIAGNOSTIC));
+}

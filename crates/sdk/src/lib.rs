@@ -3,6 +3,7 @@
 #![no_std]
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 mod arch;
+pub mod block;
 pub mod error;
 pub mod ipc;
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]

@@ -2,7 +2,7 @@
 
 # Native Rust SDK and application manifest
 
-Implemented for #11 on the R0 single-CPU x86_64 target. This is an allocation-free native application SDK over process ABI 1.0 and IPC extension 1, not a POSIX environment. [Process ABI](PROCESS-ABI.md), [IPC](IPC.md) and [loader limits](PROCESSES.md) remain authoritative.
+Implemented for #11 on the R0 single-CPU x86_64 target. This is an allocation-free native application SDK over process ABI 1.0, IPC extension 1 and block extension 1, not a POSIX environment. [Process ABI](PROCESS-ABI.md), [IPC](IPC.md) and [loader limits](PROCESSES.md) remain authoritative.
 
 ## Boundaries and available API
 
@@ -13,7 +13,9 @@ Implemented for #11 on the R0 single-CPU x86_64 target. This is an allocation-fr
 | `crates/sdk/src/startup.rs` | Entry macro, version check and exit on return |
 | `crates/sdk/src/process.rs` | Version queries, identity, bounded integer diagnostics and exit |
 | `crates/sdk/src/ipc/` | Owned fixed-size message encoding and endpoint send/receive/wait/close |
-| `apps/sdk-probe/` | Separate native executable; imports only the public SDK |
+| `crates/sdk/src/block/` | Scoped disk geometry, copied request submission, result collection, wait/cancel/close |
+| `apps/sdk-probe/` | Separate native IPC executable; imports only the public SDK |
+| `apps/block-probe/` | Separate native storage executable; adversarial raw calls isolated in its test module |
 | `tools/application.py` | Host build and strict TOML-to-binary manifest encoding |
 | `kernel/src/process/runtime/application.rs` | Trusted admission before process allocation; used by the acceptance launcher |
 
@@ -29,7 +31,7 @@ Messages own 88 bytes of storage and expose at most 64 payload bytes. Outbound s
 
 Rust `core`, stack variables, static data, slices and fixed arrays are available. Image segments retain the loader's R/RX/RW permissions. The SDK has no allocator, allocation/free syscalls, `alloc`, `std`, files, networking, threads, TLS, floating point or SIMD support. It does not publish placeholders for those functions. The pinned target avoids a red zone and SIMD. Do not add dependencies that require a runtime the OS has not implemented.
 
-A later service adds a cohesive client module when its actual contract exists, conforming to the [versioned service schemas](SERVICE-CONTRACTS.md) from #6. The initial schemas and host descriptors do not add native SDK calls; #44/#12 supply their actual bounded encoding and client modules. Service versions remain separate from the process/IPC ABI. MCP is an adapter above services and does not block native SDK use.
+A later service adds a cohesive client module when its actual contract exists, conforming to the [versioned service schemas](SERVICE-CONTRACTS.md) from #6. The initial schemas and host descriptors do not add native service calls. #44 supplies the lower-level [block API](BLOCK-ACCESS.md); #12 will add file-service encoding and clients. A 512-byte block is separate from the logical file-operation payload limit. Service versions remain separate from the process/IPC ABI. MCP is an adapter above services and does not block native SDK use.
 
 ## Manifest schema 1
 
@@ -45,7 +47,7 @@ The kernel independently parses exactly 128 bytes with explicit little-endian de
 | 12 | 4 | Required process ABI, 65536 (1.0), exact match |
 | 16 | 2 | Required IPC extension, 1, exact match |
 | 18 | 6 | Application major/minor/patch, three u16 integers |
-| 24 | 8 | Capability requests: bit 0 IPC, bit 1 diagnostic; unknown bits rejected |
+| 24 | 8 | Capability requests: bit 0 IPC, bit 1 diagnostic, bit 2 block; unknown bits rejected |
 | 32 | 32 | Application identity |
 | 64 | 32 | Executable filename, ending in `.elf` |
 | 96 | 32 | Reserved, all zero |
@@ -63,7 +65,7 @@ From the repository root in the pinned Ubuntu 24.04 environment:
 ```sh
 source ~/.cargo/env
 python3 tools/application.py
-# Outputs: target/native/sdk-probe.elf and target/native/app.manifest
+# Outputs: target/native/sdk-probe.elf, app.manifest, block-probe.elf, block-probe.manifest
 
 cargo xtask check
 python3 -m unittest discover -s tools/tests -v
@@ -74,7 +76,7 @@ The image builder compiles the application first, then builds the kernel with `s
 
 The app linker script emits a static ET_EXEC with separate PT_LOAD segments at 0x400000. No ELF parser relaxation was required. The observed release executable is 20,184 bytes; this is a measurement with Rust 1.98.1, not a fixed format requirement. The loader continues to enforce its 1 MiB file, 256-page process and W^X limits.
 
-To create another native utility, follow the example's Cargo package, linker script, entry function and panic handler. Add it to the workspace and explicitly extend the host build/launcher to select it. This first builder and bootstrap harness deliberately select one named template; arbitrary application discovery, installation and shell launch are later work.
+To create another native utility, follow the example's Cargo package, linker script, entry function and panic handler. Add it to the workspace and explicitly extend the host build/launcher to select it. The builder and bootstrap harness deliberately select two named templates; arbitrary application discovery, installation and shell launch are later work.
 
 The example runs two instances with opposite roles. They verify identity, reject an oversized payload and invalid handle, exchange four correlated requests/replies with authenticated sender IDs, close their endpoints and report completion. Malformed example roles or peer identities return a nonzero exit code.
 
@@ -86,4 +88,10 @@ Both direct and isolated suites require the complete SDK summary, in addition to
 
 Direct image metadata records the application ELF and manifest hashes as well as the containing kernel/image hashes. The isolated executor builds from an exact revision, exports bounded application/manifest artifacts and records their hashes. The separate trusted boot worker executes the resulting kernel; a successful compiler output alone is insufficient. Published revision and CI evidence are recorded in [#11](https://github.com/alseif0x/rustic-os/issues/11).
 
-External dependencies remain the pinned host Rust/compiler/linker, Python, Limine, QEMU and OVMF described in [the inventory](dependencies.md). No new third-party crate, code template or runtime was introduced. The SDK and application are original Apache-2.0 code. Compiler, linker and VM run on the host; the application instructions run inside RusticOS. Review was performed by the implementing agent, without an independent audit.
+External dependencies remain the pinned host Rust/compiler/linker, Python, Limine, QEMU and OVMF described in [the inventory](dependencies.md). No new third-party crate, code template or runtime was introduced. The SDK and applications are original Apache-2.0 code. Compiler, linker and VM run on the host; the application instructions run inside RusticOS. Review was performed by the implementing agent, without an independent audit.
+
+## Bounded block client
+
+#44 adds `block::Device`. The trusted launcher supplies its handle; `from_bootstrap` wraps it without granting rights. Query the independent block wire version with `Device::version()`. `read`, `write` and `flush` return a request ID after admission; `wait(id)` yields until completion, and `result()` copies and consumes the retained result. Check completion status/effect as well as syscall success. Write admission snapshots exactly 512 bytes, so the source slice need not live until completion. Read buffers are supplied only during collection.
+
+`cancel(id)` returns true only for cancellation before device submission; false means too late and requires reading the actual result. Closing a handle consumes the wrapper but does not roll back submitted writes. Errors, byte layouts, quotas, scope, resource recovery, both new VM modes and their measured evidence are specified in [BLOCK-ACCESS.md](BLOCK-ACCESS.md). The example is independently linked and executes under RusticOS; the host encoder/compiler does not perform its I/O.

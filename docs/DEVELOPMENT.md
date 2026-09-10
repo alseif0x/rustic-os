@@ -74,7 +74,7 @@ The FAT32/UEFI image can already be built and booted. [Boot commands and limits]
 
 ## CI and negative testing
 
-.github/workflows/check.yml runs the same cargo xtask check on ubuntu-24.04 for push and pull_request. Actions are pinned by SHA, the token has contents:read permissions, checkout does not persist credentials, and no project secrets are supplied. Toolchain versions, logs and the no_std library are retained as artifacts for 14 days. A separate job installs pinned QEMU/OVMF, tests the runner and boots all eighteen scenarios, preserving images and evidence.
+.github/workflows/check.yml runs the same cargo xtask check on ubuntu-24.04 for push and pull_request. Actions are pinned by SHA, the token has contents:read permissions, checkout does not persist credentials, and no project secrets are supplied. Toolchain versions, logs and the no_std library are retained as artifacts for 14 days. A separate job installs pinned QEMU/OVMF, tests the runner and boots all twenty scenarios, preserving images and evidence.
 
 Next, tools/check-failure.sh introduces a deliberately failing test and requires cargo xtask check to reject it. The check identifies the expected marker so a compilation or tooling error cannot count as evidence. Run it only in a disposable checkout: it formats and temporarily adds the fixture, removing it on exit.
 
@@ -86,12 +86,14 @@ The same CI user could modify PR code; the workflow limits permissions and suppl
 
 ## Native application SDK
 
-#11 adds [the native SDK and manifest](SDK.md). Run `python3 tools/application.py` to build the independent ELF and binary manifest. `cargo xtask check` requires Python 3.11+ (the reference uses Python 3.12), compiles/lints the guest application and passes its artifact directory explicitly when checking the kernel acceptance image. It still does not need QEMU or bootloader downloads. Host builds do not expose the SDK instruction boundary.
+#11 adds [the native SDK and manifest](SDK.md). Run `python3 tools/application.py` to build both independent ELFs and their binary manifests. `cargo xtask check` requires Python 3.11+ (the reference uses Python 3.12), compiles/lints the guest application and passes its artifact directory explicitly when checking the kernel acceptance image. It still does not need QEMU or bootloader downloads. Host builds do not expose the SDK instruction boundary.
 
 The image builder and isolated worker compile the application before the kernel with the `sdk-test` feature. Direct source fingerprints cover application sources, linker script, descriptor and the host manifest encoder. The sandbox exports bounded ELF/manifest artifacts with hashes alongside the containing kernel.
 
-#35 adds [block storage](BLOCK.md), with PCI I/O, DMA, queue mechanics and request validation in separate modules. No toolchain or Cargo dependency is added. Full direct and isolated suites now contain 18 and 22 scenarios. Rebuild reviewed sandbox infrastructure before using the new modes.
+#35 adds [block storage](BLOCK.md), with PCI I/O, DMA, queue mechanics and request validation in separate modules. No toolchain or Cargo dependency is added. That increment supplied 18 direct and 22 isolated scenarios; #44 expands them to 20 and 24. Rebuild reviewed sandbox infrastructure before using the new modes.
 
 ## Logical service contracts
 
 The [service contract guide](SERVICE-CONTRACTS.md) provides the commands for the separate Python 3.12 host validator and descriptor exporter. Install its exact hashed wheels into `.cache/contracts-venv`; no package is added to the kernel, SDK or sandbox image. CI checks 62 messages, nine exchanges and 14 message/descriptor tests and preserves their results. This is separate from the runner tests, finite operation model and actual guest acceptance.
+
+#44 adds [bounded user-mode disk access](BLOCK-ACCESS.md). The host builder/linter selects both `sdk-probe` and `block-probe`; both manifests and ELFs have separate hashes. Shared block codecs and pure ownership/queue tests run on the host, while two additional VM scenarios exercise actual copied sector calls, cancellation, process death and persistence. The regression inventory is 46 Rust and 30 runner tests, 20 direct VM scenarios and 24 isolated scenarios.

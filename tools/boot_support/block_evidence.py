@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 """Block-device acceptance on the fixed 4 GiB test disk."""
-MODES = ("block-persist", "block-readonly", "block-error", "block-timeout", "block-missing")
+MODES = ("block-persist", "block-readonly", "block-error", "block-timeout", "block-missing", "block-user", "block-user-faults")
 PHASES = {"block-persist": ["write", "read"], "block-readonly": ["readonly"],
           "block-error": ["error"], "block-timeout": ["timeout"], "block-missing": ["missing"]}
 
 
 def verified(mode, serial, records):
+    if mode in ("block-user", "block-user-faults"):
+        from .block_user_evidence import verified as user_verified
+        return user_verified(mode, serial, records)
     try:
         values = records(serial, "RUSTIC BLOCK ")
         if [value["phase"] for value in values] != PHASES[mode]:

@@ -2,10 +2,10 @@
 //! Trusted launcher operations and wakeups. No process gets authority by naming a PID.
 use super::manager::Manager;
 use rustic_abi::ipc::Error;
-use rustic_kernel::process::lifecycle::{CAPACITY, Pid, State};
+use rustic_kernel::process::lifecycle::{Pid, State};
 
 impl Manager {
-    fn live(&self, pid: Pid) -> Result<usize, Error> {
+    pub(super) fn live(&self, pid: Pid) -> Result<usize, Error> {
         if matches!(
             self.table.state(pid),
             Ok(State::Ready | State::Running | State::Blocked)
@@ -48,29 +48,12 @@ impl Manager {
             return Err(Error::Message);
         }
         let process = self.processes[slot].as_mut().unwrap();
+        if !matches!(process.pending, Some(super::record::Pending::Ipc(_))) {
+            return Err(Error::Message);
+        }
         process.pending = None;
         process.frame.result(Error::Cancelled.code());
         self.table.wake(pid).unwrap();
         Ok(())
-    }
-    pub(super) fn refresh_waiters(&mut self) {
-        for slot in 0..CAPACITY {
-            let Some(pid) = self.table.pid_at(slot) else {
-                continue;
-            };
-            if self.table.state(pid).unwrap() != State::Blocked {
-                continue;
-            }
-            let process = self.processes[slot].as_mut().unwrap();
-            let handle = process.pending.expect("blocked process owns a wait");
-            let result = match self.broker.peek(pid.0, handle) {
-                Ok(_) => 0,
-                Err(Error::WouldBlock) => continue,
-                Err(error) => error.code(),
-            };
-            process.pending = None;
-            process.frame.result(result);
-            self.table.wake(pid).unwrap();
-        }
     }
 }
