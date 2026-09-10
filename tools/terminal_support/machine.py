@@ -14,7 +14,9 @@ import environment
 SIZE = 4 * 1024 ** 3
 
 @contextlib.contextmanager
-def disk(path, initialize=False):
+def disk(path, initialize=False, upgrade_recovery=False):
+    if initialize and upgrade_recovery:
+        raise RuntimeError("initialize and upgrade are mutually exclusive")
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     flags = os.O_RDWR | os.O_NOFOLLOW | (os.O_CREAT | os.O_EXCL if initialize else 0)
@@ -35,8 +37,13 @@ def disk(path, initialize=False):
             raise RuntimeError("terminal data must be a dedicated regular file")
         if initialize:
             os.ftruncate(fd, SIZE)
+            from .provision import provision
+            provision(fd)
         elif info.st_size != SIZE:
             raise RuntimeError("unexpected terminal disk size; refusing to modify it")
+        if upgrade_recovery:
+            from .provision import upgrade
+            upgrade(fd, path)
         yield path.resolve()
     finally:
         if fd is not None:
@@ -44,7 +51,7 @@ def disk(path, initialize=False):
         os.close(lock_fd)
 
 @contextlib.contextmanager
-def machine(image, data, serial, log):
+def machine(image, data, serial, log, fault=None):
     image = Path(image).resolve()
     metadata = json.loads((image.parent / "image.json").read_text())
     if environment.digest(image) != metadata["image_sha256"]:
@@ -53,13 +60,19 @@ def machine(image, data, serial, log):
         variables = Path(temporary) / "OVMF_VARS.fd"
         shutil.copyfile("/usr/share/OVMF/OVMF_VARS_4M.fd", variables)
         config = environment.CONFIG
+        drive = str(data)
+        if fault is not None:
+            from .recovery_faults import configuration
+            rules = Path(temporary) / "blkdebug.conf"
+            rules.write_text(configuration(fault))
+            drive = f"blkdebug:{rules}:{data}"
         command = [
             "qemu-system-x86_64", "-machine", config["machine"], "-accel", config["accelerator"],
             "-cpu", config["cpu"], "-smp", "1", "-m", "256M",
             "-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd",
             "-drive", f"if=pflash,format=raw,file={variables}",
             "-drive", f"if=virtio,format=raw,readonly=on,file={image}",
-            "-drive", f"if=none,id=rusticdata,format=raw,cache=writeback,file={data}",
+            "-drive", f"if=none,id=rusticdata,format=raw,cache=writeback,file={drive}",
             "-device", "virtio-blk-pci,drive=rusticdata,addr=0x6,disable-modern=on,disable-legacy=off,queue-size=8,num-queues=1,vectors=0,rerror=report,werror=report",
             "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04",
             "-display", "none", "-serial", serial, "-monitor", "none", "-nic", "none", "-no-reboot",

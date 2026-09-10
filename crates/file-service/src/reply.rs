@@ -32,5 +32,10 @@ pub(super) fn error(error: rustic_fs::Error) -> Error {
         E::ReadOnly => Error::ReadOnly,
         E::Empty => Error::Empty,
         E::Exhausted => Error::Exhausted,
+        E::Unsupported => Error::Unsupported,
+        E::Lineage => Error::Lineage,
+        E::ExpiredEpoch => Error::ExpiredEpoch,
+        E::OutcomeUnknown => Error::OutcomeUnknown,
+        E::IdempotencyConflict => Error::IdempotencyConflict,
     }
 }

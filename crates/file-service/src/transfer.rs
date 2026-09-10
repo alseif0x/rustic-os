@@ -3,6 +3,7 @@ use rustic_abi::files::{Error, Packet};
 use rustic_fs::MAX_FILE;
 pub(super) struct Transfer {
     pub(super) client: usize,
+    pub(super) retry: Option<rustic_abi::files::recovery::Retry>,
     pub(super) context: u32,
     pub(super) id: u32,
     pub(super) version: u64,
@@ -49,6 +50,13 @@ impl Transfers {
             .ok_or(Error::Busy)?;
         self.slots[slot] = Some(Transfer {
             client,
+            retry: if request.op == rustic_abi::files::TRACK_BEGIN {
+                Some(rustic_abi::files::recovery::Retry::decode(
+                    request.payload(),
+                )?)
+            } else {
+                None
+            },
             context: request.context,
             id: request.id,
             version: request.version,
@@ -79,6 +87,12 @@ impl Transfers {
             return Err(Error::Offset);
         }
         Ok(self.slots[index].take().unwrap())
+    }
+    pub(super) fn tracked(&self, client: usize) -> bool {
+        self.slots
+            .iter()
+            .flatten()
+            .any(|s| s.client == client && s.retry.is_some())
     }
     pub(super) fn count(&self) -> usize {
         self.slots.iter().flatten().count()

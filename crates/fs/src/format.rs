@@ -5,6 +5,7 @@ pub(super) struct Metadata {
     pub(super) sequence: u64,
     pub(super) next: u32,
     pub(super) nodes: [Node; OBJECTS],
+    pub(crate) recovery: Option<crate::recovery::Recovery>,
 }
 impl Metadata {
     pub(super) fn initial() -> Self {
@@ -12,6 +13,7 @@ impl Metadata {
             sequence: 1,
             next: 5,
             nodes: [Node::EMPTY; OBJECTS],
+            recovery: None,
         };
         for (i, name) in [b"system".as_slice(), b"data", b"config", b"workspaces"]
             .iter()
@@ -37,13 +39,24 @@ impl Metadata {
     }
     pub(super) fn write(&self, disk: &mut impl Disk, bank: u8) -> Result<(), Error> {
         let bytes = self.bytes();
+        let recovery_crc = if let Some(recovery) = &self.recovery {
+            let records = recovery.encode();
+            for (i, chunk) in records.as_chunks::<512>().0.iter().enumerate() {
+                disk.write(160 + u64::from(bank) * 7 + i as u64, chunk)?;
+            }
+            crate::checksum::crc(&records)
+        } else {
+            0
+        };
         for (i, chunk) in bytes.as_chunks::<512>().0.iter().enumerate() {
             disk.write(header(bank) + 1 + i as u64, chunk)?;
         }
         disk.flush()?;
         let mut b = [0; 512];
         b[..8].copy_from_slice(b"RUSTFS1\0");
-        b[8..10].copy_from_slice(&1u16.to_le_bytes());
+        b[8..10]
+            .copy_from_slice(&(if self.recovery.is_some() { 2u16 } else { 1u16 }).to_le_bytes());
+        b[32..36].copy_from_slice(&recovery_crc.to_le_bytes());
         b[10..12].copy_from_slice(&512u16.to_le_bytes());
         b[12..20].copy_from_slice(&self.sequence.to_le_bytes());
         b[20..24].copy_from_slice(&self.next.to_le_bytes());
@@ -59,7 +72,12 @@ impl Metadata {
         if b == [0; 512] {
             return Err(Error::Empty);
         }
-        if &b[..8] != b"RUSTFS1\0" || b[8..12] != [1, 0, 0, 2] || b[32..].iter().any(|b| *b != 0) {
+        if &b[..8] != b"RUSTFS1\0"
+            || !matches!(b[8], 1 | 2)
+            || b[9..12] != [0, 0, 2]
+            || b[36..].iter().any(|b| *b != 0)
+            || b[8] == 1 && b[32..36] != [0; 4]
+        {
             return Err(Error::Corrupt);
         }
         let checksum = u32::from_le_bytes(b[28..32].try_into().unwrap());
@@ -71,6 +89,7 @@ impl Metadata {
             sequence: u64::from_le_bytes(b[12..20].try_into().unwrap()),
             next: u32::from_le_bytes(b[20..24].try_into().unwrap()),
             nodes: [Node::EMPTY; OBJECTS],
+            recovery: None,
         };
         let mut bytes = [0; 2048];
         for (i, chunk) in bytes.as_chunks_mut::<512>().0.iter_mut().enumerate() {
@@ -85,6 +104,20 @@ impl Metadata {
             .zip(bytes.as_chunks::<64>().0.iter())
         {
             *node = Node::decode(chunk)?;
+        }
+        if b[8] == 2 {
+            let mut records = [0; crate::recovery::RECOVERY_SECTORS * 512];
+            for (i, chunk) in records.as_chunks_mut::<512>().0.iter_mut().enumerate() {
+                disk.read(160 + u64::from(bank) * 7 + i as u64, chunk)?;
+            }
+            if crc(&records) != u32::from_le_bytes(b[32..36].try_into().unwrap()) {
+                return Err(Error::Corrupt);
+            }
+            result.recovery = Some(crate::recovery::Recovery::decode(
+                &records,
+                result.sequence,
+                result.next,
+            )?);
         }
         result.validate()?;
         Ok(result)

@@ -4,15 +4,19 @@
 #![forbid(unsafe_code)]
 mod checksum;
 mod format;
+mod mutations;
 mod namespace;
+mod provision;
+mod recovery;
 mod storage;
 mod volume;
 pub use namespace::{Kind, Node};
+pub use recovery::{RETAINED, Receipt, Retry};
 pub use storage::Disk;
 pub use volume::Volume;
 pub const OBJECTS: usize = 32;
 pub const MAX_FILE: usize = 1024;
-pub const SECTORS: u64 = 160;
+pub const SECTORS: u64 = 174;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     Io,
@@ -30,4 +34,9 @@ pub enum Error {
     ReadOnly,
     Empty,
     Exhausted,
+    Unsupported,
+    Lineage,
+    ExpiredEpoch,
+    OutcomeUnknown,
+    IdempotencyConflict,
 }

@@ -31,9 +31,10 @@ The goal is agent control without mandatory screen interpretation. A graphical i
 | [User-mode disk access](docs/BLOCK-ACCESS.md) | Typed SDK, scoped handles, asynchronous sector I/O, cancellation and process-death recovery |
 | [Native terminal](docs/TERMINAL.md) | Real keyboard input, file commands, isolated utilities, permissions, service restart and reboot persistence |
 | [File service](docs/FILES.md) | Bounded copy-on-write volume, version checks, scopes, recovery model and independent disk verification |
+| [Recoverable writes](docs/FILE-RECOVERY.md) | Durable receipts, exact replay, conflict/epoch fencing, lost replies and selected native I/O failures |
 | [Isolated test executor](docs/EXECUTOR.md) | Exact Git revisions, offline jobs, resource limits, cancellation and structured evidence |
 
-The current acceptance suite covers **59 Rust tests, 32 Python tests, 21 VM scenarios and 25 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [terminal acceptance and limits](docs/TERMINAL.md) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees. Separately, the [service contract suite](docs/SERVICE-CONTRACTS.md) validates 62 messages, nine exchanges and 14 host checks; those do not execute guest services.
+The current acceptance suite covers **69 Rust tests, 35 Python tests, 22 VM scenarios and 26 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [terminal acceptance and limits](docs/TERMINAL.md) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees. Separately, the [service contract suite](docs/SERVICE-CONTRACTS.md) validates 62 messages, nine exchanges and 14 host checks; those do not execute guest services.
 
 The current VM uses **x86_64, one CPU and 256 MiB RAM**. Process and IPC limits are deliberately small; see their contracts before building on them.
 
@@ -124,7 +125,7 @@ Modules follow ownership and trust boundaries. Entry points compose components; 
 | H4 — Desktop and browser | Graphical interaction and a browser engine running inside RusticOS | Planned |
 | H5 — Experimental v0.1 | Verified candidates, activation, recovery and integrated acceptance | Planned |
 
-**Next:** complete the durable effect/receipt and recovery contracts in [#12](https://github.com/alseif0x/rustic-os/issues/12), extend the native authority mission in [#13](https://github.com/alseif0x/rustic-os/issues/13), and measure the service topology in #20. The terminal establishes the manual path; it does not yet provide idempotency receipts, a general delegation framework or production filesystem guarantees. [Current boundaries](docs/TERMINAL.md).
+[Recoverable native replacements](docs/FILE-RECOVERY.md) now retain atomic file/version receipts, reject conflicting retries and preserve results across service/VM restart. **Next:** complete service-v1/workspace semantics in [#12](https://github.com/alseif0x/rustic-os/issues/12)/#22, extend the authority mission in [#13](https://github.com/alseif0x/rustic-os/issues/13), and measure the topology in #20. This remains a bounded prototype without general delegation or production filesystem guarantees.
 
 The experimental v0.1 target includes a native console, optional agent, locally running browser engine and a verifiable change/recovery cycle. The model, compiler and test environment may be external, with that dependency declared. Broad hardware support and universal application compatibility are long-term research goals, not current promises.
 

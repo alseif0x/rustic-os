@@ -22,8 +22,7 @@ impl State {
         self.owner = owner;
         self.policy = super::policy::load(&mut self.owner).unwrap_or(0);
         let data = connect(files, self.shell).map_err(|_| 4u64)?;
-        let generation =
-            grant(&mut self.admin, 0, self.shell, data[0], 0, 3, 0).map_err(|_| 4u64)?;
+        let generation = owner_grant(&mut self.admin, 0, self.shell, data[0]).map_err(|_| 4u64)?;
         Ok([0, files, data[1], generation as u64, 0, 0, 0, 0])
     }
 }

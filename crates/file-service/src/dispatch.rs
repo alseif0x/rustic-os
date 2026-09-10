@@ -6,7 +6,7 @@ pub struct Server {
     pub volume: Volume,
     grants: [Option<Grant>; CLIENTS],
     next: u32,
-    transfers: Transfers,
+    pub(super) transfers: Transfers,
 }
 impl Server {
     pub fn new(volume: Volume) -> Self {
@@ -23,7 +23,8 @@ impl Server {
             || grant.peer == 0
             || grant.endpoint == 0
             || grant.rights == 0
-            || grant.rights & !(READ_RIGHT | WRITE_RIGHT) != 0
+            || grant.rights & !(READ_RIGHT | WRITE_RIGHT | INSPECT_RIGHT) != 0
+            || (grant.rights & INSPECT_RIGHT != 0 && grant.subject == 0)
             || (grant.scope != 0 && self.volume.stat(grant.scope).is_err())
         {
             return Err(Error::Invalid);
@@ -78,11 +79,21 @@ impl Server {
             crate::validation::request(&request)?;
             let grant = self.grant_at(slot).ok_or(Error::Denied)?;
             grant.check(peer, request.context, now)?;
+            if matches!(request.op, RECOVERY | TRACK_BEGIN | RECEIPT)
+                || request.op == COMMIT && self.transfers.tracked(slot)
+            {
+                response = self.recovery_request(disk, slot, grant, request)?;
+                return Ok(());
+            }
             let write = matches!(
                 request.op,
                 CREATE | MKDIR | REMOVE | BEGIN | CHUNK | COMMIT | ABORT
             );
-            grant.access(&self.volume, request.id, write)?;
+            if matches!(request.op, CHUNK | ABORT) && self.transfers.tracked(slot) {
+                grant.inspect(&self.volume, request.id)?;
+            } else {
+                grant.access(&self.volume, request.id, write)?;
+            }
             match request.op {
                 LOOKUP => {
                     let n = self

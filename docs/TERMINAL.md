@@ -14,7 +14,7 @@ python3 tools/terminal.py --initialize  # First launch: create a NEW dedicated d
 python3 tools/terminal.py               # Later launches: mount the same disk.
 ```
 
-Run one command at a time. The launcher builds the applications/kernel, packages a read-only UEFI boot image and attaches `artifacts/terminal/data.raw`. Initialization uses exclusive file creation and refuses an existing file. Normal launch refuses a missing, linked, wrong-size or concurrently used image. It never chooses a physical disk. The 4 GiB logical data image is sparse; the first format uses only 160 sectors. Do not include it in Git.
+Run one command at a time. The launcher builds the applications/kernel, packages a read-only UEFI boot image and attaches `artifacts/terminal/data.raw`. Initialization uses exclusive file creation and refuses an existing file. Normal launch refuses a missing, linked, wrong-size or concurrently used image. It never chooses a physical disk. The 4 GiB logical data image is sparse; the receipt-capable format uses only 174 sectors. Do not include it in Git.
 
 Type `exit` to stop cleanly. Ctrl-C cancels the current input line. Ctrl-U clears it; Backspace/Delete removes the last character. QEMU's Ctrl-A X is an emergency exit, without a guest shutdown acknowledgement. The stdio backend disables host signal handling so Ctrl-C reaches the guest. Console ownership belongs to the shell; a utility cannot write directly to its prompt.
 
@@ -55,6 +55,8 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `permissions [PID]`, `revoke PID` | Inspect file scope/rights/generation/deadline/report; revoke a utility's current file context |
 | `services`, `mem` | Query service identities, owner-policy state, frame/process/channel counts |
 | `restart files` | End utility sessions, remount the file service and issue fresh owner bindings |
+| `retry-key PATH KEY`, `replace PATH VERSION TOKEN TEXT`, `receipt ID TOKEN` | Prepare an explicit retry token, commit a tracked whole-file replacement, inspect its retained result |
+| `rotate-receipts` | Deliberately advance the retry epoch and expire the two retained receipts after reconciliation |
 | `exit` | Request supervisor shutdown and release process/device resources |
 
 Quotes preserve spaces; single quotes are literal and double quotes allow backslash escapes. Backslash escapes the following character; backslash-n/backslash-t encode newline/tab outside single quotes. At most 16 arguments and 1024 input bytes are accepted. Overflow, unsupported bytes or unmatched quotes discard the command rather than executing a truncated prefix. Commands and names are ASCII. File output escapes control bytes, including ANSI escapes; newline remains a line break.
@@ -76,7 +78,7 @@ helpers=explicit
 
 A malformed policy disables new helper file grants while the manual shell can still inspect and repair files. Restore it with `write /config/owner-policy "rustic-owner-v1\nhelpers=explicit\n"` and `restart files`. Runtime utility grants never survive restart/reboot. Restarting the service ends all utility sessions and binds the owner to its new PID/endpoint. It does not silently resume an old task.
 
-A lost response or failed submitted mutation is an uncertain result. Inspect the file after recovery before deciding what to do; do not assume a retry is safe. The bootstrap file protocol has no durable operation receipts or idempotency-key lookup yet. Creating an absent file and writing its contents are two commits: a failure between them can leave an empty file. The logical service-v1 effect/receipt contract remains separate work in #12/#22/#43. This terminal does not close those obligations.
+A lost response or failed submitted mutation is an uncertain result. The new tracked replace/receipt API can recover the original result after fresh authorization; ordinary write remains untracked. See [recoverable replacements](FILE-RECOVERY.md) for tokens, two-record retention, explicit legacy-disk upgrade and error handling. Creating an absent file and writing its contents remain two commits. The complete logical service-v1 contract remains in #12/#22/#43.
 
 ## Verification
 
@@ -91,6 +93,6 @@ python3 tools/sandbox.py test --revision "$(git rev-parse HEAD)"
 
 The terminal driver sends real UART input, checks normal/error output, editing/overflow, full object capacity, two simultaneous utilities, faults, unauthorized control, scoped reads, expiry/revocation, malformed-policy repair and repeated service restart. After fault/restart/reap cycles, frame/process/channel/pending-I/O counts return to the same baseline. A second QEMU process mounts the same disk. An independent Python reader checks metadata/data CRCs, persisted file and policy bytes, and untouched reserved sectors.
 
-Evidence includes serial transcripts, `terminal.json`, `files.bin` (the bounded 81,920-byte format area), image/kernel identities and runner results. Pure filesystem tests separately interrupt each write/flush with partial-sector cases and recover either the old or new complete file. Those model tests are not an exhaustive physical power-loss test or a production filesystem guarantee.
+Evidence includes serial transcripts, `terminal.json`, `files.bin` (the bounded 89,088-byte format area), image/kernel identities and runner results. Pure filesystem tests separately interrupt each write/flush with partial-sector cases and recover either the old or new complete file. Those model tests are not an exhaustive physical power-loss test or a production filesystem guarantee.
 
-Review is by the implementing agent, with automated host/native checks; no independent audit. Hardware support, durable task receipts, broader authority/takeover semantics, observability and capacity measurements remain tracked in #12/#13/#15/#20 and H2. The terminal increment establishes a working manual path without claiming the entire OS roadmap is complete.
+Review is by the implementing agent, with automated host/native checks; no independent audit. Hardware support, complete service-v1 operation semantics, broader authority/takeover semantics, observability and capacity measurements remain tracked in #12/#13/#15/#20 and H2. The terminal increment establishes a working manual path without claiming the entire OS roadmap is complete.

@@ -30,7 +30,9 @@ impl BootMode {
     pub fn parse(input: &[u8]) -> Option<Self> {
         match input {
             b"mode=terminal" => Some(Self::Terminal),
-            b"mode=terminal-init" | b"mode=terminal-test" => Some(Self::TerminalInit),
+            b"mode=terminal-init" | b"mode=terminal-test" | b"mode=recovery-test" => {
+                Some(Self::TerminalInit)
+            }
             b"mode=ok" => Some(Self::Ok),
             b"mode=panic" => Some(Self::Panic),
             b"mode=hang" => Some(Self::Hang),

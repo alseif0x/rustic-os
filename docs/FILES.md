@@ -2,7 +2,7 @@
 
 # Bounded native file service
 
-Implemented as the bounded storage foundation for the [native terminal](TERMINAL.md), with separate pure format/policy crates, SDK clients and a ring-3 file-server application. #12 remains open for the logical service-v1 durable effect/receipt contract; this bootstrap protocol does not claim that conformance.
+Implemented as the bounded storage foundation for the [native terminal](TERMINAL.md), with separate pure format/policy crates, SDK clients and a ring-3 file-server application. [Recoverable replacements](FILE-RECOVERY.md) add atomic retained receipts to the native binding. #12/#22 retain complete logical service-v1 conformance; this bootstrap protocol does not advertise that surface.
 
 ## Format decision
 
@@ -34,4 +34,4 @@ Metadata banks occupy sectors 8–12 and 13–17. Each header identifies sequenc
 
 A successful mutation includes the final flush. Submitted-write failure returns Uncertain and poisons that live volume until remount. A transport failure after a possible durable request also maps conservatively to Uncertain in the SDK. There is no automatic mutation replay. Existing-file replacement publishes old or new complete content under the tested flush/tear model. Create-and-write is two commits; there is no multi-file transaction.
 
-Pure tests cover names, directory constraints, quota recovery, stale versions, read-only system roots, malformed metadata, checksum rejection and torn writes/flushes. Native terminal acceptance adds real disk I/O, object saturation, scopes, manual recovery, service restart and two VM boots with an independent on-disk oracle. Durable operation receipts/retry epochs, persistent workspace lineage, generic helper delegation and the complete logical service-v1 schema remain open. See [SERVICE-CONTRACTS.md](SERVICE-CONTRACTS.md), #12/#13/#22/#43.
+Pure tests cover names, directory constraints, quota recovery, stale versions, read-only system roots, malformed metadata, checksum rejection and torn writes/flushes. Native terminal acceptance adds real disk I/O, object saturation, scopes, manual recovery, service restart and two VM boots with an independent on-disk oracle. The [native recovery increment](FILE-RECOVERY.md) adds durable receipts, retry epochs, volume lineage and selected guest EIO/reboot tests. Stable workspace-generation references, generic helper delegation and the complete logical service-v1 schema remain open. See [SERVICE-CONTRACTS.md](SERVICE-CONTRACTS.md), #12/#13/#22/#43.

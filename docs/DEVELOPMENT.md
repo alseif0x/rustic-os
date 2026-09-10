@@ -74,7 +74,7 @@ The FAT32/UEFI image can already be built and booted. [Boot commands and limits]
 
 ## CI and negative testing
 
-.github/workflows/check.yml runs the same cargo xtask check on ubuntu-24.04 for push and pull_request. Actions are pinned by SHA, the token has contents:read permissions, checkout does not persist credentials, and no project secrets are supplied. Toolchain versions, logs and the no_std library are retained as artifacts for 14 days. A separate job installs pinned QEMU/OVMF, tests the runner and boots all twenty scenarios, preserving images and evidence.
+.github/workflows/check.yml runs the same cargo xtask check on ubuntu-24.04 for push and pull_request. Actions are pinned by SHA, the token has contents:read permissions, checkout does not persist credentials, and no project secrets are supplied. Toolchain versions, logs and the no_std library are retained as artifacts for 14 days. A separate job installs pinned QEMU/OVMF, tests the runner and boots all twenty-two scenarios, preserving images and evidence.
 
 Next, tools/check-failure.sh introduces a deliberately failing test and requires cargo xtask check to reject it. The check identifies the expected marker so a compilation or tooling error cannot count as evidence. Run it only in a disposable checkout: it formats and temporarily adds the fixture, removing it on exit.
 

@@ -2,6 +2,7 @@
 #![no_std]
 #![no_main]
 mod actions;
+mod recovery;
 rustic_sdk::entry!(run);
 fn run(files: u64, control: u64, peer: u64) -> u64 {
     let endpoint = rustic_sdk::ipc::Endpoint::from_bootstrap(control);

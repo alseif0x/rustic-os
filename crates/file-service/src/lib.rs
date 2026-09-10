@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 mod authority;
 mod dispatch;
+mod recovery;
 mod reply;
 mod transfer;
 pub use authority::{CLIENTS, Grant};

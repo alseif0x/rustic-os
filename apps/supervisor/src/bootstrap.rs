@@ -22,7 +22,7 @@ pub fn file_service(initialize: bool) -> Result<(u64, Rpc, Client), ()> {
             return Err(());
         }
         let mut admin = Rpc::new(endpoint.token(), files);
-        let generation = grant(&mut admin, 1, me, data[1], 0, 3, 0)?;
+        let generation = owner_grant(&mut admin, 1, me, data[1])?;
         Ok((files, admin, Client::new(data[0], files, generation)))
     })();
     if result.is_err() {
@@ -40,7 +40,7 @@ pub fn start(initialize: bool) -> Result<State, ()> {
     let shell = spawn(k::SHELL)?;
     let control = connect(me, shell)?;
     let data = connect(files, shell)?;
-    let generation = grant(&mut admin, 0, shell, data[0], 0, 3, 0)?;
+    let generation = owner_grant(&mut admin, 0, shell, data[0])?;
     call([k::CONSOLE_GRANT, shell, 0, 0, 0, 0, 0, 0])?;
     super::services::start(shell, [data[1], control[1], generation as u64])?;
     Ok(State {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use rustic_abi::files::{Error, READ_RIGHT, WRITE_RIGHT};
+use rustic_abi::files::{Error, INSPECT_RIGHT, READ_RIGHT, WRITE_RIGHT};
 use rustic_fs::Volume;
 pub const CLIENTS: usize = 4;
 #[derive(Clone, Copy, Debug)]
@@ -10,6 +10,8 @@ pub struct Grant {
     pub rights: u8,
     pub generation: u32,
     pub expires: u64,
+    /// Trusted recovery identity; zero means no durable-operation authority.
+    pub subject: u64,
 }
 impl Grant {
     pub(super) fn check(&self, peer: u64, context: u32, now: u64) -> Result<(), Error> {
@@ -23,6 +25,16 @@ impl Grant {
             return Err(Error::Expired);
         }
         Ok(())
+    }
+    pub(super) fn inspect(&self, volume: &Volume, id: u32) -> Result<(), Error> {
+        if self.subject == 0
+            || self.rights & INSPECT_RIGHT == 0
+            || !(self.scope == 0 || self.scope == id || volume.within(id, self.scope))
+        {
+            Err(Error::Denied)
+        } else {
+            Ok(())
+        }
     }
     pub(super) fn access(&self, volume: &Volume, id: u32, write: bool) -> Result<(), Error> {
         let right = if write { WRITE_RIGHT } else { READ_RIGHT };

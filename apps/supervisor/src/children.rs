@@ -28,17 +28,17 @@ impl State {
     ) -> Result<u64, u64> {
         if !matches!(
             role,
-            s::SPIN | s::FAULT | s::READ | s::PROBE | s::FINISH | s::WATCH
+            s::SPIN | s::FAULT | s::READ | s::PROBE | s::FINISH | s::WATCH | s::LOST_REPLY
         ) || lease > 360000
         {
             return Err(1);
         }
-        let file_access = matches!(role, s::READ | s::PROBE | s::WATCH);
+        let file_access = matches!(role, s::READ | s::PROBE | s::WATCH | s::LOST_REPLY);
         if file_access {
             if self.policy == 0 {
                 return Err(2);
             }
-            if scope == 0 || rights == 0 || rights & !3 != 0 {
+            if scope == 0 || rights != if role == s::LOST_REPLY { 7 } else { 1 } {
                 return Err(2);
             }
             self.owner.stat(scope).map_err(|_| 2u64)?;
@@ -59,16 +59,36 @@ impl State {
             };
             let generation = if file_access {
                 data = connect(self.files, pid).map_err(|_| 3u64)?;
-                grant(
-                    &mut self.admin,
-                    slot + 2,
-                    pid,
-                    data[0],
-                    scope,
-                    rights,
-                    expires,
-                )
-                .map_err(|_| 2u64)?
+                if role == s::LOST_REPLY {
+                    let r = self
+                        .admin
+                        .words([
+                            32,
+                            (slot + 2) as u64,
+                            pid,
+                            data[0],
+                            scope as u64,
+                            7,
+                            expires,
+                            1,
+                        ])
+                        .map_err(|_| 4u64)?;
+                    if r[0] != 0 {
+                        return Err(2);
+                    }
+                    u32::try_from(r[1]).map_err(|_| 4u64)?
+                } else {
+                    grant(
+                        &mut self.admin,
+                        slot + 2,
+                        pid,
+                        data[0],
+                        scope,
+                        rights,
+                        expires,
+                    )
+                    .map_err(|_| 2u64)?
+                }
             } else {
                 0
             };

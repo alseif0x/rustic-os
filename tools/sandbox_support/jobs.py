@@ -107,7 +107,7 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
                       "/opt/controller/worker.py", phase, revision]
             if phase == "boot":
                 worker += [mode, str(boot_timeout)]
-            limit = build_timeout if phase == "build" else boot_timeout * (4 if mode == "terminal-test" else 2 if mode in ("block-persist", "block-user") else 1) + 30
+            limit = build_timeout if phase == "build" else boot_timeout * (16 if mode == "recovery-test" else 4 if mode == "terminal-test" else 2 if mode in ("block-persist", "block-user") else 1) + 30
             try:
                 with input_path.open("rb") as stream:
                     code = command(worker, directory / (phase + ".log"), timeout=limit, stdin=stream)
@@ -133,8 +133,10 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
             else:
                 sizes = {"result.json": 65536, "image.json": 65536, "serial.log": 1048576,
                          "qemu.log": 1048576, "rustic-os.img": 67108864}
+                if mode == "recovery-test":
+                    sizes.update({"recovery.json":65536,"files.bin":89088})
                 if mode=="terminal-test":
-                    sizes.update({"terminal.json":65536,"files.bin":81920})
+                    sizes.update({"terminal.json":65536,"files.bin":89088})
                 if mode.startswith("block-"):
                     sizes.update({"block.json": 65536, "blocks.bin": 2048})
                 for name, maximum in sizes.items():

@@ -4,19 +4,16 @@
 mod admin;
 mod disk;
 mod serving;
+mod startup;
 rustic_sdk::entry!(run);
 fn run(block: u64, admin: u64, initialize: u64) -> u64 {
     let mut disk = disk::Disk::new(block);
-    let volume = if initialize == 1 {
-        rustic_fs::Volume::initialize(&mut disk)
-    } else {
-        rustic_fs::Volume::mount(&mut disk)
-    };
+    let volume = startup::load(&mut disk, initialize == 1);
     let endpoint = rustic_sdk::ipc::Endpoint::from_bootstrap(admin);
     match volume {
         Ok(volume) => serving::run(
             &mut disk,
-            rustic_file_service::Server::new(volume),
+            &mut rustic_file_service::Server::new(volume),
             endpoint,
         ),
         Err(error) => {

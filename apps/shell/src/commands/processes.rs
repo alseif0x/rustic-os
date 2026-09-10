@@ -28,6 +28,15 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                     exact(a, 3)?;
                     (p::READ, s.files.resolve(s.cwd, argument(a, 2)?)?, 0, 1)
                 }
+                "lost-reply" => {
+                    exact(a, 4)?;
+                    (
+                        p::LOST_REPLY,
+                        s.files.resolve(s.cwd, argument(a, 2)?)?,
+                        s.files.resolve(s.cwd, argument(a, 3)?)?,
+                        7,
+                    )
+                }
                 "probe" => {
                     exact(a, 4)?;
                     (

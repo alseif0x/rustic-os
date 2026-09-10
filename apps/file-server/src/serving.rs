@@ -12,7 +12,9 @@ fn detach(server: &mut Server, slot: usize) {
     }
     server.detach(slot);
 }
-pub fn run(disk: &mut super::disk::Disk, mut server: Server, admin: Endpoint) -> u64 {
+// Keep startup-owned buffers out of the live request stack.
+#[inline(never)]
+pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -> u64 {
     let ready = Message::new(0, &wire::encode([0, 1, 32, 1024, 0, 0, 0, 0])).unwrap();
     if admin.send(&ready).is_err() {
         return 1;
@@ -37,7 +39,7 @@ pub fn run(disk: &mut super::disk::Disk, mut server: Server, admin: Endpoint) ->
                         if slot == CLIENTS {
                             return 2;
                         }
-                        detach(&mut server, slot);
+                        detach(server, slot);
                     }
                 }
             }
@@ -55,7 +57,7 @@ pub fn run(disk: &mut super::disk::Disk, mut server: Server, admin: Endpoint) ->
                         Ok(words) => {
                             let slot = words[1] as usize;
                             let old = server.grant_at(slot);
-                            let r = super::admin::dispatch(&mut server, words);
+                            let r = super::admin::dispatch(server, disk, words);
                             if r[0] == 0 && matches!(words[0], 32 | 33 | 35) && slot < CLIENTS {
                                 // Never deliver a queued reply into a newly granted context.
                                 replies[slot] = None;
@@ -101,7 +103,7 @@ pub fn run(disk: &mut super::disk::Disk, mut server: Server, admin: Endpoint) ->
                     *reply = Some(Message::new(message.correlation(), &output.encode()).unwrap());
                 }
                 Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {}
-                Err(_) => detach(&mut server, slot),
+                Err(_) => detach(server, slot),
             }
         }
         let mut tokens = [0; CLIENTS + 1];

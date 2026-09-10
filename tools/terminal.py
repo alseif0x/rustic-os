@@ -9,10 +9,13 @@ import environment
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--initialize", action="store_true", help="create a NEW dedicated disk; never overwrite an existing one")
+    parser.add_argument("--upgrade-recovery", action="store_true", help="back up legacy filesystem sectors and provision a one-way receipt-format upgrade")
     args = parser.parse_args()
+    if args.initialize and args.upgrade_recovery:
+        parser.error("--initialize and --upgrade-recovery are mutually exclusive")
     directory = environment.ROOT / "artifacts/terminal"
     image = build("terminal-init" if args.initialize else "terminal")
-    with disk(directory / "data.raw", args.initialize) as data:
+    with disk(directory / "data.raw", args.initialize, args.upgrade_recovery) as data:
         print("Starting native RusticOS. Type exit for a clean stop. QEMU emergency exit: Ctrl-A X.", flush=True)
         with machine(image, data, "stdio", directory / "qemu.log") as process:
             code = process.wait()

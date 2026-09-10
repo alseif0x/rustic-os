@@ -4,9 +4,9 @@ import hashlib
 import struct
 import zlib
 
-def inspect(data):
+def snapshot(data):
     with data.open("rb") as stream:
-        selected = stream.read(160 * 512)
+        selected = stream.read(174 * 512)
         stream.seek(-512, 2)
         end = stream.read(512)
     if selected[:512] != bytes(512) or end != bytes(512):
@@ -14,7 +14,7 @@ def inspect(data):
     banks = []
     for sector in (8, 13):
         header = bytearray(selected[sector*512:(sector+1)*512])
-        if header[:12] != b"RUSTFS1\0\x01\0\0\x02":
+        if header[:8] != b"RUSTFS1\0" or header[8] not in (1, 2) or header[9:12] != b"\0\0\x02":
             continue
         expected = struct.unpack_from("<I", header, 28)[0]
         header[28:32] = bytes(4)
@@ -22,11 +22,17 @@ def inspect(data):
         if zlib.crc32(header) != expected or zlib.crc32(metadata) != struct.unpack_from("<I",header,24)[0]:
             continue
         sequence = struct.unpack_from("<Q",header,12)[0]
-        banks.append((sequence, metadata))
+        recovery = None
+        if header[8] == 2:
+            start = (160 + (sector == 13) * 7) * 512
+            recovery = selected[start:start + 7*512]
+            if zlib.crc32(recovery) != struct.unpack_from("<I", header, 32)[0]:
+                continue
+        banks.append((sequence, metadata, recovery))
     if not banks:
         raise AssertionError("no committed filesystem metadata bank")
-    sequence, metadata = max(banks)
-    files = {}
+    sequence, metadata, recovery = max(banks, key=lambda b: b[0])
+    files, nodes = {}, {}
     for slot in range(32):
         node = metadata[slot*64:(slot+1)*64]
         if node[0] != 1:
@@ -38,6 +44,34 @@ def inspect(data):
         if length and zlib.crc32(content[:length]) != struct.unpack_from("<I",node,24)[0]:
             raise AssertionError("file data checksum mismatch")
         files[(parent,node[32:32+node[3]].decode("ascii"))] = content[:length]
+        nodes[struct.unpack_from("<I",node,8)[0]] = {"version":struct.unpack_from("<Q",node,16)[0],"content":content[:length]}
+    records = []
+    if recovery is not None:
+        if recovery[:8] != b"RUSTREC1" or any(recovery[32:512]):
+            raise AssertionError("invalid recovery state")
+        lineage = recovery[8:24].hex()
+        envelope = bytearray(selected[512:1024])
+        checksum = struct.unpack_from("<I",envelope,24)[0]
+        envelope[24:28] = bytes(4)
+        if envelope[:8] != b"RUSTVOL1" or envelope[8:24] != recovery[8:24] or zlib.crc32(envelope) != checksum:
+            raise AssertionError("lineage envelope differs from committed recovery identity")
+        epoch = struct.unpack_from("<Q", recovery, 24)[0]
+        for slot in range(2):
+            p = recovery[512+slot*1536:512+(slot+1)*1536]
+            if not any(p):
+                continue
+            length = struct.unpack_from("<H",p,28)[0]
+            if length > 1024 or any(p[30:32]) or any(p[48:512]) or any(p[512+length:]):
+                raise AssertionError("invalid receipt padding/length")
+            records.append({"subject":struct.unpack_from("<Q",p)[0],"epoch":struct.unpack_from("<Q",p,8)[0],"key":struct.unpack_from("<Q",p,16)[0],"id":struct.unpack_from("<I",p,24)[0],"previous":struct.unpack_from("<Q",p,32)[0],"committed":struct.unpack_from("<Q",p,40)[0],"content":p[512:512+length]})
+    else:
+        lineage, epoch = None, None
+    return selected, {"sequence":sequence,"files":files,"nodes":nodes,"records":records,"lineage":lineage,"epoch":epoch,"selected_sha256":hashlib.sha256(selected).hexdigest()}
+
+def inspect(data):
+    selected, state = snapshot(data)
+    files = state["files"]
+    sequence = state["sequence"]
     if len(files)!=2:
         raise AssertionError("temporary files were not reclaimed")
     if files.get((4,"hello")) != b"Hello from native Rust":

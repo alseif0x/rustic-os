@@ -55,6 +55,16 @@ pub fn grant(
     }
     u32::try_from(r[1]).map_err(|_| ())
 }
+/// The local owner is a stable recovery subject, never a client-supplied identity.
+pub fn owner_grant(admin: &mut Rpc, slot: usize, peer: u64, endpoint: u64) -> Result<u32, ()> {
+    let r = admin
+        .words([32, slot as u64, peer, endpoint, 0, 7, 0, 1])
+        .map_err(|_| ())?;
+    if r[0] != 0 {
+        return Err(());
+    }
+    u32::try_from(r[1]).map_err(|_| ())
+}
 pub fn detach(admin: &mut Rpc, slot: usize) -> Result<(), ()> {
     let r = admin
         .words([35, slot as u64, 0, 0, 0, 0, 0, 0])

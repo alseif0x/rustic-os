@@ -12,10 +12,13 @@ EXPECTED = {"ok": "success", "panic": "panic", "hang": "timeout", "invalid": "fa
 EXPECTED.update({mode: "exception" for mode in MEMORY_FAULTS})
 EXPECTED.update({mode: "success" for mode in BLOCK_MODES})
 EXPECTED["terminal-test"]="success"
+EXPECTED["recovery-test"]="success"
 MODES = tuple(EXPECTED) + ("terminal", "terminal-init")
 
 
 def reached(mode, serial):
+    if mode == "recovery-test":
+        return serial.count("RusticOS native terminal 0.1") == 14 and serial.count("error: Uncertain") == 5 and "IdempotencyConflict" in serial and "ExpiredEpoch" in serial and "RUSTIC PANIC" not in serial
     if mode == "terminal-test":
         return serial.count("RUSTIC TERMINAL stopped=1 reclaimed=1") == 2 and serial.count("RusticOS native terminal 0.1") == 2 and "RUSTIC PANIC" not in serial
     if mode in BLOCK_MODES:

@@ -14,6 +14,11 @@ pub const CHUNK: u8 = 8;
 pub const COMMIT: u8 = 9;
 pub const ABORT: u8 = 10;
 pub const MKDIR: u8 = 11;
+pub const RECOVERY: u8 = 12;
+pub const TRACK_BEGIN: u8 = 13;
+pub const RECEIPT: u8 = 14;
+pub const INSPECT_RIGHT: u8 = 4;
+pub mod recovery;
 pub const GRANT: u8 = 32;
 pub const REVOKE: u8 = 33;
 pub const STATUS: u8 = 34;
@@ -45,6 +50,11 @@ pub enum Error {
     NoTransfer = 21,
     Offset = 22,
     Closed = 23,
+    Unsupported = 24,
+    Lineage = 25,
+    ExpiredEpoch = 26,
+    OutcomeUnknown = 27,
+    IdempotencyConflict = 28,
 }
 impl Error {
     pub fn parse(value: u8) -> Result<(), Self> {
@@ -73,6 +83,11 @@ impl Error {
             21 => Self::NoTransfer,
             22 => Self::Offset,
             23 => Self::Closed,
+            24 => Self::Unsupported,
+            25 => Self::Lineage,
+            26 => Self::ExpiredEpoch,
+            27 => Self::OutcomeUnknown,
+            28 => Self::IdempotencyConflict,
             _ => Self::Protocol,
         })
     }
@@ -118,7 +133,7 @@ impl Packet {
         if b.len() != SIZE
             || b[0] != VERSION
             || b[3] as usize > DATA
-            || !matches!(b[1],1..=11|32..=34)
+            || !matches!(b[1],1..=14|32..=34)
         {
             return Err(Error::Protocol);
         }

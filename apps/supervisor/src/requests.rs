@@ -5,7 +5,7 @@ use rustic_sdk::{abi::supervisor as s, runtime::abi as k};
 impl State {
     pub fn request(&mut self, w: [u64; 8]) -> Result<[u64; 8], u64> {
         let end = match w[0] {
-            s::INFO | s::EXIT | s::SERVICES | s::RESTART => 1,
+            s::INFO | s::EXIT | s::SERVICES | s::RESTART | s::ROTATE_RECEIPTS => 1,
             s::PROCESS | s::KILL | s::REAP | s::PERMISSIONS | s::REVOKE => 2,
             s::RUN => 6,
             _ => return Err(1),
@@ -23,6 +23,14 @@ impl State {
                 Ok([0, r[0], r[1], r[2], r[3], r[4], r[5], r[6]])
             }
             s::RESTART => self.restart(),
+            s::ROTATE_RECEIPTS => {
+                let r = self
+                    .admin
+                    .words([36, 0, 0, 0, 0, 0, 0, 0])
+                    .map_err(|_| 4u64)?;
+                // Preserve the file error in a successful owner-control envelope.
+                Ok([0, r[0], r[1], 0, 0, 0, 0, 0])
+            }
             s::SERVICES => Ok([0, self.files, self.shell, self.policy as u64, 1, 0, 0, 0]),
             s::RUN => self
                 .launch(
@@ -43,7 +51,7 @@ impl State {
             s::REAP => self.reap(w[1]),
             s::PERMISSIONS => {
                 if w[1] == 0 {
-                    return Ok([0, 0, 3, 0, 0, 0, 0, 0]);
+                    return Ok([0, 0, 7, 0, 0, 0, 0, 0]);
                 }
                 let c = self
                     .children
