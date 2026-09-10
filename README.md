@@ -35,7 +35,9 @@ The goal is agent control without mandatory screen interpretation. A graphical i
 | [Recoverable writes](docs/FILE-RECOVERY.md) | Durable receipts, exact replay, conflict/epoch fencing, lost replies and selected native I/O failures |
 | [Isolated test executor](docs/EXECUTOR.md) | Exact Git revisions, offline jobs, resource limits, cancellation and structured evidence |
 
-The current acceptance suite covers **85 Rust tests, 37 Python tests, 22 VM scenarios and 26 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [terminal acceptance and limits](docs/TERMINAL.md) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees. Separately, the [service contract suite](docs/SERVICE-CONTRACTS.md) validates 62 messages, nine exchanges and 14 host checks; those do not execute guest services.
+The current acceptance suite covers **85 Rust tests, 75 Python tests, 22 VM scenarios and 26 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [terminal acceptance and limits](docs/TERMINAL.md) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees. Separately, the [service contract suite](docs/SERVICE-CONTRACTS.md) validates 62 messages, nine exchanges and 14 host checks; those do not execute guest services.
+
+The [measurement harness](docs/MEASUREMENTS.md) adds repeated native resource/control workloads, a held-out unchanged batch and a real delayed-service regression. Its budgets are derived from a compatible baseline; failed samples and different hosts cannot be pooled.
 
 The current VM uses **x86_64, one CPU and 256 MiB RAM**. Process and IPC limits are deliberately small; see their contracts before building on them.
 

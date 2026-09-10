@@ -43,17 +43,24 @@ pub(super) fn verify(manager: &mut Manager, memory: &mut Memory) -> usize {
         );
         let previous = manager.process(victim).unwrap().preemptions;
         let progress = manager.process(victim).unwrap().fixture_progress();
+        // A timer IRQ can arrive on user entry before the fixture reaches or
+        // advances its spin loop. Require actual user progress as well as a
+        // preemption within the same bounded event budget.
         for _ in 0..16 {
             manager.step(memory).unwrap();
-            if manager.process(victim).unwrap().preemptions > previous {
+            let survivor = manager.process(victim).unwrap();
+            if survivor.preemptions > previous && survivor.fixture_progress() > progress {
                 break;
             }
         }
         assert!(
             manager.process(victim).unwrap().preemptions > previous,
-            "survivor must run after peer fault"
+            "{name}: survivor must be timer-preempted after peer fault"
         );
-        assert!(manager.process(victim).unwrap().fixture_progress() > progress);
+        assert!(
+            manager.process(victim).unwrap().fixture_progress() > progress,
+            "{name}: survivor must make user progress after peer fault"
+        );
         assert_eq!(SENTINEL.load(core::sync::atomic::Ordering::Relaxed), 0x1234);
         manager.kill(victim).unwrap();
         assert_eq!(manager.wait(memory, victim).unwrap(), Some(Exit::Killed));

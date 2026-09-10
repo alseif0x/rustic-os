@@ -41,7 +41,7 @@ def run(image, timeout):
     return run_once(image, timeout)
 
 
-def run_once(image, timeout, storage=(), output=None):
+def run_once(image, timeout, storage=(), output=None, on_start=None):
     image = Path(image).resolve()
     directory = output or image.parent
     metadata = json.loads((image.parent / "image.json").read_text())
@@ -69,6 +69,8 @@ def run_once(image, timeout, storage=(), output=None):
         with (directory / "qemu.log").open("w") as log:
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
             try:
+                if on_start is not None:
+                    on_start()
                 returncode = process.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
                 timed_out = True
