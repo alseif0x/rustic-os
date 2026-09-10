@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    Disk, Error, Kind, Node, OBJECTS, SECTORS, checksum::crc, format::Metadata,
-    namespace::valid_name, storage,
-};
+use crate::{Disk, Error, Kind, Node, OBJECTS, SECTORS, format::Metadata, namespace::valid_name};
 pub struct Volume {
     pub(crate) metadata: Metadata,
     pub(crate) bank: u8,
@@ -159,30 +156,5 @@ impl Volume {
         self.metadata = next;
         self.bank = 1 - self.bank;
         Ok(())
-    }
-    pub fn read(
-        &self,
-        disk: &mut impl Disk,
-        id: u32,
-        offset: usize,
-        output: &mut [u8],
-    ) -> Result<usize, Error> {
-        let node = self.stat(id)?;
-        if node.kind != Kind::File {
-            return Err(Error::IsDirectory);
-        }
-        if offset > usize::from(node.length) {
-            return Err(Error::Size);
-        }
-        if node.length == 0 {
-            return Ok(0);
-        }
-        let bytes = storage::read_data(disk, self.metadata.index(id)?, node.bank)?;
-        if crc(&bytes[..usize::from(node.length)]) != node.checksum {
-            return Err(Error::Corrupt);
-        }
-        let length = output.len().min(usize::from(node.length) - offset);
-        output[..length].copy_from_slice(&bytes[offset..offset + length]);
-        Ok(length)
     }
 }

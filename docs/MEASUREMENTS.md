@@ -118,3 +118,31 @@ Implementer review plus two additional code reviews addressed evidence completen
 Before adding a resident service, record its process/channel/handle/memory costs, add an effect-verified workload and preserve owner progress under its queue pressure/failure. Version the workload and establish a separate baseline when its meaning changes. Networking adds bounded local-fixture RTT/bytes and loss recovery; GUI/browser add frame/input and memory measurements for versioned scenes; the pilot adds operation success, denial/conflict/retry and provider-budget accounting. Capability adaptation in #38 consumes reviewed budgets; it must not reinterpret a single timing sample as an automatic policy decision.
 
 Peak user-stack instrumentation, larger latency samples, hardware profiles and any production targets remain future measurement extensions. This initial harness can close #20 without implementing future services. It does not close those services, H1 as a whole or the wider v0.1 missions.
+
+
+## Native read calibration — 2026-09-10
+
+[Retained native-read samples and comparisons](measurements/r0-read-v1.json) record a fresh successful 36-boot verification of the stable-reference/range-read increment. All three warmups and fifteen measured repetitions passed. The unchanged control passes all 17 budgets; the real 100-tick service delay raises the read median to 1.0133 s, above the pre-established 0.0753 s limit. No sample was removed and no limit was widened after observing the control.
+
+| Read round trip | Median | Min–max | MAD |
+| --- | ---: | ---: | ---: |
+| Baseline | 0.0253 s | 0.0233–0.0323 s | 0.0020 s |
+| Unchanged control | 0.0298 s | 0.0208–0.0321 s | 0.0022 s |
+| Injected delay | 1.0133 s | 1.0052–1.0204 s | 0.0063 s |
+
+The same small-file workload now exercises the shell's checked native range read, including reference resolution, version pinning and SHA-256 validation. It does not measure 1 KiB throughput. Boot-ready baseline median is 3.6078 s (3.5006–3.9029 s); these five observations remain reference-VM measurements, without a hardware or worst-case guarantee.
+
+The image packager changed to preserve the added dependency notices, changing the harness configuration hash. The automatic historical comparison correctly returns `incomparable`; its result is retained. This is a separate baseline, not a passing comparison against the initial timing budgets. The following counters show the reviewed resource growth relative to the retained initial report:
+
+| Counter | Initial report | Native read | Difference |
+| --- | ---: | ---: | ---: |
+| Static kernel load reservation, including embedded programs | 651,264 B | 716,800 B | +64 KiB |
+| Resident runtime | 111 frames | 120 frames | +9 frames / 36 KiB |
+| Sampled C/H pressure growth above resident runtime | 58 frames | 68 frames | +10 frames / 40 KiB |
+| Process diagnostic peak | 200 frames | 200 frames | unchanged |
+| Allocator / manager metadata | 65,536 / 9,608 B | 65,536 / 9,608 B | unchanged |
+| Reported kernel page-table frames | 16 | 15 | −1 frame |
+
+The added service/SDK hashing and typed reference/range handling increase the linked native programs. This growth is accepted for the delivered checked-read contract within the unchanged eight-process/eight-channel and 64 KiB stack bounds. No kernel memory implementation or quota was changed; the page-table count is a measured layout-sensitive value, not a claimed MMU optimization. These accounting categories overlap and must not be added as a total. Stack high-water usage remains unmeasured. Reclamation and owner progress pass in every repetition.
+
+Measured guest identity: build `106b9b6c3577ea54`, ELF SHA-256 `e4ee53c682ef965cb1f93a4276ce8d9d371354a95547b152b647a8f510112f76`, configuration `bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e`. Source was the explicitly recorded working tree over `212acb9`; these binary hashes identify the actual code. The exact same ELF passed the direct native read/recovery suite. Publication CI retains its own separate calibration.

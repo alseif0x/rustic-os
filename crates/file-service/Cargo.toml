@@ -12,3 +12,4 @@ workspace = true
 [dependencies]
 rustic-abi = { path = "../abi" }
 rustic-fs = { path = "../fs" }
+sha2.workspace = true

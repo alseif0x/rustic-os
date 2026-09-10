@@ -34,6 +34,10 @@ pub mod actor {
     pub const DRAIN: u64 = 5;
     pub const MOVED: u64 = 6;
     pub const STALE: u64 = 7;
+    pub const API_READ: u64 = 8;
+    pub const READ_OPEN: u64 = 9;
+    pub const READ_NEXT: u64 = 10;
+    pub const FILL: u64 = 11;
 }
 pub const SPIN: u64 = 1;
 pub const FAULT: u64 = 2;

@@ -3,6 +3,7 @@
 #![no_main]
 mod actions;
 mod pressure;
+mod read;
 mod recovery;
 mod session;
 rustic_sdk::entry!(run);

@@ -1,0 +1,2494 @@
+{
+  "SPDX-License-Identifier": "Apache-2.0",
+  "schema": 1,
+  "scope": "Native read local WSL R0 recalibration; five measured repetitions plus one validated excluded warmup per batch. Separate configuration from the initial baseline; not a hardware benchmark or production SLO.",
+  "verification": {
+    "schema": 1,
+    "status": "success",
+    "source": {
+      "revision": "212acb9f545f4e7495f75914b059c0ab262abdc1",
+      "worktree_status": " M .cargo/config.toml\n M .github/workflows/check.yml\n M Cargo.lock\n M Cargo.toml\n M LICENSE\n M README.md\n M apps/shell/src/commands/authority.rs\n M apps/shell/src/commands/files.rs\n M apps/shell/src/commands/mod.rs\n M apps/supervisor/src/sessions.rs\n M apps/utility/src/main.rs\n M apps/utility/src/session.rs\n M crates/abi/src/files.rs\n M crates/abi/src/supervisor.rs\n M crates/file-service/Cargo.toml\n M crates/file-service/src/dispatch.rs\n M crates/file-service/src/lib.rs\n M crates/file-service/src/validation.rs\n M crates/fs/src/lib.rs\n M crates/fs/src/volume.rs\n M crates/sdk/Cargo.toml\n M crates/sdk/src/files/mod.rs\n M docs/DEVELOPMENT.md\n M docs/FILE-RECOVERY.md\n M docs/FILES.md\n M docs/README.md\n M docs/SDK.md\n M docs/SERVICE-CONTRACTS.md\n M docs/TERMINAL.md\n M docs/dependencies.md\n M tools/boot_support/image.py\n M tools/contracts/__init__.py\n M tools/contracts/__main__.py\n M tools/sandbox_support/prepare.py\n M tools/terminal_support/acceptance.py\n?? apps/shell/src/commands/read.rs\n?? apps/utility/src/read.rs\n?? contracts/services/v1/fixtures/read-ranges.json\n?? crates/abi/src/files/read/\n?? crates/abi/src/files/reference.rs\n?? crates/abi/src/files/reference/\n?? crates/abi/tests/file_read.rs\n?? crates/file-service/src/read.rs\n?? crates/file-service/tests/read.rs\n?? crates/fs/src/read.rs\n?? crates/fs/src/references.rs\n?? crates/fs/tests/references.rs\n?? crates/sdk/src/files/range/\n?? crates/sdk/src/files/references.rs\n?? crates/sdk/tests/file_read.rs\n?? docs/FILES-READ.md\n?? licenses/block-buffer-MIT.txt\n?? licenses/cfg-if-MIT.txt\n?? licenses/cpufeatures-MIT.txt\n?? licenses/crypto-common-MIT.txt\n?? licenses/digest-MIT.txt\n?? licenses/hybrid-array-MIT.txt\n?? licenses/sha2-MIT.txt\n?? licenses/typenum-MIT.txt\n?? tools/contracts/read_conformance.py\n?? tools/contracts/read_vectors.py\n?? tools/contracts/tests/test_read_conformance.py\n?? tools/terminal_support/read_cases.py\n?? tools/tests/test_read_adapter.py\n",
+      "build_id": "106b9b6c3577ea54",
+      "kernel_sha256": "e4ee53c682ef965cb1f93a4276ce8d9d371354a95547b152b647a8f510112f76",
+      "image_sha256": {
+        "terminal": "7e7b76ba769bb8dfd26a4b5e44ba25944fc7193f064943c1d54061ce8923737b",
+        "ok": "5663df282707d4931bded35994a7b5d1e1cd6770f74c17239357e75c2480642a"
+      }
+    },
+    "configuration_id": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+    "control_status": "pass",
+    "regression_status": "regression",
+    "injected_read_regression_detected": true,
+    "measured_samples_per_batch": 5,
+    "warmups_per_batch": 1,
+    "native_vm_boots": 36
+  },
+  "configuration": {
+    "workload": "r0-owner-control-v1",
+    "harness": "58b1a461ab593d31ec8792fccf32e06233c3e5f08d4dadc29eb0866121f7c584",
+    "reference": {
+      "rust": "1.98.1",
+      "target": "x86_64-unknown-none",
+      "linker": "rust-lld bundled with rustc 1.98.1",
+      "machine": "pc-q35-8.2",
+      "cpu": "qemu64",
+      "accelerator": "tcg",
+      "boot_image": "64 MiB FAT32 removable UEFI volume, read-only virtio drive in QEMU",
+      "protocol": {
+        "binding": "limine 0.5.0",
+        "base_revision": 3,
+        "specification_commit": "da65184e91f80fcb397270121b1e2515a11e01ee"
+      },
+      "packages": {
+        "qemu-system-x86": "1:8.2.2+ds-0ubuntu1.18",
+        "ovmf": "2024.02-2ubuntu0.9",
+        "mtools": "4.0.43-1build1",
+        "dosfstools": "4.2-1.1build1",
+        "xorriso": "1:1.5.6-1.1ubuntu3"
+      },
+      "firmware": {
+        "/usr/share/OVMF/OVMF_CODE_4M.fd": "949bfa5389c4c48582737481e7d24f46b3a16b276ef44c4089a56858c6a0a446",
+        "/usr/share/OVMF/OVMF_VARS_4M.fd": "5d2ac383371b408398accee7ec27c8c09ea5b74a0de0ceea6513388b15be5d1e"
+      },
+      "bootloader": {
+        "version": "12.8.0",
+        "url": "https://github.com/Limine-Bootloader/Limine/releases/download/v12.8.0/limine-binary.tar.gz",
+        "sha256": "e21b0a9ce1cf83e79eb0f3fa6d6de49a1b6d1288df11e2232e41c9f4916b673d"
+      },
+      "block": {
+        "transport": "legacy PCI I/O, disable-modern=on, disable-legacy=off",
+        "pci_function": "00:06.0",
+        "logical_bytes": 4294967296,
+        "sector_bytes": 512,
+        "queue_size": 8,
+        "queues": 1,
+        "vectors": 0,
+        "max_request_bytes": 512
+      }
+    },
+    "guest_mib": 256,
+    "guest_cpus": 1,
+    "data_bytes": 4294967296,
+    "cache": "writeback",
+    "network": "none",
+    "sample_protocol": {
+      "warmups": 1,
+      "admitted_hold_ticks": 200,
+      "timeout_seconds": 60
+    },
+    "host": {
+      "label": "local-wsl-r0",
+      "system": "Linux",
+      "release": "6.18.33.2-microsoft-standard-WSL2",
+      "architecture": "x86_64",
+      "cpu_model": "AMD Ryzen 7 8840HS w/ Radeon 780M Graphics",
+      "logical_cpus": 16,
+      "affinity": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "memory": "MemTotal:        7757480 kB",
+      "boot_identity_sha256": "1d23fead93028326d48ed8fbc545e9c9f9a6550a3939846284b8459053c95595",
+      "cgroup": {
+        "version": 2,
+        "membership_sha256": "c82a5e50fdf30fb92402b3c440664a9875c2112f5b9422e4194e12ce3c3b3374",
+        "ancestors": [
+          {
+            "depth": 0,
+            "controllers": [
+              "cpu",
+              "cpuset",
+              "hugetlb",
+              "io",
+              "memory",
+              "pids",
+              "rdma"
+            ],
+            "cpu_max": null,
+            "memory_max": null,
+            "cpuset_cpus_effective": "0-15",
+            "cpuset_mems_effective": "0"
+          },
+          {
+            "depth": 1,
+            "controllers": [
+              "cpu",
+              "cpuset",
+              "hugetlb",
+              "io",
+              "memory",
+              "pids",
+              "rdma"
+            ],
+            "cpu_max": "max 100000",
+            "memory_max": "max",
+            "cpuset_cpus_effective": "0-15",
+            "cpuset_mems_effective": "0"
+          }
+        ]
+      },
+      "output_filesystem": "9p",
+      "temporary_filesystem": "ext4",
+      "python": "3.12.3"
+    },
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n"
+  },
+  "reports": {
+    "baseline": {
+      "schema": 1,
+      "configuration": {
+        "workload": "r0-owner-control-v1",
+        "harness": "58b1a461ab593d31ec8792fccf32e06233c3e5f08d4dadc29eb0866121f7c584",
+        "reference": {
+          "rust": "1.98.1",
+          "target": "x86_64-unknown-none",
+          "linker": "rust-lld bundled with rustc 1.98.1",
+          "machine": "pc-q35-8.2",
+          "cpu": "qemu64",
+          "accelerator": "tcg",
+          "boot_image": "64 MiB FAT32 removable UEFI volume, read-only virtio drive in QEMU",
+          "protocol": {
+            "binding": "limine 0.5.0",
+            "base_revision": 3,
+            "specification_commit": "da65184e91f80fcb397270121b1e2515a11e01ee"
+          },
+          "packages": {
+            "qemu-system-x86": "1:8.2.2+ds-0ubuntu1.18",
+            "ovmf": "2024.02-2ubuntu0.9",
+            "mtools": "4.0.43-1build1",
+            "dosfstools": "4.2-1.1build1",
+            "xorriso": "1:1.5.6-1.1ubuntu3"
+          },
+          "firmware": {
+            "/usr/share/OVMF/OVMF_CODE_4M.fd": "949bfa5389c4c48582737481e7d24f46b3a16b276ef44c4089a56858c6a0a446",
+            "/usr/share/OVMF/OVMF_VARS_4M.fd": "5d2ac383371b408398accee7ec27c8c09ea5b74a0de0ceea6513388b15be5d1e"
+          },
+          "bootloader": {
+            "version": "12.8.0",
+            "url": "https://github.com/Limine-Bootloader/Limine/releases/download/v12.8.0/limine-binary.tar.gz",
+            "sha256": "e21b0a9ce1cf83e79eb0f3fa6d6de49a1b6d1288df11e2232e41c9f4916b673d"
+          },
+          "block": {
+            "transport": "legacy PCI I/O, disable-modern=on, disable-legacy=off",
+            "pci_function": "00:06.0",
+            "logical_bytes": 4294967296,
+            "sector_bytes": 512,
+            "queue_size": 8,
+            "queues": 1,
+            "vectors": 0,
+            "max_request_bytes": 512
+          }
+        },
+        "guest_mib": 256,
+        "guest_cpus": 1,
+        "data_bytes": 4294967296,
+        "cache": "writeback",
+        "network": "none",
+        "sample_protocol": {
+          "warmups": 1,
+          "admitted_hold_ticks": 200,
+          "timeout_seconds": 60
+        },
+        "host": {
+          "label": "local-wsl-r0",
+          "system": "Linux",
+          "release": "6.18.33.2-microsoft-standard-WSL2",
+          "architecture": "x86_64",
+          "cpu_model": "AMD Ryzen 7 8840HS w/ Radeon 780M Graphics",
+          "logical_cpus": 16,
+          "affinity": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "memory": "MemTotal:        7757480 kB",
+          "boot_identity_sha256": "1d23fead93028326d48ed8fbc545e9c9f9a6550a3939846284b8459053c95595",
+          "cgroup": {
+            "version": 2,
+            "membership_sha256": "c82a5e50fdf30fb92402b3c440664a9875c2112f5b9422e4194e12ce3c3b3374",
+            "ancestors": [
+              {
+                "depth": 0,
+                "controllers": [
+                  "cpu",
+                  "cpuset",
+                  "hugetlb",
+                  "io",
+                  "memory",
+                  "pids",
+                  "rdma"
+                ],
+                "cpu_max": null,
+                "memory_max": null,
+                "cpuset_cpus_effective": "0-15",
+                "cpuset_mems_effective": "0"
+              },
+              {
+                "depth": 1,
+                "controllers": [
+                  "cpu",
+                  "cpuset",
+                  "hugetlb",
+                  "io",
+                  "memory",
+                  "pids",
+                  "rdma"
+                ],
+                "cpu_max": "max 100000",
+                "memory_max": "max",
+                "cpuset_cpus_effective": "0-15",
+                "cpuset_mems_effective": "0"
+              }
+            ]
+          },
+          "output_filesystem": "9p",
+          "temporary_filesystem": "ext4",
+          "python": "3.12.3"
+        },
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n"
+      },
+      "configuration_id": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+      "source": {
+        "revision": "212acb9f545f4e7495f75914b059c0ab262abdc1",
+        "worktree_status": " M .cargo/config.toml\n M .github/workflows/check.yml\n M Cargo.lock\n M Cargo.toml\n M LICENSE\n M README.md\n M apps/shell/src/commands/authority.rs\n M apps/shell/src/commands/files.rs\n M apps/shell/src/commands/mod.rs\n M apps/supervisor/src/sessions.rs\n M apps/utility/src/main.rs\n M apps/utility/src/session.rs\n M crates/abi/src/files.rs\n M crates/abi/src/supervisor.rs\n M crates/file-service/Cargo.toml\n M crates/file-service/src/dispatch.rs\n M crates/file-service/src/lib.rs\n M crates/file-service/src/validation.rs\n M crates/fs/src/lib.rs\n M crates/fs/src/volume.rs\n M crates/sdk/Cargo.toml\n M crates/sdk/src/files/mod.rs\n M docs/DEVELOPMENT.md\n M docs/FILE-RECOVERY.md\n M docs/FILES.md\n M docs/README.md\n M docs/SDK.md\n M docs/SERVICE-CONTRACTS.md\n M docs/TERMINAL.md\n M docs/dependencies.md\n M tools/boot_support/image.py\n M tools/contracts/__init__.py\n M tools/contracts/__main__.py\n M tools/sandbox_support/prepare.py\n M tools/terminal_support/acceptance.py\n?? apps/shell/src/commands/read.rs\n?? apps/utility/src/read.rs\n?? contracts/services/v1/fixtures/read-ranges.json\n?? crates/abi/src/files/read/\n?? crates/abi/src/files/reference.rs\n?? crates/abi/src/files/reference/\n?? crates/abi/tests/file_read.rs\n?? crates/file-service/src/read.rs\n?? crates/file-service/tests/read.rs\n?? crates/fs/src/read.rs\n?? crates/fs/src/references.rs\n?? crates/fs/tests/references.rs\n?? crates/sdk/src/files/range/\n?? crates/sdk/src/files/references.rs\n?? crates/sdk/tests/file_read.rs\n?? docs/FILES-READ.md\n?? licenses/block-buffer-MIT.txt\n?? licenses/cfg-if-MIT.txt\n?? licenses/cpufeatures-MIT.txt\n?? licenses/crypto-common-MIT.txt\n?? licenses/digest-MIT.txt\n?? licenses/hybrid-array-MIT.txt\n?? licenses/sha2-MIT.txt\n?? licenses/typenum-MIT.txt\n?? tools/contracts/read_conformance.py\n?? tools/contracts/read_vectors.py\n?? tools/contracts/tests/test_read_conformance.py\n?? tools/terminal_support/read_cases.py\n?? tools/tests/test_read_adapter.py\n",
+        "build_id": "106b9b6c3577ea54",
+        "kernel_sha256": "e4ee53c682ef965cb1f93a4276ce8d9d371354a95547b152b647a8f510112f76",
+        "image_sha256": {
+          "terminal": "7e7b76ba769bb8dfd26a4b5e44ba25944fc7193f064943c1d54061ce8923737b",
+          "ok": "5663df282707d4931bded35994a7b5d1e1cd6770f74c17239357e75c2480642a"
+        }
+      },
+      "requested_samples": 5,
+      "injected_delay_ticks": 0,
+      "samples": [
+        {
+          "warmup": true,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.821069568999519,
+            "read_seconds": 0.03214334899894311,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.0051298569997015875,
+            "pressure_write_seconds": 0.06200685300063924,
+            "revoke_seconds": 0.011888209999597166,
+            "full_control_seconds": 0.008803799999441253,
+            "stopped_control_seconds": 0.40024036099930527,
+            "interrupt_seconds": 0.21007747900148388,
+            "admitted_control_seconds": 0.011848077003378421,
+            "drain_seconds": 2.060011719000613,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.31591796875,
+              2.0927734375,
+              1.9052734375
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "121f83be24c2d17cb31478182ed15293b625c4d49441cb453c46bedc34390188",
+          "host_observation_after": {
+            "load_average": [
+              1.28857421875,
+              2.03662109375,
+              1.8916015625
+            ]
+          },
+          "artifacts": {
+            "files.bin": "121f83be24c2d17cb31478182ed15293b625c4d49441cb453c46bedc34390188",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "a67eb5977349a1adc81812af8d537001969e44b5d3f7cafab5e3e95cbdab8afe",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "c8567786322f1bdf552f56fd72d077207b6ba1ba6e2a9286207d0658c25319d7"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.902944492001552,
+            "read_seconds": 0.025273549999837996,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.005770417999883648,
+            "pressure_write_seconds": 0.07237251900005504,
+            "revoke_seconds": 0.012775299001077656,
+            "full_control_seconds": 0.008501887998136226,
+            "stopped_control_seconds": 0.4000006740025128,
+            "interrupt_seconds": 0.21076143300160766,
+            "admitted_control_seconds": 0.011356402999808779,
+            "drain_seconds": 2.060477663999336,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.28857421875,
+              2.03662109375,
+              1.8916015625
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "02f314ae3648e1ce0d9b750b0e171d47124087a8119d3340a1f191c929a6501f",
+          "host_observation_after": {
+            "load_average": [
+              1.2392578125,
+              1.96728515625,
+              1.873046875
+            ]
+          },
+          "artifacts": {
+            "files.bin": "02f314ae3648e1ce0d9b750b0e171d47124087a8119d3340a1f191c929a6501f",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "6ac1c79e339da9d8b90deb6611aa7cbb71d939953ef86e7d10039afe09807327",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "ca98049f9e25c7e2dbb5c3550ef393829e8f280190ef0fb43237ec63055d8d39"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.6931270090026374,
+            "read_seconds": 0.02329023399943253,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.0059338930004742,
+            "pressure_write_seconds": 0.04866793900146149,
+            "revoke_seconds": 0.014141472998744575,
+            "full_control_seconds": 0.008947187998273876,
+            "stopped_control_seconds": 0.4005305099999532,
+            "interrupt_seconds": 0.21100774300066405,
+            "admitted_control_seconds": 0.010857567001949064,
+            "drain_seconds": 2.0608747200021753,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.2392578125,
+              1.96728515625,
+              1.873046875
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "142619c4a15c6e7e8f35ab0c336cb2a5168d2b3fb5f566f1f85a56ead6491d5b",
+          "host_observation_after": {
+            "load_average": [
+              1.16455078125,
+              1.90380859375,
+              1.85400390625
+            ]
+          },
+          "artifacts": {
+            "files.bin": "142619c4a15c6e7e8f35ab0c336cb2a5168d2b3fb5f566f1f85a56ead6491d5b",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "4ef8ee3e777837c8d46e02c72c8932f7b13f038bb91d349c4f9b29e7f1e26361",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "ef64ee51c5fcbd3b935cb2dd754ca3d07af85b7dde75e4171064d8917d568d17"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.6077783860018826,
+            "read_seconds": 0.024868469998182263,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.005043713001214201,
+            "pressure_write_seconds": 0.06158836200120277,
+            "revoke_seconds": 0.014065407998714363,
+            "full_control_seconds": 0.008524999997462146,
+            "stopped_control_seconds": 0.40001776999997674,
+            "interrupt_seconds": 0.2092059069982497,
+            "admitted_control_seconds": 0.011677985999995144,
+            "drain_seconds": 2.030955348000134,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.16455078125,
+              1.90380859375,
+              1.85400390625
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "f2c3f500efe3f15070ce579b4bb40a138e2b7902363feb6ed57d9420ad7ec2d5",
+          "host_observation_after": {
+            "load_average": [
+              1.19140625,
+              1.861328125,
+              1.84033203125
+            ]
+          },
+          "artifacts": {
+            "files.bin": "f2c3f500efe3f15070ce579b4bb40a138e2b7902363feb6ed57d9420ad7ec2d5",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "aee47ea873d6dd1c799d9e3a3c41df2c867a8b06e3d1ef9409a604befdc171c5",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "bc79aad7b3c3d15b0b9b147401da3fdf47be1b9088da7b006884e86289ae2ab1"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.569133510998654,
+            "read_seconds": 0.032349198998417705,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.004618294999090722,
+            "pressure_write_seconds": 0.08509196600061841,
+            "revoke_seconds": 0.012859386999480193,
+            "full_control_seconds": 0.008977583998785121,
+            "stopped_control_seconds": 0.4000808259988844,
+            "interrupt_seconds": 0.2097931409989542,
+            "admitted_control_seconds": 0.011394594002922531,
+            "drain_seconds": 2.060205538997252,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.19140625,
+              1.861328125,
+              1.84033203125
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "11d6890d4fa16f1bd176b7c646a478975f4b51cdadb3f768d745441c9f5a354d",
+          "host_observation_after": {
+            "load_average": [
+              1.13623046875,
+              1.80517578125,
+              1.82177734375
+            ]
+          },
+          "artifacts": {
+            "files.bin": "11d6890d4fa16f1bd176b7c646a478975f4b51cdadb3f768d745441c9f5a354d",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "06c223320291e4f544bbe9af8f4312b747924361747083ef7df9158fd65a184b",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "47c25839495f0c36b9df42b5f0e852b024550d18953c877a3c3a77f4a3c4b2c0"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.500620651000645,
+            "read_seconds": 0.032110075997479726,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.004776071000378579,
+            "pressure_write_seconds": 0.04582562200084794,
+            "revoke_seconds": 0.012725378001050558,
+            "full_control_seconds": 0.008446003001154168,
+            "stopped_control_seconds": 0.40005878700321773,
+            "interrupt_seconds": 0.20969699200213654,
+            "admitted_control_seconds": 0.010985409997374518,
+            "drain_seconds": 2.070715834001021,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.13623046875,
+              1.80517578125,
+              1.82177734375
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "3c2a48aa321a51e44cf23a0bb67b04f74d37bd6e60bf5ab5cebdd698940c4319",
+          "host_observation_after": {
+            "load_average": [
+              1.0966796875,
+              1.751953125,
+              1.8037109375
+            ]
+          },
+          "artifacts": {
+            "files.bin": "3c2a48aa321a51e44cf23a0bb67b04f74d37bd6e60bf5ab5cebdd698940c4319",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "3af4bb301420485326744ca15268a27c003f1b6f8cef0fee1959ecf34d8d9063",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "5340e4d2e73524f494d76aa2aba2e6763514b34ca9e9119a4f8fa13af9011c14"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        }
+      ],
+      "status": "success",
+      "summary": {
+        "boot_ready_seconds": {
+          "count": 5,
+          "min": 3.500620651000645,
+          "median": 3.6077783860018826,
+          "max": 3.902944492001552,
+          "mad": 0.08534862300075474
+        },
+        "read_seconds": {
+          "count": 5,
+          "min": 0.02329023399943253,
+          "median": 0.025273549999837996,
+          "max": 0.032349198998417705,
+          "mad": 0.001983316000405466
+        },
+        "pressure_write_seconds": {
+          "count": 5,
+          "min": 0.04582562200084794,
+          "median": 0.06158836200120277,
+          "max": 0.08509196600061841,
+          "mad": 0.012920422999741277
+        },
+        "pressure_control_seconds": {
+          "count": 5,
+          "min": 0.004618294999090722,
+          "median": 0.005043713001214201,
+          "max": 0.0059338930004742,
+          "mad": 0.0004254180021234788
+        },
+        "revoke_seconds": {
+          "count": 5,
+          "min": 0.012725378001050558,
+          "median": 0.012859386999480193,
+          "max": 0.014141472998744575,
+          "mad": 0.00013400899842963554
+        },
+        "full_control_seconds": {
+          "count": 5,
+          "min": 0.008446003001154168,
+          "median": 0.008524999997462146,
+          "max": 0.008977583998785121,
+          "mad": 0.0000789969963079784
+        },
+        "stopped_control_seconds": {
+          "count": 5,
+          "min": 0.4000006740025128,
+          "median": 0.40005878700321773,
+          "max": 0.4005305099999532,
+          "mad": 0.00004101700324099511
+        },
+        "interrupt_seconds": {
+          "count": 5,
+          "min": 0.2092059069982497,
+          "median": 0.2097931409989542,
+          "max": 0.21100774300066405,
+          "mad": 0.0005872340007044841
+        },
+        "admitted_control_seconds": {
+          "count": 5,
+          "min": 0.010857567001949064,
+          "median": 0.011356402999808779,
+          "max": 0.011677985999995144,
+          "mad": 0.0003215830001863651
+        },
+        "drain_seconds": {
+          "count": 5,
+          "min": 2.030955348000134,
+          "median": 2.060477663999336,
+          "max": 2.070715834001021,
+          "mad": 0.0003970560028392356
+        },
+        "kernel_load_bytes": {
+          "count": 5,
+          "min": 716800,
+          "median": 716800,
+          "max": 716800,
+          "mad": 0
+        },
+        "kernel_page_table_frames": {
+          "count": 5,
+          "min": 15,
+          "median": 15,
+          "max": 15,
+          "mad": 0
+        },
+        "allocator_metadata_bytes": {
+          "count": 5,
+          "min": 65536,
+          "median": 65536,
+          "max": 65536,
+          "mad": 0
+        },
+        "manager_metadata_bytes": {
+          "count": 5,
+          "min": 9608,
+          "median": 9608,
+          "max": 9608,
+          "mad": 0
+        },
+        "process_fixture_peak_frames": {
+          "count": 5,
+          "min": 200,
+          "median": 200,
+          "max": 200,
+          "mad": 0
+        },
+        "resident_runtime_frames": {
+          "count": 5,
+          "min": 120,
+          "median": 120,
+          "max": 120,
+          "mad": 0
+        },
+        "sampled_pressure_extra_frames": {
+          "count": 5,
+          "min": 68,
+          "median": 68,
+          "max": 68,
+          "mad": 0
+        }
+      }
+    },
+    "control": {
+      "schema": 1,
+      "configuration": {
+        "workload": "r0-owner-control-v1",
+        "harness": "58b1a461ab593d31ec8792fccf32e06233c3e5f08d4dadc29eb0866121f7c584",
+        "reference": {
+          "rust": "1.98.1",
+          "target": "x86_64-unknown-none",
+          "linker": "rust-lld bundled with rustc 1.98.1",
+          "machine": "pc-q35-8.2",
+          "cpu": "qemu64",
+          "accelerator": "tcg",
+          "boot_image": "64 MiB FAT32 removable UEFI volume, read-only virtio drive in QEMU",
+          "protocol": {
+            "binding": "limine 0.5.0",
+            "base_revision": 3,
+            "specification_commit": "da65184e91f80fcb397270121b1e2515a11e01ee"
+          },
+          "packages": {
+            "qemu-system-x86": "1:8.2.2+ds-0ubuntu1.18",
+            "ovmf": "2024.02-2ubuntu0.9",
+            "mtools": "4.0.43-1build1",
+            "dosfstools": "4.2-1.1build1",
+            "xorriso": "1:1.5.6-1.1ubuntu3"
+          },
+          "firmware": {
+            "/usr/share/OVMF/OVMF_CODE_4M.fd": "949bfa5389c4c48582737481e7d24f46b3a16b276ef44c4089a56858c6a0a446",
+            "/usr/share/OVMF/OVMF_VARS_4M.fd": "5d2ac383371b408398accee7ec27c8c09ea5b74a0de0ceea6513388b15be5d1e"
+          },
+          "bootloader": {
+            "version": "12.8.0",
+            "url": "https://github.com/Limine-Bootloader/Limine/releases/download/v12.8.0/limine-binary.tar.gz",
+            "sha256": "e21b0a9ce1cf83e79eb0f3fa6d6de49a1b6d1288df11e2232e41c9f4916b673d"
+          },
+          "block": {
+            "transport": "legacy PCI I/O, disable-modern=on, disable-legacy=off",
+            "pci_function": "00:06.0",
+            "logical_bytes": 4294967296,
+            "sector_bytes": 512,
+            "queue_size": 8,
+            "queues": 1,
+            "vectors": 0,
+            "max_request_bytes": 512
+          }
+        },
+        "guest_mib": 256,
+        "guest_cpus": 1,
+        "data_bytes": 4294967296,
+        "cache": "writeback",
+        "network": "none",
+        "sample_protocol": {
+          "warmups": 1,
+          "admitted_hold_ticks": 200,
+          "timeout_seconds": 60
+        },
+        "host": {
+          "label": "local-wsl-r0",
+          "system": "Linux",
+          "release": "6.18.33.2-microsoft-standard-WSL2",
+          "architecture": "x86_64",
+          "cpu_model": "AMD Ryzen 7 8840HS w/ Radeon 780M Graphics",
+          "logical_cpus": 16,
+          "affinity": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "memory": "MemTotal:        7757480 kB",
+          "boot_identity_sha256": "1d23fead93028326d48ed8fbc545e9c9f9a6550a3939846284b8459053c95595",
+          "cgroup": {
+            "version": 2,
+            "membership_sha256": "c82a5e50fdf30fb92402b3c440664a9875c2112f5b9422e4194e12ce3c3b3374",
+            "ancestors": [
+              {
+                "depth": 0,
+                "controllers": [
+                  "cpu",
+                  "cpuset",
+                  "hugetlb",
+                  "io",
+                  "memory",
+                  "pids",
+                  "rdma"
+                ],
+                "cpu_max": null,
+                "memory_max": null,
+                "cpuset_cpus_effective": "0-15",
+                "cpuset_mems_effective": "0"
+              },
+              {
+                "depth": 1,
+                "controllers": [
+                  "cpu",
+                  "cpuset",
+                  "hugetlb",
+                  "io",
+                  "memory",
+                  "pids",
+                  "rdma"
+                ],
+                "cpu_max": "max 100000",
+                "memory_max": "max",
+                "cpuset_cpus_effective": "0-15",
+                "cpuset_mems_effective": "0"
+              }
+            ]
+          },
+          "output_filesystem": "9p",
+          "temporary_filesystem": "ext4",
+          "python": "3.12.3"
+        },
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n"
+      },
+      "configuration_id": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+      "source": {
+        "revision": "212acb9f545f4e7495f75914b059c0ab262abdc1",
+        "worktree_status": " M .cargo/config.toml\n M .github/workflows/check.yml\n M Cargo.lock\n M Cargo.toml\n M LICENSE\n M README.md\n M apps/shell/src/commands/authority.rs\n M apps/shell/src/commands/files.rs\n M apps/shell/src/commands/mod.rs\n M apps/supervisor/src/sessions.rs\n M apps/utility/src/main.rs\n M apps/utility/src/session.rs\n M crates/abi/src/files.rs\n M crates/abi/src/supervisor.rs\n M crates/file-service/Cargo.toml\n M crates/file-service/src/dispatch.rs\n M crates/file-service/src/lib.rs\n M crates/file-service/src/validation.rs\n M crates/fs/src/lib.rs\n M crates/fs/src/volume.rs\n M crates/sdk/Cargo.toml\n M crates/sdk/src/files/mod.rs\n M docs/DEVELOPMENT.md\n M docs/FILE-RECOVERY.md\n M docs/FILES.md\n M docs/README.md\n M docs/SDK.md\n M docs/SERVICE-CONTRACTS.md\n M docs/TERMINAL.md\n M docs/dependencies.md\n M tools/boot_support/image.py\n M tools/contracts/__init__.py\n M tools/contracts/__main__.py\n M tools/sandbox_support/prepare.py\n M tools/terminal_support/acceptance.py\n?? apps/shell/src/commands/read.rs\n?? apps/utility/src/read.rs\n?? contracts/services/v1/fixtures/read-ranges.json\n?? crates/abi/src/files/read/\n?? crates/abi/src/files/reference.rs\n?? crates/abi/src/files/reference/\n?? crates/abi/tests/file_read.rs\n?? crates/file-service/src/read.rs\n?? crates/file-service/tests/read.rs\n?? crates/fs/src/read.rs\n?? crates/fs/src/references.rs\n?? crates/fs/tests/references.rs\n?? crates/sdk/src/files/range/\n?? crates/sdk/src/files/references.rs\n?? crates/sdk/tests/file_read.rs\n?? docs/FILES-READ.md\n?? licenses/block-buffer-MIT.txt\n?? licenses/cfg-if-MIT.txt\n?? licenses/cpufeatures-MIT.txt\n?? licenses/crypto-common-MIT.txt\n?? licenses/digest-MIT.txt\n?? licenses/hybrid-array-MIT.txt\n?? licenses/sha2-MIT.txt\n?? licenses/typenum-MIT.txt\n?? tools/contracts/read_conformance.py\n?? tools/contracts/read_vectors.py\n?? tools/contracts/tests/test_read_conformance.py\n?? tools/terminal_support/read_cases.py\n?? tools/tests/test_read_adapter.py\n",
+        "build_id": "106b9b6c3577ea54",
+        "kernel_sha256": "e4ee53c682ef965cb1f93a4276ce8d9d371354a95547b152b647a8f510112f76",
+        "image_sha256": {
+          "terminal": "7e7b76ba769bb8dfd26a4b5e44ba25944fc7193f064943c1d54061ce8923737b",
+          "ok": "5663df282707d4931bded35994a7b5d1e1cd6770f74c17239357e75c2480642a"
+        }
+      },
+      "requested_samples": 5,
+      "injected_delay_ticks": 0,
+      "samples": [
+        {
+          "warmup": true,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.5495691670003,
+            "read_seconds": 0.024939802999142557,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.004257230000803247,
+            "pressure_write_seconds": 0.05878637199930381,
+            "revoke_seconds": 0.012890277001133654,
+            "full_control_seconds": 0.008854067997162929,
+            "stopped_control_seconds": 0.3998129669998889,
+            "interrupt_seconds": 0.20941045599829522,
+            "admitted_control_seconds": 0.010658785002306104,
+            "drain_seconds": 2.0616233659966383,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.0966796875,
+              1.751953125,
+              1.8037109375
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "1545a57197b913031c1da438a876112244c17b299a91dfb227486fca5e4e557c",
+          "host_observation_after": {
+            "load_average": [
+              0.98828125,
+              1.685546875,
+              1.78076171875
+            ]
+          },
+          "artifacts": {
+            "files.bin": "1545a57197b913031c1da438a876112244c17b299a91dfb227486fca5e4e557c",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "c4c8bad8fc37bab90f477bf06eb645e235772a9e1b62a76c858bcd3835493f2e",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "2d15f539a801a2490f52368619dec4d26f7d3c0fd3483f48160fd551b7de25f2"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.5089812360020005,
+            "read_seconds": 0.020767132002220023,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.005193786000745604,
+            "pressure_write_seconds": 0.08691406800062396,
+            "revoke_seconds": 0.012638537999009714,
+            "full_control_seconds": 0.009211230000801152,
+            "stopped_control_seconds": 0.3994296150012815,
+            "interrupt_seconds": 0.20889886299846694,
+            "admitted_control_seconds": 0.010340296998037957,
+            "drain_seconds": 2.0403327429994533,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              0.9892578125,
+              1.673828125,
+              1.7763671875
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "e913ed1b7e3f3636427043159640031373061c5f59979ba80c336028a158ff21",
+          "host_observation_after": {
+            "load_average": [
+              1.33154296875,
+              1.7109375,
+              1.787109375
+            ]
+          },
+          "artifacts": {
+            "files.bin": "e913ed1b7e3f3636427043159640031373061c5f59979ba80c336028a158ff21",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "60728e990b50f3e0304269fc8ca9e5c41f04511ee3a526327146760597aa7089",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "875f9464326e5f35984b91b101fbf1807e1a871970e468ced812ce9f4292e37e"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.533269736002694,
+            "read_seconds": 0.031838812999922084,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.004669657999329502,
+            "pressure_write_seconds": 0.0422463129980315,
+            "revoke_seconds": 0.012234974001330556,
+            "full_control_seconds": 0.008460111999738729,
+            "stopped_control_seconds": 0.4001716650018352,
+            "interrupt_seconds": 0.20952002199919662,
+            "admitted_control_seconds": 0.011758290998841403,
+            "drain_seconds": 2.0607079780020285,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.33154296875,
+              1.7109375,
+              1.787109375
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "b0886f371f7325b530b6f5eee94108ebe665ebd083888982cf54416aa97b4342",
+          "host_observation_after": {
+            "load_average": [
+              1.162109375,
+              1.64794921875,
+              1.7646484375
+            ]
+          },
+          "artifacts": {
+            "files.bin": "b0886f371f7325b530b6f5eee94108ebe665ebd083888982cf54416aa97b4342",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "c93104b90dd5998bdcc373136c10b839bb8929ae1c6d809e76711f7d39d5ad83",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "364ec495e382931041ffaecbc199b163d6bff6cd13e8839d8ff44fbb528e4bab"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.692055031999189,
+            "read_seconds": 0.029836462999810465,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.004428173997439444,
+            "pressure_write_seconds": 0.09734226699947612,
+            "revoke_seconds": 0.01289570899825776,
+            "full_control_seconds": 0.008513938999385573,
+            "stopped_control_seconds": 0.4000393839996832,
+            "interrupt_seconds": 0.20907052099937573,
+            "admitted_control_seconds": 0.01108059799662442,
+            "drain_seconds": 2.0310124370007543,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.162109375,
+              1.64794921875,
+              1.7646484375
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "d899db365aca7bfd910559d12117afbb7f53136f795f5e9e4da5ba7f851aeb28",
+          "host_observation_after": {
+            "load_average": [
+              1.10986328125,
+              1.60546875,
+              1.74755859375
+            ]
+          },
+          "artifacts": {
+            "files.bin": "d899db365aca7bfd910559d12117afbb7f53136f795f5e9e4da5ba7f851aeb28",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "1ffa0c640d7b597fecc935fd4f2ce72410d721fa23e1f263855bf2c1096dd5ab",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "30e77c5c0ac13a41c109b80374ae25428671c218883062134e3a8b0f34701e64"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.614566793999984,
+            "read_seconds": 0.02515968399893609,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.004156786999374162,
+            "pressure_write_seconds": 0.0826004059999832,
+            "revoke_seconds": 0.01212639000004856,
+            "full_control_seconds": 0.00795037599891657,
+            "stopped_control_seconds": 0.39492186899951776,
+            "interrupt_seconds": 0.21034434899775079,
+            "admitted_control_seconds": 0.011439210000389721,
+            "drain_seconds": 2.06934245299999,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.10986328125,
+              1.60546875,
+              1.74755859375
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "41a51bd5c465bb22b5eb0bb96ce205a28f241452dccfc0ecd15002ba62e02c68",
+          "host_observation_after": {
+            "load_average": [
+              1.15283203125,
+              1.58251953125,
+              1.736328125
+            ]
+          },
+          "artifacts": {
+            "files.bin": "41a51bd5c465bb22b5eb0bb96ce205a28f241452dccfc0ecd15002ba62e02c68",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "b307205557a9af3140cff49ace5a0437ea6f759778f52d6c86da5ce38866dc6c",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "5db7f48221444e3a1973d69595785af2fce504446129a552ed690171797eeaa5"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.6817643899994437,
+            "read_seconds": 0.0320558470011747,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.0046067929979471955,
+            "pressure_write_seconds": 0.07963897199806524,
+            "revoke_seconds": 0.01975745299932896,
+            "full_control_seconds": 0.006496857000456657,
+            "stopped_control_seconds": 0.4001362130002235,
+            "interrupt_seconds": 0.20907601499857265,
+            "admitted_control_seconds": 0.011992051000561332,
+            "drain_seconds": 2.061546551001811,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.15283203125,
+              1.58251953125,
+              1.736328125
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "172a6088242b0700aeb01e28f5b050e169a464a4f94daa2f37e6a9d3a552c2b7",
+          "host_observation_after": {
+            "load_average": [
+              1.431640625,
+              1.62451171875,
+              1.74658203125
+            ]
+          },
+          "artifacts": {
+            "files.bin": "172a6088242b0700aeb01e28f5b050e169a464a4f94daa2f37e6a9d3a552c2b7",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "a72e4f3e5e82f845112a3004750686d52f0c333bfded6c46a39ada253a33395d",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "6b68c5a629e6679d474a8394ec733d09bc11628bd5b5b408b75c35c65c381e93"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        }
+      ],
+      "status": "success",
+      "summary": {
+        "boot_ready_seconds": {
+          "count": 5,
+          "min": 3.5089812360020005,
+          "median": 3.614566793999984,
+          "max": 3.692055031999189,
+          "mad": 0.07748823799920501
+        },
+        "read_seconds": {
+          "count": 5,
+          "min": 0.020767132002220023,
+          "median": 0.029836462999810465,
+          "max": 0.0320558470011747,
+          "mad": 0.002219384001364233
+        },
+        "pressure_write_seconds": {
+          "count": 5,
+          "min": 0.0422463129980315,
+          "median": 0.0826004059999832,
+          "max": 0.09734226699947612,
+          "mad": 0.004313662000640761
+        },
+        "pressure_control_seconds": {
+          "count": 5,
+          "min": 0.004156786999374162,
+          "median": 0.0046067929979471955,
+          "max": 0.005193786000745604,
+          "mad": 0.00017861900050775148
+        },
+        "revoke_seconds": {
+          "count": 5,
+          "min": 0.01212639000004856,
+          "median": 0.012638537999009714,
+          "max": 0.01975745299932896,
+          "mad": 0.0004035639976791572
+        },
+        "full_control_seconds": {
+          "count": 5,
+          "min": 0.006496857000456657,
+          "median": 0.008460111999738729,
+          "max": 0.009211230000801152,
+          "mad": 0.0005097360008221585
+        },
+        "stopped_control_seconds": {
+          "count": 5,
+          "min": 0.39492186899951776,
+          "median": 0.4000393839996832,
+          "max": 0.4001716650018352,
+          "mad": 0.00013228100215201266
+        },
+        "interrupt_seconds": {
+          "count": 5,
+          "min": 0.20889886299846694,
+          "median": 0.20907601499857265,
+          "max": 0.21034434899775079,
+          "mad": 0.00017715200010570697
+        },
+        "admitted_control_seconds": {
+          "count": 5,
+          "min": 0.010340296998037957,
+          "median": 0.011439210000389721,
+          "max": 0.011992051000561332,
+          "mad": 0.0003586120037653018
+        },
+        "drain_seconds": {
+          "count": 5,
+          "min": 2.0310124370007543,
+          "median": 2.0607079780020285,
+          "max": 2.06934245299999,
+          "mad": 0.00863447499796166
+        },
+        "kernel_load_bytes": {
+          "count": 5,
+          "min": 716800,
+          "median": 716800,
+          "max": 716800,
+          "mad": 0
+        },
+        "kernel_page_table_frames": {
+          "count": 5,
+          "min": 15,
+          "median": 15,
+          "max": 15,
+          "mad": 0
+        },
+        "allocator_metadata_bytes": {
+          "count": 5,
+          "min": 65536,
+          "median": 65536,
+          "max": 65536,
+          "mad": 0
+        },
+        "manager_metadata_bytes": {
+          "count": 5,
+          "min": 9608,
+          "median": 9608,
+          "max": 9608,
+          "mad": 0
+        },
+        "process_fixture_peak_frames": {
+          "count": 5,
+          "min": 200,
+          "median": 200,
+          "max": 200,
+          "mad": 0
+        },
+        "resident_runtime_frames": {
+          "count": 5,
+          "min": 120,
+          "median": 120,
+          "max": 120,
+          "mad": 0
+        },
+        "sampled_pressure_extra_frames": {
+          "count": 5,
+          "min": 68,
+          "median": 68,
+          "max": 68,
+          "mad": 0
+        }
+      }
+    },
+    "injected": {
+      "schema": 1,
+      "configuration": {
+        "workload": "r0-owner-control-v1",
+        "harness": "58b1a461ab593d31ec8792fccf32e06233c3e5f08d4dadc29eb0866121f7c584",
+        "reference": {
+          "rust": "1.98.1",
+          "target": "x86_64-unknown-none",
+          "linker": "rust-lld bundled with rustc 1.98.1",
+          "machine": "pc-q35-8.2",
+          "cpu": "qemu64",
+          "accelerator": "tcg",
+          "boot_image": "64 MiB FAT32 removable UEFI volume, read-only virtio drive in QEMU",
+          "protocol": {
+            "binding": "limine 0.5.0",
+            "base_revision": 3,
+            "specification_commit": "da65184e91f80fcb397270121b1e2515a11e01ee"
+          },
+          "packages": {
+            "qemu-system-x86": "1:8.2.2+ds-0ubuntu1.18",
+            "ovmf": "2024.02-2ubuntu0.9",
+            "mtools": "4.0.43-1build1",
+            "dosfstools": "4.2-1.1build1",
+            "xorriso": "1:1.5.6-1.1ubuntu3"
+          },
+          "firmware": {
+            "/usr/share/OVMF/OVMF_CODE_4M.fd": "949bfa5389c4c48582737481e7d24f46b3a16b276ef44c4089a56858c6a0a446",
+            "/usr/share/OVMF/OVMF_VARS_4M.fd": "5d2ac383371b408398accee7ec27c8c09ea5b74a0de0ceea6513388b15be5d1e"
+          },
+          "bootloader": {
+            "version": "12.8.0",
+            "url": "https://github.com/Limine-Bootloader/Limine/releases/download/v12.8.0/limine-binary.tar.gz",
+            "sha256": "e21b0a9ce1cf83e79eb0f3fa6d6de49a1b6d1288df11e2232e41c9f4916b673d"
+          },
+          "block": {
+            "transport": "legacy PCI I/O, disable-modern=on, disable-legacy=off",
+            "pci_function": "00:06.0",
+            "logical_bytes": 4294967296,
+            "sector_bytes": 512,
+            "queue_size": 8,
+            "queues": 1,
+            "vectors": 0,
+            "max_request_bytes": 512
+          }
+        },
+        "guest_mib": 256,
+        "guest_cpus": 1,
+        "data_bytes": 4294967296,
+        "cache": "writeback",
+        "network": "none",
+        "sample_protocol": {
+          "warmups": 1,
+          "admitted_hold_ticks": 200,
+          "timeout_seconds": 60
+        },
+        "host": {
+          "label": "local-wsl-r0",
+          "system": "Linux",
+          "release": "6.18.33.2-microsoft-standard-WSL2",
+          "architecture": "x86_64",
+          "cpu_model": "AMD Ryzen 7 8840HS w/ Radeon 780M Graphics",
+          "logical_cpus": 16,
+          "affinity": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "memory": "MemTotal:        7757480 kB",
+          "boot_identity_sha256": "1d23fead93028326d48ed8fbc545e9c9f9a6550a3939846284b8459053c95595",
+          "cgroup": {
+            "version": 2,
+            "membership_sha256": "c82a5e50fdf30fb92402b3c440664a9875c2112f5b9422e4194e12ce3c3b3374",
+            "ancestors": [
+              {
+                "depth": 0,
+                "controllers": [
+                  "cpu",
+                  "cpuset",
+                  "hugetlb",
+                  "io",
+                  "memory",
+                  "pids",
+                  "rdma"
+                ],
+                "cpu_max": null,
+                "memory_max": null,
+                "cpuset_cpus_effective": "0-15",
+                "cpuset_mems_effective": "0"
+              },
+              {
+                "depth": 1,
+                "controllers": [
+                  "cpu",
+                  "cpuset",
+                  "hugetlb",
+                  "io",
+                  "memory",
+                  "pids",
+                  "rdma"
+                ],
+                "cpu_max": "max 100000",
+                "memory_max": "max",
+                "cpuset_cpus_effective": "0-15",
+                "cpuset_mems_effective": "0"
+              }
+            ]
+          },
+          "output_filesystem": "9p",
+          "temporary_filesystem": "ext4",
+          "python": "3.12.3"
+        },
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n"
+      },
+      "configuration_id": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+      "source": {
+        "revision": "212acb9f545f4e7495f75914b059c0ab262abdc1",
+        "worktree_status": " M .cargo/config.toml\n M .github/workflows/check.yml\n M Cargo.lock\n M Cargo.toml\n M LICENSE\n M README.md\n M apps/shell/src/commands/authority.rs\n M apps/shell/src/commands/files.rs\n M apps/shell/src/commands/mod.rs\n M apps/supervisor/src/sessions.rs\n M apps/utility/src/main.rs\n M apps/utility/src/session.rs\n M crates/abi/src/files.rs\n M crates/abi/src/supervisor.rs\n M crates/file-service/Cargo.toml\n M crates/file-service/src/dispatch.rs\n M crates/file-service/src/lib.rs\n M crates/file-service/src/validation.rs\n M crates/fs/src/lib.rs\n M crates/fs/src/volume.rs\n M crates/sdk/Cargo.toml\n M crates/sdk/src/files/mod.rs\n M docs/DEVELOPMENT.md\n M docs/FILE-RECOVERY.md\n M docs/FILES.md\n M docs/README.md\n M docs/SDK.md\n M docs/SERVICE-CONTRACTS.md\n M docs/TERMINAL.md\n M docs/dependencies.md\n M tools/boot_support/image.py\n M tools/contracts/__init__.py\n M tools/contracts/__main__.py\n M tools/sandbox_support/prepare.py\n M tools/terminal_support/acceptance.py\n?? apps/shell/src/commands/read.rs\n?? apps/utility/src/read.rs\n?? contracts/services/v1/fixtures/read-ranges.json\n?? crates/abi/src/files/read/\n?? crates/abi/src/files/reference.rs\n?? crates/abi/src/files/reference/\n?? crates/abi/tests/file_read.rs\n?? crates/file-service/src/read.rs\n?? crates/file-service/tests/read.rs\n?? crates/fs/src/read.rs\n?? crates/fs/src/references.rs\n?? crates/fs/tests/references.rs\n?? crates/sdk/src/files/range/\n?? crates/sdk/src/files/references.rs\n?? crates/sdk/tests/file_read.rs\n?? docs/FILES-READ.md\n?? licenses/block-buffer-MIT.txt\n?? licenses/cfg-if-MIT.txt\n?? licenses/cpufeatures-MIT.txt\n?? licenses/crypto-common-MIT.txt\n?? licenses/digest-MIT.txt\n?? licenses/hybrid-array-MIT.txt\n?? licenses/sha2-MIT.txt\n?? licenses/typenum-MIT.txt\n?? tools/contracts/read_conformance.py\n?? tools/contracts/read_vectors.py\n?? tools/contracts/tests/test_read_conformance.py\n?? tools/terminal_support/read_cases.py\n?? tools/tests/test_read_adapter.py\n",
+        "build_id": "106b9b6c3577ea54",
+        "kernel_sha256": "e4ee53c682ef965cb1f93a4276ce8d9d371354a95547b152b647a8f510112f76",
+        "image_sha256": {
+          "terminal": "7e7b76ba769bb8dfd26a4b5e44ba25944fc7193f064943c1d54061ce8923737b",
+          "ok": "5663df282707d4931bded35994a7b5d1e1cd6770f74c17239357e75c2480642a"
+        }
+      },
+      "requested_samples": 5,
+      "injected_delay_ticks": 100,
+      "samples": [
+        {
+          "warmup": true,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.7012134229989897,
+            "read_seconds": 1.0130673720013874,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.005235114000242902,
+            "pressure_write_seconds": 0.06215950100158807,
+            "revoke_seconds": 0.013740221002080943,
+            "full_control_seconds": 0.008469553999020718,
+            "stopped_control_seconds": 0.39984318899951177,
+            "interrupt_seconds": 0.20872826899721986,
+            "admitted_control_seconds": 0.011642248999123694,
+            "drain_seconds": 2.0638373410001805,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.431640625,
+              1.62451171875,
+              1.74658203125
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "bea4f7d9733050af06b4534bf4cd8112b72dbb96a134b0c23c9525181266ec86",
+          "host_observation_after": {
+            "load_average": [
+              1.35888671875,
+              1.59912109375,
+              1.7353515625
+            ]
+          },
+          "artifacts": {
+            "files.bin": "bea4f7d9733050af06b4534bf4cd8112b72dbb96a134b0c23c9525181266ec86",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "d9843e5ca1317b9eea0ee0a5b767e0335e63dfbf9a862bbb2f2eba8c2b202f4d",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "292fe5281024a4c9d83c159e8473faa70f70543b980f6116bfd3fb577398367d"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.4305716220005706,
+            "read_seconds": 1.0122332159990037,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.006337831997370813,
+            "pressure_write_seconds": 0.07987744400088559,
+            "revoke_seconds": 0.013357759002246894,
+            "full_control_seconds": 0.009163867998722708,
+            "stopped_control_seconds": 0.3999539980031841,
+            "interrupt_seconds": 0.20942096499857143,
+            "admitted_control_seconds": 0.011042869999073446,
+            "drain_seconds": 2.0607892269981676,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.35888671875,
+              1.59912109375,
+              1.7353515625
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "2196302d4e57ea6501fce029b493ff9ebc6b7ee57ac674f0237b74920b90af4f",
+          "host_observation_after": {
+            "load_average": [
+              1.4296875,
+              1.59912109375,
+              1.73095703125
+            ]
+          },
+          "artifacts": {
+            "files.bin": "2196302d4e57ea6501fce029b493ff9ebc6b7ee57ac674f0237b74920b90af4f",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "3f370e7fccae0038db21254a97f20f364f07656857f8884f0b9cb461dc18ab3c",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "d55cd6c52bbd7d2761a3bd63ae72a9c6e05fab3ed610eea5e5c5c7bb1f1ed1dd"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.481472435996693,
+            "read_seconds": 1.0132591090005008,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.004540622001513839,
+            "pressure_write_seconds": 0.06330481099939789,
+            "revoke_seconds": 0.012657145998673514,
+            "full_control_seconds": 0.007742833000520477,
+            "stopped_control_seconds": 0.40060425399860833,
+            "interrupt_seconds": 0.2101863649986626,
+            "admitted_control_seconds": 0.010680393002985511,
+            "drain_seconds": 2.0596111099985137,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.4296875,
+              1.59912109375,
+              1.73095703125
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "3e642d72e46f96476a0bfa4c6cbe5952275eb236d86ea9019f849e62c517cc95",
+          "host_observation_after": {
+            "load_average": [
+              1.22705078125,
+              1.54296875,
+              1.70947265625
+            ]
+          },
+          "artifacts": {
+            "files.bin": "3e642d72e46f96476a0bfa4c6cbe5952275eb236d86ea9019f849e62c517cc95",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "0581429c54246c328a0dd3f315fa33f00f494898690d1b49464e5917c480b96e",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "f39dffc5cffe512b6852ad8925336fb423b7464129e6af3093b68ffe5d3444ef"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.606459090999124,
+            "read_seconds": 1.0203598830012197,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.004560587000014493,
+            "pressure_write_seconds": 0.05157229700125754,
+            "revoke_seconds": 0.012007313001959119,
+            "full_control_seconds": 0.00869648300067638,
+            "stopped_control_seconds": 0.4000062960003561,
+            "interrupt_seconds": 0.20935099000053015,
+            "admitted_control_seconds": 0.011915584000234958,
+            "drain_seconds": 2.0314743150011054,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.22705078125,
+              1.54296875,
+              1.70947265625
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "169842d0ead1fc3e5ca70719ecf4714ca4e7425bafdefdc53840023792c6660b",
+          "host_observation_after": {
+            "load_average": [
+              1.15625,
+              1.5068359375,
+              1.6943359375
+            ]
+          },
+          "artifacts": {
+            "files.bin": "169842d0ead1fc3e5ca70719ecf4714ca4e7425bafdefdc53840023792c6660b",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "ffab05018f30ef5a60c58cb4fc1418cfb9688b654950cc8f56c43180772ff4e8",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "0ac165d522040806bf688667cc23883543a93d0b41cbb185906fbbc2cda81554"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.7332355230028043,
+            "read_seconds": 1.0195136119982635,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.004053234999446431,
+            "pressure_write_seconds": 0.048179723002249375,
+            "revoke_seconds": 0.014273837001383072,
+            "full_control_seconds": 0.00825713700032793,
+            "stopped_control_seconds": 0.3994510820011783,
+            "interrupt_seconds": 0.20988488099828828,
+            "admitted_control_seconds": 0.010974821001582313,
+            "drain_seconds": 2.0295597619988257,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              1.15625,
+              1.5068359375,
+              1.6943359375
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "337b5a648140b2f21380c2e3478eae9ad51b2948dce79ca40adb70e6fa46f849",
+          "host_observation_after": {
+            "load_average": [
+              0.95751953125,
+              1.4404296875,
+              1.66796875
+            ]
+          },
+          "artifacts": {
+            "files.bin": "337b5a648140b2f21380c2e3478eae9ad51b2948dce79ca40adb70e6fa46f849",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "9dabc70ee278c8f1827e65270ce6447badeb0db601d19a27c743f62abe686c52",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "1cb9460c243aadc47975cfc2e2a942fe83bfbaec0a3d6461483477a33ecf1580"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        },
+        {
+          "warmup": false,
+          "status": "success",
+          "metrics": {
+            "kernel_page_table_frames": 15,
+            "allocator_metadata_bytes": 65536,
+            "manager_metadata_bytes": 9608,
+            "process_fixture_peak_frames": 200,
+            "kernel_load_bytes": 716800,
+            "boot_ready_seconds": 3.53696703300011,
+            "read_seconds": 1.0051687990016944,
+            "sampled_pressure_extra_frames": 68,
+            "pressure_control_seconds": 0.004414170998643385,
+            "pressure_write_seconds": 0.03827625200210605,
+            "revoke_seconds": 0.012783949998265598,
+            "full_control_seconds": 0.008404611002333695,
+            "stopped_control_seconds": 0.39922898200165946,
+            "interrupt_seconds": 0.21125566000046092,
+            "admitted_control_seconds": 0.010709513000620063,
+            "drain_seconds": 2.0601795589973335,
+            "resident_runtime_frames": 120
+          },
+          "host_observation_before": {
+            "load_average": [
+              0.95751953125,
+              1.4404296875,
+              1.66796875
+            ]
+          },
+          "vm_boots_started": 2,
+          "disk_sha256": "6245eba140eee44e0e02b96331694617d46279a9078996b3f134f862165456ef",
+          "host_observation_after": {
+            "load_average": [
+              1,
+              1.4189453125,
+              1.65478515625
+            ]
+          },
+          "artifacts": {
+            "files.bin": "6245eba140eee44e0e02b96331694617d46279a9078996b3f134f862165456ef",
+            "probe/qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "probe/result.json": "7b9d9a07fac3d642f6386a423eaef55b9dae2bb9b22607c9c7120cbbfd0d6d8e",
+            "probe/serial.log": "d02b561c93a265ec0c3f06c46fdad6b96821f31468edb95db748c72cf2bf5207",
+            "qemu.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "serial.log": "e7eb839bcab75c32cdd0c60322e4733fc2deb2269cd884840800d0d8fd86e296"
+          },
+          "configuration_before": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+          "configuration_after": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e"
+        }
+      ],
+      "status": "success",
+      "summary": {
+        "boot_ready_seconds": {
+          "count": 5,
+          "min": 3.4305716220005706,
+          "median": 3.53696703300011,
+          "max": 3.7332355230028043,
+          "mad": 0.06949205799901392
+        },
+        "read_seconds": {
+          "count": 5,
+          "min": 1.0051687990016944,
+          "median": 1.0132591090005008,
+          "max": 1.0203598830012197,
+          "mad": 0.006254502997762756
+        },
+        "pressure_write_seconds": {
+          "count": 5,
+          "min": 0.03827625200210605,
+          "median": 0.05157229700125754,
+          "max": 0.07987744400088559,
+          "mad": 0.011732513998140348
+        },
+        "pressure_control_seconds": {
+          "count": 5,
+          "min": 0.004053234999446431,
+          "median": 0.004540622001513839,
+          "max": 0.006337831997370813,
+          "mad": 0.00012645100287045352
+        },
+        "revoke_seconds": {
+          "count": 5,
+          "min": 0.012007313001959119,
+          "median": 0.012783949998265598,
+          "max": 0.014273837001383072,
+          "mad": 0.000573809003981296
+        },
+        "full_control_seconds": {
+          "count": 5,
+          "min": 0.007742833000520477,
+          "median": 0.008404611002333695,
+          "max": 0.009163867998722708,
+          "mad": 0.0002918719983426854
+        },
+        "stopped_control_seconds": {
+          "count": 5,
+          "min": 0.39922898200165946,
+          "median": 0.3999539980031841,
+          "max": 0.40060425399860833,
+          "mad": 0.0005029160020058043
+        },
+        "interrupt_seconds": {
+          "count": 5,
+          "min": 0.20935099000053015,
+          "median": 0.20988488099828828,
+          "max": 0.21125566000046092,
+          "mad": 0.00046391599971684627
+        },
+        "admitted_control_seconds": {
+          "count": 5,
+          "min": 0.010680393002985511,
+          "median": 0.010974821001582313,
+          "max": 0.011915584000234958,
+          "mad": 0.00026530800096224993
+        },
+        "drain_seconds": {
+          "count": 5,
+          "min": 2.0295597619988257,
+          "median": 2.0596111099985137,
+          "max": 2.0607892269981676,
+          "mad": 0.0011781169996538665
+        },
+        "kernel_load_bytes": {
+          "count": 5,
+          "min": 716800,
+          "median": 716800,
+          "max": 716800,
+          "mad": 0
+        },
+        "kernel_page_table_frames": {
+          "count": 5,
+          "min": 15,
+          "median": 15,
+          "max": 15,
+          "mad": 0
+        },
+        "allocator_metadata_bytes": {
+          "count": 5,
+          "min": 65536,
+          "median": 65536,
+          "max": 65536,
+          "mad": 0
+        },
+        "manager_metadata_bytes": {
+          "count": 5,
+          "min": 9608,
+          "median": 9608,
+          "max": 9608,
+          "mad": 0
+        },
+        "process_fixture_peak_frames": {
+          "count": 5,
+          "min": 200,
+          "median": 200,
+          "max": 200,
+          "mad": 0
+        },
+        "resident_runtime_frames": {
+          "count": 5,
+          "min": 120,
+          "median": 120,
+          "max": 120,
+          "mad": 0
+        },
+        "sampled_pressure_extra_frames": {
+          "count": 5,
+          "min": 68,
+          "median": 68,
+          "max": 68,
+          "mad": 0
+        }
+      }
+    }
+  },
+  "control_comparison": {
+    "schema": 1,
+    "status": "pass",
+    "baseline_revision": "212acb9f545f4e7495f75914b059c0ab262abdc1",
+    "candidate_revision": "212acb9f545f4e7495f75914b059c0ab262abdc1",
+    "configuration_id": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+    "metrics": {
+      "boot_ready_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 3.500620651000645,
+          "median": 3.6077783860018826,
+          "max": 3.902944492001552,
+          "mad": 0.08534862300075474
+        },
+        "candidate": {
+          "count": 5,
+          "min": 3.5089812360020005,
+          "median": 3.614566793999984,
+          "max": 3.692055031999189,
+          "mad": 0.07748823799920501
+        },
+        "upper_limit": 5.411667579002824,
+        "observed": 3.614566793999984,
+        "regression": false
+      },
+      "read_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.02329023399943253,
+          "median": 0.025273549999837996,
+          "max": 0.032349198998417705,
+          "mad": 0.001983316000405466
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.020767132002220023,
+          "median": 0.029836462999810465,
+          "max": 0.0320558470011747,
+          "mad": 0.002219384001364233
+        },
+        "upper_limit": 0.075273549999838,
+        "observed": 0.029836462999810465,
+        "regression": false
+      },
+      "pressure_write_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.04582562200084794,
+          "median": 0.06158836200120277,
+          "max": 0.08509196600061841,
+          "mad": 0.012920422999741277
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.0422463129980315,
+          "median": 0.0826004059999832,
+          "max": 0.09734226699947612,
+          "mad": 0.004313662000640761
+        },
+        "upper_limit": 0.13911089999965043,
+        "observed": 0.0826004059999832,
+        "regression": false
+      },
+      "pressure_control_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.004618294999090722,
+          "median": 0.005043713001214201,
+          "max": 0.0059338930004742,
+          "mad": 0.0004254180021234788
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.004156786999374162,
+          "median": 0.0046067929979471955,
+          "max": 0.005193786000745604,
+          "mad": 0.00017861900050775148
+        },
+        "upper_limit": 0.0550437130012142,
+        "observed": 0.0046067929979471955,
+        "regression": false
+      },
+      "revoke_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.012725378001050558,
+          "median": 0.012859386999480193,
+          "max": 0.014141472998744575,
+          "mad": 0.00013400899842963554
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.01212639000004856,
+          "median": 0.012638537999009714,
+          "max": 0.01975745299932896,
+          "mad": 0.0004035639976791572
+        },
+        "upper_limit": 0.0628593869994802,
+        "observed": 0.012638537999009714,
+        "regression": false
+      },
+      "full_control_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.008446003001154168,
+          "median": 0.008524999997462146,
+          "max": 0.008977583998785121,
+          "mad": 0.0000789969963079784
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.006496857000456657,
+          "median": 0.008460111999738729,
+          "max": 0.009211230000801152,
+          "mad": 0.0005097360008221585
+        },
+        "upper_limit": 0.05852499999746215,
+        "observed": 0.008460111999738729,
+        "regression": false
+      },
+      "stopped_control_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.4000006740025128,
+          "median": 0.40005878700321773,
+          "max": 0.4005305099999532,
+          "mad": 0.00004101700324099511
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.39492186899951776,
+          "median": 0.4000393839996832,
+          "max": 0.4001716650018352,
+          "mad": 0.00013228100215201266
+        },
+        "upper_limit": 0.6000881805048266,
+        "observed": 0.4000393839996832,
+        "regression": false
+      },
+      "interrupt_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.2092059069982497,
+          "median": 0.2097931409989542,
+          "max": 0.21100774300066405,
+          "mad": 0.0005872340007044841
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.20889886299846694,
+          "median": 0.20907601499857265,
+          "max": 0.21034434899775079,
+          "mad": 0.00017715200010570697
+        },
+        "upper_limit": 0.3146897114984313,
+        "observed": 0.20907601499857265,
+        "regression": false
+      },
+      "admitted_control_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.010857567001949064,
+          "median": 0.011356402999808779,
+          "max": 0.011677985999995144,
+          "mad": 0.0003215830001863651
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.010340296998037957,
+          "median": 0.011439210000389721,
+          "max": 0.011992051000561332,
+          "mad": 0.0003586120037653018
+        },
+        "upper_limit": 0.06135640299980878,
+        "observed": 0.011439210000389721,
+        "regression": false
+      },
+      "drain_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 2.030955348000134,
+          "median": 2.060477663999336,
+          "max": 2.070715834001021,
+          "mad": 0.0003970560028392356
+        },
+        "candidate": {
+          "count": 5,
+          "min": 2.0310124370007543,
+          "median": 2.0607079780020285,
+          "max": 2.06934245299999,
+          "mad": 0.00863447499796166
+        },
+        "upper_limit": 3.090716495999004,
+        "observed": 2.0607079780020285,
+        "regression": false
+      },
+      "kernel_load_bytes": {
+        "baseline": {
+          "count": 5,
+          "min": 716800,
+          "median": 716800,
+          "max": 716800,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 716800,
+          "median": 716800,
+          "max": 716800,
+          "mad": 0
+        },
+        "upper_limit": 720896,
+        "observed": 716800,
+        "regression": false
+      },
+      "kernel_page_table_frames": {
+        "baseline": {
+          "count": 5,
+          "min": 15,
+          "median": 15,
+          "max": 15,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 15,
+          "median": 15,
+          "max": 15,
+          "mad": 0
+        },
+        "upper_limit": 16,
+        "observed": 15,
+        "regression": false
+      },
+      "allocator_metadata_bytes": {
+        "baseline": {
+          "count": 5,
+          "min": 65536,
+          "median": 65536,
+          "max": 65536,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 65536,
+          "median": 65536,
+          "max": 65536,
+          "mad": 0
+        },
+        "upper_limit": 65536,
+        "observed": 65536,
+        "regression": false
+      },
+      "manager_metadata_bytes": {
+        "baseline": {
+          "count": 5,
+          "min": 9608,
+          "median": 9608,
+          "max": 9608,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 9608,
+          "median": 9608,
+          "max": 9608,
+          "mad": 0
+        },
+        "upper_limit": 9608,
+        "observed": 9608,
+        "regression": false
+      },
+      "process_fixture_peak_frames": {
+        "baseline": {
+          "count": 5,
+          "min": 200,
+          "median": 200,
+          "max": 200,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 200,
+          "median": 200,
+          "max": 200,
+          "mad": 0
+        },
+        "upper_limit": 201,
+        "observed": 200,
+        "regression": false
+      },
+      "resident_runtime_frames": {
+        "baseline": {
+          "count": 5,
+          "min": 120,
+          "median": 120,
+          "max": 120,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 120,
+          "median": 120,
+          "max": 120,
+          "mad": 0
+        },
+        "upper_limit": 121,
+        "observed": 120,
+        "regression": false
+      },
+      "sampled_pressure_extra_frames": {
+        "baseline": {
+          "count": 5,
+          "min": 68,
+          "median": 68,
+          "max": 68,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 68,
+          "median": 68,
+          "max": 68,
+          "mad": 0
+        },
+        "upper_limit": 69,
+        "observed": 68,
+        "regression": false
+      }
+    }
+  },
+  "regression_comparison": {
+    "schema": 1,
+    "status": "regression",
+    "baseline_revision": "212acb9f545f4e7495f75914b059c0ab262abdc1",
+    "candidate_revision": "212acb9f545f4e7495f75914b059c0ab262abdc1",
+    "configuration_id": "bccd309574387541f15feeef0930d215115508f6c4abfc1b5f180accc69bea7e",
+    "metrics": {
+      "boot_ready_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 3.500620651000645,
+          "median": 3.6077783860018826,
+          "max": 3.902944492001552,
+          "mad": 0.08534862300075474
+        },
+        "candidate": {
+          "count": 5,
+          "min": 3.4305716220005706,
+          "median": 3.53696703300011,
+          "max": 3.7332355230028043,
+          "mad": 0.06949205799901392
+        },
+        "upper_limit": 5.411667579002824,
+        "observed": 3.53696703300011,
+        "regression": false
+      },
+      "read_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.02329023399943253,
+          "median": 0.025273549999837996,
+          "max": 0.032349198998417705,
+          "mad": 0.001983316000405466
+        },
+        "candidate": {
+          "count": 5,
+          "min": 1.0051687990016944,
+          "median": 1.0132591090005008,
+          "max": 1.0203598830012197,
+          "mad": 0.006254502997762756
+        },
+        "upper_limit": 0.075273549999838,
+        "observed": 1.0132591090005008,
+        "regression": true
+      },
+      "pressure_write_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.04582562200084794,
+          "median": 0.06158836200120277,
+          "max": 0.08509196600061841,
+          "mad": 0.012920422999741277
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.03827625200210605,
+          "median": 0.05157229700125754,
+          "max": 0.07987744400088559,
+          "mad": 0.011732513998140348
+        },
+        "upper_limit": 0.13911089999965043,
+        "observed": 0.05157229700125754,
+        "regression": false
+      },
+      "pressure_control_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.004618294999090722,
+          "median": 0.005043713001214201,
+          "max": 0.0059338930004742,
+          "mad": 0.0004254180021234788
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.004053234999446431,
+          "median": 0.004540622001513839,
+          "max": 0.006337831997370813,
+          "mad": 0.00012645100287045352
+        },
+        "upper_limit": 0.0550437130012142,
+        "observed": 0.004540622001513839,
+        "regression": false
+      },
+      "revoke_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.012725378001050558,
+          "median": 0.012859386999480193,
+          "max": 0.014141472998744575,
+          "mad": 0.00013400899842963554
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.012007313001959119,
+          "median": 0.012783949998265598,
+          "max": 0.014273837001383072,
+          "mad": 0.000573809003981296
+        },
+        "upper_limit": 0.0628593869994802,
+        "observed": 0.012783949998265598,
+        "regression": false
+      },
+      "full_control_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.008446003001154168,
+          "median": 0.008524999997462146,
+          "max": 0.008977583998785121,
+          "mad": 0.0000789969963079784
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.007742833000520477,
+          "median": 0.008404611002333695,
+          "max": 0.009163867998722708,
+          "mad": 0.0002918719983426854
+        },
+        "upper_limit": 0.05852499999746215,
+        "observed": 0.008404611002333695,
+        "regression": false
+      },
+      "stopped_control_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.4000006740025128,
+          "median": 0.40005878700321773,
+          "max": 0.4005305099999532,
+          "mad": 0.00004101700324099511
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.39922898200165946,
+          "median": 0.3999539980031841,
+          "max": 0.40060425399860833,
+          "mad": 0.0005029160020058043
+        },
+        "upper_limit": 0.6000881805048266,
+        "observed": 0.3999539980031841,
+        "regression": false
+      },
+      "interrupt_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.2092059069982497,
+          "median": 0.2097931409989542,
+          "max": 0.21100774300066405,
+          "mad": 0.0005872340007044841
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.20935099000053015,
+          "median": 0.20988488099828828,
+          "max": 0.21125566000046092,
+          "mad": 0.00046391599971684627
+        },
+        "upper_limit": 0.3146897114984313,
+        "observed": 0.20988488099828828,
+        "regression": false
+      },
+      "admitted_control_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 0.010857567001949064,
+          "median": 0.011356402999808779,
+          "max": 0.011677985999995144,
+          "mad": 0.0003215830001863651
+        },
+        "candidate": {
+          "count": 5,
+          "min": 0.010680393002985511,
+          "median": 0.010974821001582313,
+          "max": 0.011915584000234958,
+          "mad": 0.00026530800096224993
+        },
+        "upper_limit": 0.06135640299980878,
+        "observed": 0.010974821001582313,
+        "regression": false
+      },
+      "drain_seconds": {
+        "baseline": {
+          "count": 5,
+          "min": 2.030955348000134,
+          "median": 2.060477663999336,
+          "max": 2.070715834001021,
+          "mad": 0.0003970560028392356
+        },
+        "candidate": {
+          "count": 5,
+          "min": 2.0295597619988257,
+          "median": 2.0596111099985137,
+          "max": 2.0607892269981676,
+          "mad": 0.0011781169996538665
+        },
+        "upper_limit": 3.090716495999004,
+        "observed": 2.0596111099985137,
+        "regression": false
+      },
+      "kernel_load_bytes": {
+        "baseline": {
+          "count": 5,
+          "min": 716800,
+          "median": 716800,
+          "max": 716800,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 716800,
+          "median": 716800,
+          "max": 716800,
+          "mad": 0
+        },
+        "upper_limit": 720896,
+        "observed": 716800,
+        "regression": false
+      },
+      "kernel_page_table_frames": {
+        "baseline": {
+          "count": 5,
+          "min": 15,
+          "median": 15,
+          "max": 15,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 15,
+          "median": 15,
+          "max": 15,
+          "mad": 0
+        },
+        "upper_limit": 16,
+        "observed": 15,
+        "regression": false
+      },
+      "allocator_metadata_bytes": {
+        "baseline": {
+          "count": 5,
+          "min": 65536,
+          "median": 65536,
+          "max": 65536,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 65536,
+          "median": 65536,
+          "max": 65536,
+          "mad": 0
+        },
+        "upper_limit": 65536,
+        "observed": 65536,
+        "regression": false
+      },
+      "manager_metadata_bytes": {
+        "baseline": {
+          "count": 5,
+          "min": 9608,
+          "median": 9608,
+          "max": 9608,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 9608,
+          "median": 9608,
+          "max": 9608,
+          "mad": 0
+        },
+        "upper_limit": 9608,
+        "observed": 9608,
+        "regression": false
+      },
+      "process_fixture_peak_frames": {
+        "baseline": {
+          "count": 5,
+          "min": 200,
+          "median": 200,
+          "max": 200,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 200,
+          "median": 200,
+          "max": 200,
+          "mad": 0
+        },
+        "upper_limit": 201,
+        "observed": 200,
+        "regression": false
+      },
+      "resident_runtime_frames": {
+        "baseline": {
+          "count": 5,
+          "min": 120,
+          "median": 120,
+          "max": 120,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 120,
+          "median": 120,
+          "max": 120,
+          "mad": 0
+        },
+        "upper_limit": 121,
+        "observed": 120,
+        "regression": false
+      },
+      "sampled_pressure_extra_frames": {
+        "baseline": {
+          "count": 5,
+          "min": 68,
+          "median": 68,
+          "max": 68,
+          "mad": 0
+        },
+        "candidate": {
+          "count": 5,
+          "min": 68,
+          "median": 68,
+          "max": 68,
+          "mad": 0
+        },
+        "upper_limit": 69,
+        "observed": 68,
+        "regression": false
+      }
+    }
+  },
+  "historical_comparison": {
+    "status": "incomparable",
+    "reason": "configuration/workload/host changed; rebaseline separately"
+  }
+}

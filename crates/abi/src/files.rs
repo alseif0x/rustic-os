@@ -17,8 +17,13 @@ pub const MKDIR: u8 = 11;
 pub const RECOVERY: u8 = 12;
 pub const TRACK_BEGIN: u8 = 13;
 pub const RECEIPT: u8 = 14;
+pub const REFERENCES: u8 = 15;
+pub const READ_OPEN: u8 = 16;
+pub const READ_CHUNK: u8 = 17;
 pub const INSPECT_RIGHT: u8 = 4;
+pub mod read;
 pub mod recovery;
+pub mod reference;
 pub const GRANT: u8 = 32;
 pub const REVOKE: u8 = 33;
 pub const STATUS: u8 = 34;
@@ -56,6 +61,8 @@ pub enum Error {
     OutcomeUnknown = 27,
     IdempotencyConflict = 28,
     Interrupted = 29,
+    UnsupportedVersion = 30,
+    Unavailable = 31,
 }
 impl Error {
     pub fn parse(value: u8) -> Result<(), Self> {
@@ -90,6 +97,8 @@ impl Error {
             27 => Self::OutcomeUnknown,
             28 => Self::IdempotencyConflict,
             29 => Self::Interrupted,
+            30 => Self::UnsupportedVersion,
+            31 => Self::Unavailable,
             _ => Self::Protocol,
         })
     }
@@ -135,7 +144,7 @@ impl Packet {
         if b.len() != SIZE
             || b[0] != VERSION
             || b[3] as usize > DATA
-            || !matches!(b[1],1..=14|32..=34)
+            || !matches!(b[1],1..=17|32..=34)
         {
             return Err(Error::Protocol);
         }
@@ -157,5 +166,20 @@ impl Packet {
     }
     pub fn payload(&self) -> &[u8] {
         &self.data[..usize::from(self.count).min(DATA)]
+    }
+    /// Validate a complete reply after IPC has authenticated its peer/correlation.
+    /// Error replies carry no leftover result fields or data.
+    pub fn checked_reply(self, op: u8, context: u32) -> Result<Self, Error> {
+        if self.op != op
+            || self.context != context
+            || self.count as usize > DATA
+            || self.data[usize::from(self.count)..].iter().any(|b| *b != 0)
+            || self.status != 0
+                && (self.id != 0 || self.arg != 0 || self.version != 0 || self.count != 0)
+        {
+            return Err(Error::Protocol);
+        }
+        Error::parse(self.status)?;
+        Ok(self)
     }
 }

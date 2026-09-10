@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Validate fixture shapes or export descriptors from the canonical catalog."""
+"""Validate canonical contracts, check the read subset or export descriptors."""
 import argparse
 import json
 from pathlib import Path
@@ -32,11 +32,21 @@ def check(catalog):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("check", "export"))
+    parser.add_argument("command", choices=("check", "export", "read-check", "read-native"))
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--evidence", type=Path, help="terminal.json from the native read fixture")
     args = parser.parse_args()
+    if (args.command == "read-native") != (args.evidence is not None):
+        parser.error("--evidence is required only for read-native")
     catalog = Catalog()
-    result = check(catalog) if args.command == "check" else catalog.descriptors()
+    if args.command == "check":
+        result = check(catalog)
+    elif args.command == "export":
+        result = catalog.descriptors()
+    else:
+        from .read_conformance import host_check, load_native, native_check
+        result = (host_check(catalog) if args.command == "read-check"
+                  else native_check(catalog, load_native(args.evidence)))
     content = json.dumps(result, indent=2) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

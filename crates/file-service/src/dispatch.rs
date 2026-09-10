@@ -33,6 +33,10 @@ impl Server {
             crate::validation::request(&request)?;
             let grant = self.grant_at(slot).ok_or(Error::Denied)?;
             grant.check(peer, request.context, now)?;
+            if matches!(request.op, REFERENCES | READ_OPEN | READ_CHUNK) {
+                response = self.read_request(disk, grant, request)?;
+                return Ok(());
+            }
             if matches!(request.op, RECOVERY | TRACK_BEGIN | RECEIPT)
                 || request.op == COMMIT && self.transfers.tracked(slot)
             {

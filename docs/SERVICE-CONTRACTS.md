@@ -2,7 +2,7 @@
 
 # Shared service contracts, version 1
 
-Status: specified and checked on the host, 2026-09-10. [#6](https://github.com/alseif0x/rustic-os/issues/6) is a decision, not a running server. [ADR-0003](architecture/ADR-0003-service-contracts.md) records the choice. These contracts do not add syscalls or implement file storage, authorization, an agent or MCP.
+The eight-operation specification is checked on the host. [#6](https://github.com/alseif0x/rustic-os/issues/6) and [ADR-0003](architecture/ADR-0003-service-contracts.md) record the contract decision. A [native `files.read` binding](FILES-READ.md) now connects one operation to the existing storage and authority implementation. The remaining logical surface, agent and MCP integration retain their implementation work; the catalog is not a running server or a grant of authority.
 
 ## Canonical sources and boundaries
 
@@ -30,6 +30,8 @@ These are logical names, not HTTP paths or syscall numbers. All successful resul
 | `system.status` | Selected fields; exactly those fields plus service instance and observation ID | Supervisor; selected system observation scope |
 
 `capabilities.describe` returns an identity and digest for the contract bundle shipped with clients, not arbitrary downloaded schemas inside a 64-byte IPC message. Tools receive the derived schemas from that verified local bundle. A missing or mismatched bundle means unsupported contract; do not follow a descriptor URL or execute unfamiliar instructions. Dynamic third-party schema distribution is future work. Availability is `available`, `degraded` or `unavailable` for a known implemented contract; none grants permission. Unimplemented operations are omitted. Discovery is filtered by session/task and paginated; a future task tool may compose several APIs but cannot acquire extra authority.
+
+The native read increment implements `files.read` through typed binary requests and a shared shell/client SDK. Its `REFERENCES` bootstrap helper resolves already authorized native objects; it does not implement `capabilities.list` or `capabilities.describe`. The checked-in catalog remains `specified_not_implemented` for the complete eight-operation surface. Existing native tracked replacements, receipts and supervisor lifecycle jobs do not establish the remaining logical methods.
 
 ## Bounds and data meaning
 
@@ -108,6 +110,8 @@ The implemented [block bridge](BLOCK-ACCESS.md) selects copied asynchronous subm
 
 The file protocol in #12 binds transfer state to the same authenticated context and checks lengths/offsets before copying, including out-of-order chunks if selected. A control message must identify protocol/version, correlation and bounded transfer reference; raw pointers never cross service address spaces. Control-plane cancellation/owner progress cannot depend on an unlimited data queue. Split native Rust modules by transport encoding, typed client API, service state and storage; share pure contracts through an implementation-independent crate only when the actual native boundary needs it. The kernel cannot import the SDK, filesystem policy or host schema tools.
 
+The [implemented read binding](FILES-READ.md) uses native opcodes 15–17 within the existing 64-byte file packet. Workspace/resource text identities encode persistent lineage and monotonic directory/object IDs; fresh endpoint/context authority is required separately. OPEN returns a version, size, range SHA-256 and epoch; individually authenticated chunks remain pinned to that version. The SDK checks the full assembled hash and clears caller output on failure. No persistent read lease is introduced. A read-only helper may observe the epoch without acquiring the native receipt-inspection right. Per-workspace mutation/retry identity remains unfinished even though stable read references are available.
+
 ## Coverage and next implementations
 
 | Product area | First contract / remaining owned work |
@@ -137,4 +141,6 @@ python3.12 -m venv .cache/contracts-venv
 .cache/contracts-venv/bin/python -m tools.contracts export --output artifacts/service-descriptors.json
 ```
 
-The suite checks 62 message fixtures, nine request/reply exchanges and 14 host tests, including generated-descriptor consistency, byte/range/hash limits, ambiguous lookup, missing receipts, unsafe retry advice and correlation errors. It adds no guest dependency. The [conformance scenarios](architecture/service-contract-cases.md) assign stateful fault tests to #43 and their real guest owners. They are reviewed expected outcomes, not passing backend tests. Review is by the implementing agent, without independent audit. CI preserves schema results/descriptors alongside existing checks; H1 remains open until real files, supervision and shell satisfy their guest acceptance.
+The schema suite checks message fixtures and request/reply exchanges, including generated-descriptor consistency, byte/range/hash limits, ambiguous lookup, missing receipts, unsafe retry advice and correlation errors. The Python validator adds no guest dependency. The [conformance scenarios](architecture/service-contract-cases.md) assign the wider stateful fault tests to #43 and their real guest owners; their inventory alone is not a passing backend test.
+
+The read increment adds `python -m tools.contracts read-check` for a bounded immutable host backend and `read-native --evidence TERMINAL_JSON` for the shared range exchanges from native terminal evidence. Both explicitly cover one operation and the `complete_bounded_ranges` fixture profile. The general contract permits shorter non-EOF progress; this profile requires the complete requested range up to EOF. See [native read reproduction and limits](FILES-READ.md). It is not the full #43 stateful backend or native/function/MCP adapter comparison. Record actual results and backend identity for each run; generated descriptors and host fixtures cannot substitute for guest authority or disk execution.

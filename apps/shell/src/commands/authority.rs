@@ -43,6 +43,10 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                         "flood" => p::actor::FLOOD,
                         "drain" => p::actor::DRAIN,
                         "stale" => p::actor::STALE,
+                        "api-read" => p::actor::API_READ,
+                        "read-open" => p::actor::READ_OPEN,
+                        "read-next" => p::actor::READ_NEXT,
+                        "fill" => p::actor::FILL,
                         _ => return Err(Error::Usage),
                     },
                 )

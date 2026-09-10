@@ -47,6 +47,8 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `mkdir PATH`, `touch PATH` | Create a directory or empty file; existing objects are errors |
 | `write PATH TEXT...` | Create if absent, then replace with text using the observed file version |
 | `cat PATH`, `stat PATH`, `rm PATH` | Read, inspect metadata, remove a file or empty directory |
+| `ref WORKSPACE_PATH FILE_PATH` | Resolve authorized native objects to stable workspace/resource references |
+| `read-ref WORKSPACE RESOURCE VERSION\|- OFFSET LENGTH` | Read a bounded range through the shared SDK; print pinned version, range hash, epoch and exact bytes as hex |
 | `echo TEXT...`, `status` | Print arguments; show the previous command's status |
 | `run spin`, `run fault`, `run exit` | Preemptible utility, deliberate isolated invalid-instruction fault, or exit code 7 |
 | `run read FILE`, `run probe FILE OTHER` | Read selected file; probe additionally verifies denial of the other file and privileged kernel/console calls |
@@ -54,6 +56,7 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `ps`, `kill PID`, `reap PID` | Inspect processes; terminate/reap only this shell's utility children |
 | `permissions [PID]`, `revoke PID` | Inspect file scope/rights/generation/deadline/report; request a fence for the whole client/helper session; poll `revocation PID` for access and effect status |
 | `session FILE OTHER [TICKS]`, `helper PID FILE OTHER`, `act PID ACTION`, `move-check C H` | Run the [deterministic client/helper authority mission](AUTHORITY.md); explicit subsets and shared revocation |
+| `act PID api-read\|read-open\|read-next\|fill` | Run [native read diagnostics](FILES-READ.md), including a controlled pause between chunks; `fill` requires write authority |
 | `actor-status PID`, `revocation PID` | Query pending/complete actor work or requested/unconfirmed/fenced access without waiting for files |
 | `stall files TICKS` | Owner-only stopped-service diagnostic; 0 is indefinite, 1–1000 is bounded; [procedure and limits](TAKEOVER.md) |
 | `services`, `mem` | Query service identities, owner-policy state, frame/process/channel counts |
@@ -84,6 +87,8 @@ A malformed policy disables new helper file grants while the manual shell can st
 
 A lost response or failed submitted mutation is an uncertain result. The new tracked replace/receipt API can recover the original result after fresh authorization; ordinary write remains untracked. See [recoverable replacements](FILE-RECOVERY.md) for tokens, two-record retention, explicit legacy-disk upgrade and error handling. Creating an absent file and writing its contents remain two commits. The complete logical service-v1 contract remains in #12/#22/#43.
 
+`cat` and `read-ref` use the same native `files.read` SDK as deterministic clients. Stable references combine volume lineage with a selected workspace directory and object ID; they confer no rights and require a fresh binding after restart. Each read pins a version and verifies the SHA-256 of exactly the returned bytes. Only `cat` can fall back to the legacy reader when lineage/recovery metadata is unavailable; permission, version and integrity errors do not trigger fallback. See [the read guide](FILES-READ.md) for canonical reference syntax, manual examples and the distinction between observing an epoch and permission to inspect receipts.
+
 ## Verification
 
 ```sh
@@ -97,6 +102,8 @@ python3 tools/sandbox.py test --revision "$(git rev-parse HEAD)"
 
 The terminal driver sends real UART input, checks normal/error output, editing/overflow, full object capacity, two simultaneous utilities, faults, unauthorized control, scoped reads, expiry/revocation, malformed-policy repair and repeated service restart. After fault/restart/reap cycles, frame/process/channel/pending-I/O counts return to the same baseline. A second QEMU process mounts the same disk. An independent Python reader checks metadata/data CRCs, persisted file and policy bytes, and untouched reserved sectors.
 
+The native read procedure adds shared binary/text/EOF range vectors, read-only helper access, denial of receipt inspection, version changes and revocation between chunks, identity persistence across restart/reboot, and changed identity after remove/recreate. With the pinned contract environment installed, validate its logical range exchanges using `.cache/contracts-venv/bin/python -m tools.contracts read-native --evidence artifacts/terminal-test/terminal.json`. This consumes evidence from `tools/terminal_test.py`; it does not start a VM or establish the remaining seven catalog operations. [FILES-READ.md](FILES-READ.md) describes the complete bounded-range fixture profile and its limits.
+
 Evidence includes serial transcripts, `terminal.json`, `files.bin` (the bounded 89,088-byte format area), image/kernel identities and runner results. Pure filesystem tests separately interrupt each write/flush with partial-sector cases and recover either the old or new complete file. Those model tests are not an exhaustive physical power-loss test or a production filesystem guarantee.
 
-Review is by the implementing agent, with automated host/native checks; no independent audit. Hardware support, complete service-v1 operation semantics, broader authority/takeover semantics, observability and capacity measurements remain tracked in #12/#13/#15/#20 and H2. The terminal increment establishes a working manual path without claiming the entire OS roadmap is complete.
+Review is by the implementing agent, with automated host/native checks; no independent audit. Hardware support, complete service-v1 operation semantics, broader authority/takeover semantics and observability remain tracked in #12/#13/#15/#22 and H2. The [measurement harness](MEASUREMENTS.md) supplies repeated native resource/control checks. The terminal increment establishes a working manual path without claiming the entire OS roadmap is complete.

@@ -3,4 +3,5 @@
 xtask = "run --locked --package xtask --"
 
 [target.x86_64-unknown-none]
-rustflags = ["-C", "relocation-model=static"]
+# R0 traps FP/SIMD instructions; runtime CPU detection cannot authorize them.
+rustflags = ["-C", "relocation-model=static", "--cfg", "sha2_backend=\"soft\""]

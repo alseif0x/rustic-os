@@ -87,7 +87,10 @@ def package(kernel, mode, build_id, provenance):
             "timeout: 0\nserial: yes\n/RusticOS\n    protocol: limine\n"
             f"    path: boot():/kernel.elf\n    cmdline: mode={mode}\n"
         )
-        for name in ("limine-rust-MIT.txt", "bitflags-MIT.txt", "rust-MIT.txt"):
+        for name in ("limine-rust-MIT.txt", "bitflags-MIT.txt", "rust-MIT.txt",
+                     "sha2-MIT.txt", "digest-MIT.txt", "block-buffer-MIT.txt",
+                     "crypto-common-MIT.txt", "hybrid-array-MIT.txt", "typenum-MIT.txt",
+                     "cpufeatures-MIT.txt", "cfg-if-MIT.txt"):
             shutil.copyfile(ROOT / "licenses" / name, stage / name)
         shutil.copyfile(ROOT / "LICENSE", stage / "RUSTIC.txt")
         # Create a new temporary regular file; never format an existing user path.

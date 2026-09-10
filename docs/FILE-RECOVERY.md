@@ -4,7 +4,7 @@
 
 This increment of #12 provides a bounded native replacement and receipt API over real user-mode file services. A caller can recover a committed result after losing its reply, reconnecting to a restarted service or rebooting the VM. The file effect, version and retained canonical arguments publish through the same filesystem header.
 
-This is a storage and native SDK foundation. It does not advertise the complete logical service-v1 API, asynchronous operation states, cancellation, SHA-256 receipts, stable workspace-generation references or all eight tools in #22. The native key namespace is deliberately broader: one trusted recovery subject and volume lineage, rather than a separate namespace for every workspace. That stricter key uniqueness is documented here, not silently presented as service-v1 conformance.
+This is a storage and native SDK foundation. It does not advertise the complete logical service-v1 API, asynchronous operation states, cancellation, SHA-256 receipts, per-workspace mutation/retry namespaces or all eight tools in #22. The native key namespace is deliberately broader: one trusted recovery subject and volume lineage, rather than a separate namespace for every workspace. That stricter key uniqueness is documented here, not silently presented as service-v1 conformance. [Stable references and version-pinned reads](FILES-READ.md) are now available separately; they do not change this mutation namespace.
 
 ## Client workflow
 

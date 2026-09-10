@@ -20,7 +20,7 @@ If rustup is missing, follow the [official installation guide](https://rust-lang
 rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy --target x86_64-unknown-none
 ```
 
-rust-toolchain.toml selects this exact version; nightly is not required. Cargo.lock pins the Limine bindings and bitflags, used only by the boot executable. Checks use --locked. rust-lld produces a static ELF through kernel/linker.ld; the pure library remains separate from the executable.
+rust-toolchain.toml selects this exact version; nightly is not required. Cargo.lock pins the Limine bindings and bitflags for the boot executable, plus the reviewed SHA-256 dependencies for native file-service/SDK range verification. The kernel does not depend on that hash implementation. See [the dependency inventory](dependencies.md) for versions, features and provenance. Checks use --locked. rust-lld produces a static ELF through kernel/linker.ld; the pure library remains separate from the executable.
 
 ## Runnable commands
 
@@ -94,7 +94,20 @@ The image builder and isolated worker compile the application before the kernel 
 
 ## Logical service contracts
 
-The [service contract guide](SERVICE-CONTRACTS.md) provides the commands for the separate Python 3.12 host validator and descriptor exporter. Install its exact hashed wheels into `.cache/contracts-venv`; no package is added to the kernel, SDK or sandbox image. CI checks 62 messages, nine exchanges and 14 message/descriptor tests and preserves their results. This is separate from the runner tests, finite operation model and actual guest acceptance.
+The [service contract guide](SERVICE-CONTRACTS.md) provides the commands for the separate Python 3.12 host validator and descriptor exporter. Install its exact hashed wheels into `.cache/contracts-venv`; those Python packages are not added to the kernel, SDK or sandbox image. CI checks message/exchange fixtures, descriptors and host conformance behavior and preserves their results. This is separate from the runner tests, finite operation model and actual guest acceptance.
+
+The [native `files.read` guide](FILES-READ.md) separates pure codec/collector checks, a bounded immutable host fixture and actual terminal execution. After installing that validator environment, the focused procedures are:
+
+```sh
+cargo test -p rustic-abi -p rustic-sdk --test file_read --locked
+.cache/contracts-venv/bin/python -m tools.contracts read-check --output artifacts/read-host.json
+.cache/contracts-venv/bin/python -m unittest discover -s tools/contracts/tests -v
+python3 tools/terminal_test.py
+.cache/contracts-venv/bin/python -m tools.contracts read-native \
+  --evidence artifacts/terminal-test/terminal.json --output artifacts/read-native.json
+```
+
+`read-native` validates shared range exchanges in the evidence produced by the preceding terminal run; it does not boot a guest itself. Both fixture backends cover one logical operation with the `complete_bounded_ranges` profile, which requires the full requested range up to EOF. The general service-v1 contract also permits shorter non-EOF progress. These commands do not establish the full eight-operation catalog, live discovery or MCP/function adapter conformance. Record the actual revision, backend and results for each run.
 
 #44 adds [bounded user-mode disk access](BLOCK-ACCESS.md). The host builder/linter selects both `sdk-probe` and `block-probe`; both manifests and ELFs have separate hashes. Shared block codecs and pure ownership/queue tests run on the host, while two additional VM scenarios exercise actual copied sector calls, cancellation, process death and persistence. The regression inventory is 46 Rust and 30 runner tests, 20 direct VM scenarios and 24 isolated scenarios.
 

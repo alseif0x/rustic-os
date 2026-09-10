@@ -1,0 +1,26 @@
+{
+  "$comment": "SPDX-License-Identifier: Apache-2.0; Shared host/native files.read fixture profile requires complete bounded ranges. General v1 also permits shorter non-EOF progress. These vectors are not guest execution evidence.",
+  "version": 1,
+  "fixtures": {
+    "text": {"encoding": "utf8", "value": "Hello from native Rust"},
+    "empty": {"encoding": "utf8", "value": ""},
+    "binary": {"encoding": "linear_u8", "length": 1024, "multiplier": 37, "increment": 11}
+  },
+  "cases": [
+    {"id": "text_full", "fixture": "text", "offset": 0, "length": 1024, "expected_code": null},
+    {"id": "empty_eof", "fixture": "empty", "offset": 0, "length": 1, "expected_code": null},
+    {"id": "padding_55", "fixture": "binary", "offset": 0, "length": 55, "expected_code": null},
+    {"id": "padding_56", "fixture": "binary", "offset": 0, "length": 56, "expected_code": null},
+    {"id": "padding_63", "fixture": "binary", "offset": 0, "length": 63, "expected_code": null},
+    {"id": "padding_64", "fixture": "binary", "offset": 0, "length": 64, "expected_code": null},
+    {"id": "padding_65", "fixture": "binary", "offset": 0, "length": 65, "expected_code": null},
+    {"id": "binary_full", "fixture": "binary", "offset": 0, "length": 1024, "expected_code": null},
+    {"id": "binary_offset", "fixture": "binary", "offset": 33, "length": 97, "expected_code": null},
+    {"id": "binary_tail", "fixture": "binary", "offset": 1000, "length": 1024, "expected_code": null},
+    {"id": "binary_eof", "fixture": "binary", "offset": 1024, "length": 1, "expected_code": null},
+    {"id": "past_eof", "fixture": "binary", "offset": 1025, "length": 1, "expected_code": "invalid_request"},
+    {"id": "zero_length", "fixture": "binary", "offset": 0, "length": 0, "expected_code": "invalid_request"},
+    {"id": "oversized_length", "fixture": "binary", "offset": 0, "length": 1025, "expected_code": "invalid_request"},
+    {"id": "range_overflow", "fixture": "binary", "offset": 9007199254740991, "length": 1, "expected_code": "invalid_request"}
+  ]
+}

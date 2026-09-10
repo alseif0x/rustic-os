@@ -32,6 +32,7 @@ Start with the [project overview](../README.md) for current capabilities and the
 | --- | --- |
 | [Session runtime](NATIVE-RUNTIME.md) | Owned process/control calls, console, wait sets and bounded capacity |
 | [File service](FILES.md) | Original volume format, native protocol, scopes, persistence and explicit limits |
+| [Stable references and reads](FILES-READ.md) | Shared shell/client SDK, version-pinned ranges, SHA-256 and native contract evidence |
 | [Native authority](AUTHORITY.md) | Explicit client/helper subsets, shared revocation, moved handles and owner control under pressure |
 | [Recoverable replacements](FILE-RECOVERY.md) | Atomic file/version receipts, bounded retries, identity, legacy upgrade and native I/O fault tests |
 

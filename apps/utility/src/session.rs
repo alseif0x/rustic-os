@@ -10,6 +10,7 @@ use rustic_sdk::{
 pub fn run(files: &mut Client, control: &Endpoint, owner: u64, scope: u32, other: u32) -> u64 {
     let mut version = 0;
     let mut sequence = 0;
+    let mut read = super::read::State::default();
     loop {
         if control.wait().is_err() {
             return 1;
@@ -24,6 +25,9 @@ pub fn run(files: &mut Client, control: &Endpoint, owner: u64, scope: u32, other
             return 4;
         };
         let r = match w[0] {
+            a::API_READ | a::READ_OPEN | a::READ_NEXT | a::FILL => {
+                read.execute(w[0], files, scope, other)
+            }
             a::READ => {
                 let mut bytes = [0; 1024];
                 let first = files.read(scope, &mut bytes);

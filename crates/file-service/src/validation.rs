@@ -12,6 +12,8 @@ pub(super) fn request(p: &Packet) -> Result<(), Error> {
         STAT | REMOVE | COMMIT | ABORT => p.count == 0 && p.arg == 0 && p.version == 0,
         LIST => p.count == 0 && p.version == 0,
         READ | BEGIN => p.count == 0,
+        REFERENCES => p.count == 0 && p.version == 0,
+        READ_OPEN | READ_CHUNK => p.count == 30,
         RECOVERY => p.count == 0 && p.arg == 0 && p.version == 0,
         TRACK_BEGIN => p.count == 32,
         RECEIPT => p.count == 32 && p.arg == 0 && p.version == 0,

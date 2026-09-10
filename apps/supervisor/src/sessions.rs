@@ -26,6 +26,10 @@ impl State {
                 | s::actor::FLOOD
                 | s::actor::DRAIN
                 | s::actor::STALE
+                | s::actor::API_READ
+                | s::actor::READ_OPEN
+                | s::actor::READ_NEXT
+                | s::actor::FILL
         ) {
             return Err(1);
         }

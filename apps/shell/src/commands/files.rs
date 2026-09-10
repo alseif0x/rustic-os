@@ -79,10 +79,7 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
         "cat" => {
             exact(a, 2)?;
             let id = s.files.resolve(s.cwd, argument(a, 1)?)?;
-            let mut b = [0; 1024];
-            let n = s.files.read(id, &mut b)?;
-            output::bytes(&b[..n]);
-            output::text("\r\n");
+            super::read::cat(s, id)?;
         }
         "stat" => {
             exact(a, 2)?;
