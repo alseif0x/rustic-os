@@ -15,18 +15,18 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
         }
         "helper" => {
             exact(a, 4)?;
+            let parent = number(a, 1)?;
+            // Reject locally disabled authority before consulting potentially stalled files.
+            // The supervisor and service still enforce the actual derivation independently.
+            if s.service([p::PERMISSIONS, parent, 0, 0, 0, 0, 0, 0])?[2] == 0 {
+                return Err(Error::Service(2));
+            }
+            if s.service([p::SERVICES, 0, 0, 0, 0, 0, 0, 0])?[4] == 0 {
+                return Err(Error::Service(3));
+            }
             let id = s.files.resolve(s.cwd, argument(a, 2)?)?;
             let other = s.files.resolve(s.cwd, argument(a, 3)?)?;
-            let r = s.service([
-                p::HELPER_START,
-                number(a, 1)?,
-                id as u64,
-                other as u64,
-                0,
-                0,
-                0,
-                0,
-            ])?;
+            let r = s.service([p::HELPER_START, parent, id as u64, other as u64, 0, 0, 0, 0])?;
             output::format(format_args!("started pid={}\r\n", r[1]));
         }
         "act" | "move-check" => {
@@ -48,10 +48,29 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 )
             };
             let r = s.service([op, number(a, 1)?, value, 0, 0, 0, 0, 0])?;
-            output::format(format_args!(
-                "actor status={} value={} other={} control_denied={} version={}\r\n",
-                r[1], r[2], r[3], r[4], r[5]
-            ));
+            super::takeover::actor(r);
+        }
+        "actor-status" | "revocation" => {
+            exact(a, 2)?;
+            let op = if argument(a, 0)? == "actor-status" {
+                p::ACT_STATUS
+            } else {
+                p::REVOCATION
+            };
+            let r = s.service([op, number(a, 1)?, 0, 0, 0, 0, 0, 0])?;
+            if op == p::ACT_STATUS {
+                super::takeover::actor(r)
+            } else {
+                super::takeover::display(r)
+            }
+        }
+        "stall" => {
+            exact(a, 3)?;
+            if argument(a, 1)? != "files" {
+                return Err(Error::Usage);
+            }
+            s.service([p::STALL_FILES, number(a, 2)?, 0, 0, 0, 0, 0, 0])?;
+            output::text("files stall diagnostic armed; owner control remains available\r\n");
         }
         _ => return Err(Error::Unknown),
     }

@@ -90,6 +90,12 @@ Direct image metadata records the application ELF and manifest hashes as well as
 
 External dependencies remain the pinned host Rust/compiler/linker, Python, Limine, QEMU and OVMF described in [the inventory](dependencies.md). No new third-party crate, code template or runtime was introduced. The SDK and applications are original Apache-2.0 code. Compiler, linker and VM run on the host; the application instructions run inside RusticOS. Review was performed by the implementing agent, without an independent audit.
 
+## Correlated RPC and independent control
+
+The native `rpc::Rpc` exposes `begin` (one nonblocking send), `poll` (at most one reply), `pending` and `failed`. One request may be active per binding; WouldBlock during admission consumes no correlation and means no request was sent. A successful admission retains its correlation until the authenticated peer replies. No automatic resubmission occurs. The allocation-free `rpc::state` module owns admission/correlation/poisoning facts and can be tested on the host; the guest client owns transport and waits.
+
+`exchange`/`words` remain bounded synchronous conveniences (1000 PIT ticks, nominally ten seconds on R0). An abandoned response, transport failure or mismatched reply poisons the binding permanently; callers must obtain a fresh authorized binding. A late response cannot complete a subsequent mutation. The supervisor uses begin/poll for [revocation and actor control](TAKEOVER.md), retaining unconfirmed work to accept a valid late acknowledgment without blocking owner queries. An observation deadline does not cancel admitted work. Full service-v1 async operations and remaining foreground conversions are separate work.
+
 ## Bounded block client
 
 #44 adds `block::Device`. The trusted launcher supplies its handle; `from_bootstrap` wraps it without granting rights. Query the independent block wire version with `Device::version()`. `read`, `write` and `flush` return a request ID after admission; `wait(id)` yields until completion, and `result()` copies and consumes the retained result. Check completion status/effect as well as syscall success. Write admission snapshots exactly 512 bytes, so the source slice need not live until completion. Read buffers are supplied only during collection.

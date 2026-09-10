@@ -9,7 +9,9 @@ use rustic_sdk::{
 };
 pub struct Child {
     pub pid: u64,
-    pub endpoint: Endpoint,
+    pub control: rustic_sdk::rpc::Rpc,
+    pub actor_state: u64,
+    pub actor_deadline: u64,
     pub scope: u32,
     pub rights: u8,
     pub expires: u64,
@@ -50,6 +52,9 @@ impl State {
             s::READ | s::PROBE | s::WATCH | s::LOST_REPLY | s::SESSION | s::HELPER
         );
         if file_access {
+            if !self.administrative_ready() {
+                return Err(3);
+            }
             if self.policy == 0 {
                 return Err(2);
             }
@@ -178,7 +183,9 @@ impl State {
             start(pid, [data[1], control[1], self.files]).map_err(|_| 4u64)?;
             self.children[slot] = Some(Child {
                 pid,
-                endpoint,
+                control: rustic_sdk::rpc::Rpc::new(endpoint.token(), pid),
+                actor_state: 0,
+                actor_deadline: 0,
                 scope,
                 rights,
                 expires,
@@ -193,7 +200,9 @@ impl State {
         })();
         if result.is_err() {
             stop(pid);
-            let _ = detach(&mut self.admin, slot + 2);
+            if file_access && self.administrative_ready() {
+                let _ = detach(&mut self.admin, slot + 2);
+            }
             close(me, control[0]);
             close(self.files, data[0]);
         }
@@ -206,7 +215,26 @@ impl State {
             if child.closed {
                 continue;
             }
-            match child.endpoint.receive() {
+            if matches!(child.role, s::SESSION | s::HELPER) && child.control.pending() {
+                match child.control.poll() {
+                    Ok(Some(message)) => {
+                        if let Ok(w) = k::decode(message.payload()) {
+                            child.report.copy_from_slice(&w[..7]);
+                            child.actor_state = 2;
+                        } else {
+                            child.actor_state = 3;
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(_) => {
+                        child.actor_state = 3;
+                    }
+                }
+                continue;
+            }
+            // Idle native actors must not send unsolicited control messages. Closed
+            // endpoints also reveal root death after a file endpoint has moved.
+            match child.control.endpoint.receive() {
                 Ok(message) => {
                     if message.sender() == child.pid
                         && let Ok(w) = k::decode(message.payload())
@@ -236,9 +264,21 @@ impl State {
             .position(|c| c.as_ref().is_some_and(|c| c.pid == pid))
             .ok_or(2u64)?;
         let r = call([k::REAP, pid, 0, 0, 0, 0, 0, 0]).map_err(|_| 3u64)?;
+        if self.children[slot]
+            .as_ref()
+            .is_some_and(|c| c.role == s::SESSION && c.rights != 0)
+        {
+            // A pending actor reply can delay closed-endpoint observation by one pass.
+            // Keep root identity until its fence has been scheduled, even after a move.
+            self.revoke_session(pid)?;
+        }
         let child = self.children[slot].take().unwrap();
-        let _ = child.endpoint.close();
-        let _ = detach(&mut self.admin, slot + 2);
+        let _ = child.control.endpoint.close();
+        // Dead client endpoints are also collected by the file server. While admin
+        // is unavailable, retain that cleanup there without blocking owner control.
+        if child.generation != 0 && self.administrative_ready() {
+            let _ = detach(&mut self.admin, slot + 2);
+        }
         Ok([0, r[0], r[1], 0, 0, 0, 0, 0])
     }
 }

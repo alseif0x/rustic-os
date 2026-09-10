@@ -118,17 +118,7 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             };
             let r = s.service([op, number(a, 1)?, 0, 0, 0, 0, 0, 0])?;
             if op == p::REVOKE {
-                output::format(format_args!(
-                    "ok access=fenced members={} discarded_staging={} effects={} sequence={}\r\n",
-                    r[1],
-                    r[2],
-                    if r[3] == 0 {
-                        "settled"
-                    } else {
-                        "recovery-required"
-                    },
-                    r[4]
-                ));
+                super::takeover::display(r);
             } else {
                 output::format(format_args!("ok exit_kind={} code={}\r\n", r[1], r[2]));
             }
@@ -150,7 +140,13 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             output::format(format_args!(
                 "files pid={} {}; shell pid={}; owner-policy id={} (0 means invalid; helper grants disabled)\r\n",
                 r[1],
-                if r[1] == 0 { "unavailable" } else { "mounted" },
+                if r[1] == 0 {
+                    "unavailable"
+                } else if r[4] == 0 {
+                    "control-pending"
+                } else {
+                    "mounted"
+                },
                 r[2],
                 r[3]
             ));

@@ -6,7 +6,14 @@ impl State {
     pub fn request(&mut self, w: [u64; 8]) -> Result<[u64; 8], u64> {
         let end = match w[0] {
             s::INFO | s::EXIT | s::SERVICES | s::RESTART | s::ROTATE_RECEIPTS => 1,
-            s::PROCESS | s::KILL | s::REAP | s::PERMISSIONS | s::REVOKE => 2,
+            s::PROCESS
+            | s::KILL
+            | s::REAP
+            | s::PERMISSIONS
+            | s::REVOKE
+            | s::REVOCATION
+            | s::ACT_STATUS
+            | s::STALL_FILES => 2,
             s::RUN => 6,
             s::HELPER_START => 4,
             s::ACT | s::MOVE_CHECK => 3,
@@ -26,6 +33,9 @@ impl State {
             }
             s::RESTART => self.restart(),
             s::ROTATE_RECEIPTS => {
+                if !self.administrative_ready() {
+                    return Err(3);
+                }
                 let r = self
                     .admin
                     .words([36, 0, 0, 0, 0, 0, 0, 0])
@@ -33,7 +43,16 @@ impl State {
                 // Preserve the file error in a successful owner-control envelope.
                 Ok([0, r[0], r[1], 0, 0, 0, 0, 0])
             }
-            s::SERVICES => Ok([0, self.files, self.shell, self.policy as u64, 1, 0, 0, 0]),
+            s::SERVICES => Ok([
+                0,
+                self.files,
+                self.shell,
+                self.policy as u64,
+                u64::from(self.administrative_ready()),
+                0,
+                0,
+                0,
+            ]),
             s::RUN => self
                 .launch(
                     w[1],
@@ -72,6 +91,25 @@ impl State {
                     c.report[1],
                     c.report[2],
                 ])
+            }
+            s::REVOCATION => self.takeover.status(w[1]),
+            s::ACT_STATUS => self.actor_status(w[1]),
+            s::STALL_FILES => {
+                if w[1] > 1000 {
+                    return Err(1);
+                }
+                if !self.administrative_ready() {
+                    return Err(3);
+                }
+                let r = self
+                    .admin
+                    .words([39, w[1], 0, 0, 0, 0, 0, 0])
+                    .map_err(|_| 4u64)?;
+                if r[0] != 0 {
+                    return Err(4);
+                }
+                self.degraded = true;
+                Ok([0; 8])
             }
             s::REVOKE => self.revoke_session(w[1]),
             s::HELPER_START => self.helper(

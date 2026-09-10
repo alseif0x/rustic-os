@@ -31,11 +31,11 @@ The goal is agent control without mandatory screen interpretation. A graphical i
 | [User-mode disk access](docs/BLOCK-ACCESS.md) | Typed SDK, scoped handles, asynchronous sector I/O, cancellation and process-death recovery |
 | [Native terminal](docs/TERMINAL.md) | Real keyboard input, file commands, isolated utilities, permissions, service restart and reboot persistence |
 | [File service](docs/FILES.md) | Bounded copy-on-write volume, version checks, scopes, recovery model and independent disk verification |
-| [Client/helper authority](docs/AUTHORITY.md) | Checked subsets, shared revocation, moved-handle denial, inherited expiry and manual progress under queue pressure |
+| [Client/helper authority](docs/AUTHORITY.md) | Checked subsets, shared revocation, moved-handle denial, inherited expiry and owner control during queue pressure or a stopped file service |
 | [Recoverable writes](docs/FILE-RECOVERY.md) | Durable receipts, exact replay, conflict/epoch fencing, lost replies and selected native I/O failures |
 | [Isolated test executor](docs/EXECUTOR.md) | Exact Git revisions, offline jobs, resource limits, cancellation and structured evidence |
 
-The current acceptance suite covers **72 Rust tests, 35 Python tests, 22 VM scenarios and 26 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [terminal acceptance and limits](docs/TERMINAL.md) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees. Separately, the [service contract suite](docs/SERVICE-CONTRACTS.md) validates 62 messages, nine exchanges and 14 host checks; those do not execute guest services.
+The current acceptance suite covers **79 Rust tests, 35 Python tests, 22 VM scenarios and 26 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [terminal acceptance and limits](docs/TERMINAL.md) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees. Separately, the [service contract suite](docs/SERVICE-CONTRACTS.md) validates 62 messages, nine exchanges and 14 host checks; those do not execute guest services.
 
 The current VM uses **x86_64, one CPU and 256 MiB RAM**. Process and IPC limits are deliberately small; see their contracts before building on them.
 

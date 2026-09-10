@@ -17,6 +17,9 @@ pub const ROTATE_RECEIPTS: u64 = 12;
 pub const HELPER_START: u64 = 13;
 pub const ACT: u64 = 14;
 pub const MOVE_CHECK: u64 = 15;
+pub const ACT_STATUS: u64 = 16;
+pub const REVOCATION: u64 = 17;
+pub const STALL_FILES: u64 = 18;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Deterministic native actor commands; the owner supplies no arbitrary program.

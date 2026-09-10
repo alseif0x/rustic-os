@@ -52,8 +52,10 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `run read FILE`, `run probe FILE OTHER` | Read selected file; probe additionally verifies denial of the other file and privileged kernel/console calls |
 | `run watch FILE [TICKS]` | Repeated reads in a separate utility; optional grant lifetime in PIT ticks (100 ticks/second) |
 | `ps`, `kill PID`, `reap PID` | Inspect processes; terminate/reap only this shell's utility children |
-| `permissions [PID]`, `revoke PID` | Inspect file scope/rights/generation/deadline/report; fence the utility's whole client/helper session and report staging/effect status |
+| `permissions [PID]`, `revoke PID` | Inspect file scope/rights/generation/deadline/report; request a fence for the whole client/helper session; poll `revocation PID` for access and effect status |
 | `session FILE OTHER [TICKS]`, `helper PID FILE OTHER`, `act PID ACTION`, `move-check C H` | Run the [deterministic client/helper authority mission](AUTHORITY.md); explicit subsets and shared revocation |
+| `actor-status PID`, `revocation PID` | Query pending/complete actor work or requested/unconfirmed/fenced access without waiting for files |
+| `stall files TICKS` | Owner-only stopped-service diagnostic; 0 is indefinite, 1–1000 is bounded; [procedure and limits](TAKEOVER.md) |
 | `services`, `mem` | Query service identities, owner-policy state, frame/process/channel counts |
 | `restart files` | End utility sessions, remount the file service and issue fresh owner bindings |
 | `retry-key PATH KEY`, `replace PATH VERSION TOKEN TEXT`, `receipt ID TOKEN` | Prepare an explicit retry token, commit a tracked whole-file replacement, inspect its retained result |
@@ -68,7 +70,7 @@ The shell is an interpreter for a fixed command set. There are no pipelines, red
 
 The four roots are `/system` (read-only), `/data`, `/config` and `/workspaces`. Limits are 32 total objects including roots, 31-byte component names, 1 KiB per file and two staged file replacements. The line limit includes the command and path, so the maximum one-line text is less than the file-format maximum. See [FILES.md](FILES.md).
 
-The supervisor owns a private administrative channel; the shell owns a separate manual control channel. Each utility has its own identity, endpoint and explicit scope. Spin/fault/exit utilities receive no file authority. Scoped readers cannot use another file, raw disk, console or supervisor control. Revocation is acknowledged by the file service after earlier serialized operations; an already admitted commit can finish before that acknowledgement. Expiry is checked at request admission, not at every physical write. The system does not claim rollback of completed effects.
+The supervisor owns a private administrative channel; the shell owns a separate manual control channel. Each utility has its own identity, endpoint and explicit scope. Spin/fault/exit utilities receive no file authority. Scoped readers cannot use another file, raw disk, console or supervisor control. Revocation is acknowledged by the file service after earlier serialized operations; an already admitted commit can finish before that acknowledgement. Expiry is checked at request admission, not at every physical write. The system does not claim rollback of completed effects. Revocation and actor commands are asynchronous: command acceptance does not establish their completion. The prompt and `pwd` use the last validated directory path. [Stopped-service acceptance](TAKEOVER.md) verifies independent owner progress, late acknowledgments and explicit recovery; ordinary foreground file commands and startup still have bounded synchronous waits.
 
 `/config/owner-policy` stores the bounded initial rule:
 

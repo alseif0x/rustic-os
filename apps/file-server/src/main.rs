@@ -2,6 +2,7 @@
 #![no_std]
 #![no_main]
 mod admin;
+mod diagnostics;
 mod disk;
 mod serving;
 mod startup;

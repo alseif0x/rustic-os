@@ -4,9 +4,7 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
     match argument(a, 0)? {
         "pwd" => {
             exact(a, 1)?;
-            let mut b = [0; 256];
-            let n = s.files.path(s.cwd, &mut b)?;
-            output::bytes(&b[..n]);
+            output::bytes(&s.path[..s.path_length]);
             output::text("\r\n");
         }
         "cd" => {
@@ -15,7 +13,11 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             if id != 0 && !s.files.stat(id)?.directory {
                 return Err(rustic_sdk::files::Error::NotDirectory.into());
             }
+            let mut path = [0; 256];
+            let length = s.files.path(id, &mut path)?;
             s.cwd = id;
+            s.path = path;
+            s.path_length = length;
         }
         "ls" => {
             if a.len() > 2 {

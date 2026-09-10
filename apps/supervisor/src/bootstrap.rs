@@ -15,8 +15,18 @@ pub fn file_service(initialize: bool) -> Result<(u64, Rpc, Client), ()> {
         let block = call([k::BLOCK_GRANT, files, 7, 0, sectors, 0, 0, 0])?[0];
         super::services::start(files, [block, admin[1], initialize as u64])?;
         let endpoint = Endpoint::from_bootstrap(admin[0]);
-        endpoint.wait().map_err(|_| ())?;
-        let message = endpoint.receive().map_err(|_| ())?;
+        let deadline = rustic_sdk::runtime::clock().saturating_add(1000);
+        let message = loop {
+            match endpoint.receive() {
+                Ok(message) => break message,
+                Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock))
+                    if rustic_sdk::runtime::clock() < deadline =>
+                {
+                    rustic_sdk::runtime::wait_set(&[endpoint.token()], 10).map_err(|_| ())?;
+                }
+                Err(_) => return Err(()),
+            }
+        };
         let ready = k::decode(message.payload()).map_err(|_| ())?;
         if message.sender() != files || message.correlation() != 0 || ready[0] != 0 {
             return Err(());
@@ -51,5 +61,8 @@ pub fn start(initialize: bool) -> Result<State, ()> {
         control: Endpoint::from_bootstrap(control[0]),
         children: [None, None],
         policy,
+        takeover: super::takeover::Takeover::new(),
+        degraded: false,
+        stopping: false,
     })
 }

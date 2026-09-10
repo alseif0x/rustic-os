@@ -63,7 +63,14 @@ impl Server {
     /// Returns a slot mask, allowing the transport to discard undelivered old replies.
     pub fn revoke(&mut self, slot: usize) -> Result<u8, Error> {
         self.grant_at(slot).ok_or(Error::NotFound)?;
-        let root = self.roots[slot];
+        Ok(self.revoke_root(self.roots[slot]))
+    }
+
+    /// Idempotent fencing by incarnation-local root, including already detached slots.
+    pub fn revoke_root(&mut self, root: u32) -> u8 {
+        if root == 0 {
+            return 0;
+        }
         let mut mask = 0;
         for index in 0..CLIENTS {
             if self.roots[index] == root
@@ -74,7 +81,7 @@ impl Server {
                 mask |= 1 << index;
             }
         }
-        Ok(mask)
+        mask
     }
 
     pub fn detach(&mut self, slot: usize) {

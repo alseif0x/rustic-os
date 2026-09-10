@@ -10,6 +10,8 @@ pub struct Session {
     pub supervisor: Rpc,
     pub cwd: u32,
     pub status: u64,
+    pub path: [u8; 256],
+    pub path_length: usize,
 }
 impl Session {
     pub fn service(&mut self, w: [u64; 8]) -> Result<[u64; 8], super::commands::Error> {
@@ -23,14 +25,9 @@ impl Session {
             Ok(r)
         }
     }
-    fn prompt(&mut self) {
-        let mut bytes = [0; 256];
-        let path = self.files.path(self.cwd, &mut bytes);
+    fn prompt(&self) {
         output::text("rustic:");
-        match path {
-            Ok(n) => output::bytes(&bytes[..n]),
-            Err(_) => output::text("?"),
-        }
+        output::bytes(&self.path[..self.path_length]);
         output::text("> ");
     }
 }
@@ -40,7 +37,10 @@ pub fn run(files: u64, control: u64, generation: u32) -> u64 {
         supervisor: Rpc::new(control, 0),
         cwd: 4,
         status: 0,
+        path: [0; 256],
+        path_length: 11,
     };
+    state.path[..11].copy_from_slice(b"/workspaces");
     output::text(
         "\r\nRusticOS native terminal 0.1\r\nRust user processes | persistent files | explicit permissions\r\nType help for commands. Ctrl-C cancels a line; exit stops the VM.\r\n",
     );

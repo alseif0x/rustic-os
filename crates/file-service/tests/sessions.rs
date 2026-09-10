@@ -99,3 +99,22 @@ fn root_death_replacement_and_moved_peer_never_revive_a_helper() {
         Error::Revoked as u8
     );
 }
+
+#[test]
+fn late_root_revoke_cannot_target_a_reused_slot() {
+    let (mut s, mut d, a, _) = setup();
+    let old = grant(&mut s, 0, a, 3, 0);
+    s.derive(1, old, helper(a, 1, 0), 0).unwrap();
+    s.detach(0);
+    let fresh = grant(&mut s, 0, a, 3, 0);
+    let h = s.derive(1, fresh, helper(a, 1, 0), 0).unwrap();
+    assert_eq!(s.revoke_root(old), 0);
+    assert_eq!(run(&mut s, &mut d, 0, request(READ, a, fresh), 0).status, 0);
+    assert_eq!(run(&mut s, &mut d, 1, request(READ, a, h), 0).status, 0);
+    assert_eq!(s.revoke_root(fresh), 3);
+    assert_eq!(s.revoke_root(fresh), 3);
+    assert_eq!(
+        run(&mut s, &mut d, 1, request(READ, a, h), 0).status,
+        Error::Revoked as u8
+    );
+}

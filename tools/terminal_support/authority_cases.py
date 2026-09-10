@@ -5,9 +5,34 @@ import time
 from .cases import pid, counters, exited
 from .oracle import snapshot
 
+def actor_result(uart, child, status=0):
+    deadline = time.monotonic() + 12
+    while True:
+        output = uart.command(f"actor-status {child}")
+        if "actor state=complete" in output:
+            values = {k:int(v) for k,v in re.findall(r"(status|value|other|control_denied|version)=(\d+)", output)}
+            assert values["status"] == status, output
+            return values
+        if time.monotonic() >= deadline:
+            raise AssertionError(output)
+        time.sleep(.02)
+
 def actor(uart, child, action, status=0):
-    output = uart.command(f"act {child} {action}", f"actor status={status} ")
-    return {k:int(v) for k,v in re.findall(r"(status|value|other|control_denied|version)=(\d+)", output)}
+    uart.command(f"act {child} {action}", "actor state=pending")
+    return actor_result(uart, child, status)
+
+def fence(uart, child, expected="access=fenced members=2", request=True):
+    if request:
+        uart.command(f"revoke {child}", "ok access=")
+    deadline = time.monotonic() + 12
+    while True:
+        output = uart.command(f"revocation {child}", "ok access=")
+        if "access=fenced" in output:
+            assert expected in output, output
+            return output
+        if time.monotonic() >= deadline:
+            raise AssertionError(output)
+        time.sleep(.02)
 
 def cleanup(uart, *children):
     for child in children:
@@ -48,7 +73,7 @@ def exercise(uart, data):
     uart.command("write authority-a owner-under-pressure")
     write_seconds = time.monotonic() - start
     start = time.monotonic()
-    uart.command(f"revoke {h}", "access=fenced members=2 discarded_staging=1 effects=settled")
+    fence(uart, h, "access=fenced members=2 discarded_staging=1 effects=settled")
     revoke_seconds = time.monotonic() - start
     for child in (c,h):
         drained = actor(uart, child, "drain")
@@ -64,16 +89,18 @@ def exercise(uart, data):
     # still bound to C's authenticated peer; it cannot lend C's write grant to H.
     c = pid(uart, "session authority-a authority-b")
     h = pid(uart, f"helper {c} authority-a authority-b")
-    uart.command(f"move-check {c} {h}", "actor status=17 ")
+    uart.command(f"move-check {c} {h}", "actor state=pending")
+    actor_result(uart,h,17)
     assert actor(uart,c,"stale")["value"] == 1
     actor(uart,h,"read")
-    uart.command(f"revoke {c}", "access=fenced members=2")
+    fence(uart, c)
     actor(uart,h,"read",18)
     cleanup(uart,c,h)
     # Root death must also fence H when H still holds the moved endpoint.
     c = pid(uart, "session authority-a authority-b")
     h = pid(uart, f"helper {c} authority-a authority-b")
-    uart.command(f"move-check {c} {h}", "actor status=17 ")
+    uart.command(f"move-check {c} {h}", "actor state=pending")
+    actor_result(uart,h,17)
     uart.command(f"kill {c}", "ok")
     exited(uart,c,3,0)
     actor(uart,h,"read",18)

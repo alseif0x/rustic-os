@@ -14,7 +14,7 @@ from .oracle import snapshot
 from .recovery_cases import exercise, verify_final
 from .recovery_faults import CUTS
 from .cases import pid
-from .authority_cases import actor
+from .authority_cases import actor, fence
 
 
 def verify(image, timeout=60, output=None):
@@ -71,7 +71,7 @@ def verify(image, timeout=60, output=None):
                         c = pid(uart, "session hello other")
                         h = pid(uart, f"helper {c} hello other")
                         uart.command(f'replace hello {base["old"]["version"]} {base["retry"]} "after"', "Uncertain")
-                        uart.command(f"revoke {c}", "access=fenced members=2 discarded_staging=0 effects=recovery-required")
+                        fence(uart, c, "access=fenced members=2 discarded_staging=0 effects=recovery-required")
                         actor(uart, h, "read", 18)
                         uart.command("mem", "pending_io=0")
                         uart.command("restart files", "utility sessions revoked")

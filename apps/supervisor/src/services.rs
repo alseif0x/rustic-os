@@ -14,6 +14,9 @@ pub struct State {
     pub control: Endpoint,
     pub children: [Option<Child>; 2],
     pub policy: u32,
+    pub(super) takeover: super::takeover::Takeover,
+    pub(super) degraded: bool,
+    pub(super) stopping: bool,
 }
 pub fn call(w: [u64; 8]) -> Result<[u64; 8], ()> {
     runtime::control(w).map_err(|_| ())
@@ -84,6 +87,7 @@ impl State {
     pub fn serve(&mut self) -> u64 {
         loop {
             self.collect();
+            self.poll_takeover();
             match self.control.receive() {
                 Ok(message) => {
                     if message.sender() != self.shell {
@@ -105,16 +109,27 @@ impl State {
                     }
                 }
                 Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {
-                    let mut tokens = [0; 3];
+                    let mut tokens = [0; 4];
                     tokens[0] = self.control.token();
                     let mut n = 1;
                     for c in self.children.iter().flatten() {
                         if !c.closed {
-                            tokens[n] = c.endpoint.token();
+                            tokens[n] = c.control.endpoint.token();
                             n += 1;
                         }
                     }
-                    let _ = runtime::wait_set(&tokens[..n], 100);
+                    if self.admin.pending() && !self.admin.failed() {
+                        tokens[n] = self.admin.endpoint.token();
+                        n += 1;
+                    }
+                    let timeout = if self.takeover.pending()
+                        || self.children.iter().flatten().any(|c| c.control.pending())
+                    {
+                        1
+                    } else {
+                        100
+                    };
+                    let _ = runtime::wait_set(&tokens[..n], timeout);
                 }
                 Err(_) => {
                     let _ = call([k::SHUTDOWN, 0, 0, 0, 0, 0, 0, 0]);

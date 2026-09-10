@@ -10,7 +10,6 @@ pub mod files;
 pub mod ipc;
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 pub mod process;
-#[cfg(all(target_arch = "x86_64", target_os = "none"))]
 pub mod rpc;
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 pub mod runtime;

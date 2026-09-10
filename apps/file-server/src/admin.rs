@@ -33,6 +33,14 @@ pub fn dispatch(
                 r[3] = server.volume.stat(1).is_err() as u64;
                 r[4] = server.volume.sequence();
             }
+            40 if slot != 0 && w[2..].iter().all(|x| *x == 0) => {
+                let root = u32::try_from(w[1]).map_err(|_| Error::Invalid)?;
+                let before = server.pending();
+                r[1] = server.revoke_root(root) as u64;
+                r[2] = (before - server.pending()) as u64;
+                r[3] = server.volume.stat(1).is_err() as u64;
+                r[4] = server.volume.sequence();
+            }
             37 => {
                 r[1] = server.derive(
                     slot,

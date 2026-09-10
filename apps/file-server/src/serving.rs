@@ -55,6 +55,9 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
                     }
                     let output = match wire::decode(message.payload()) {
                         Ok(words) => {
+                            if super::diagnostics::stall(&admin, message.correlation(), words) {
+                                continue;
+                            }
                             let slot = words[1] as usize;
                             let old = server.grant_at(slot);
                             let r = super::admin::dispatch(server, disk, words, runtime::clock());
@@ -70,7 +73,7 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
                                     let _ = Endpoint::from_bootstrap(old.endpoint).close();
                                 }
                             }
-                            if r[0] == 0 && words[0] == 33 {
+                            if r[0] == 0 && matches!(words[0], 33 | 40) {
                                 for (index, reply) in replies[..CLIENTS].iter_mut().enumerate() {
                                     if r[1] & (1 << index) != 0 {
                                         *reply = None;
