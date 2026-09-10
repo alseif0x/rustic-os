@@ -61,3 +61,7 @@ The original `tools/contracts` code and schemas use Apache-2.0. The validator us
 Implementer reviewed the installed metadata and supplied license files against the selected distributions; no independent audit. Their original notices remain in the environment. External development use introduces no new linked guest license obligation; bundling any of these packages later requires preserving the complete package notices and reviewing compiled transitive components. Other architectures/Python versions need their own reviewed wheel hashes rather than bypassing the hash check. Cargo.lock and existing boot-image notices are unchanged.
 
 #44 adds the original Apache-2.0 `rustic-block-probe` path package and typed block codecs/SDK clients. It depends only on `rustic-sdk`; Cargo.lock retains all existing external versions and checksums. The separately linked probe uses the same Rust runtime notice as the SDK probe. No third-party code or additional package is introduced.
+
+## Native terminal increment — 2026-09-10
+
+The original rustic-fs, rustic-file-service, rustic-file-server, rustic-supervisor, rustic-shell and rustic-utility packages use Apache-2.0 and path dependencies only. No additional external Cargo package was added; limine/bitflags and existing image notices are unchanged. The bounded volume implementation is original Rust code informed by the sources in FILES.md; no littlefs, FAT or SQLite source was copied and format compatibility is not claimed. Host terminal/acceptance code uses only the reference Python standard library.

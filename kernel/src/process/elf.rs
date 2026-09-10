@@ -5,7 +5,7 @@ use crate::memory::PAGE_SIZE;
 pub const MAX_SEGMENTS: usize = 8;
 pub const MAX_PAGES: u64 = 256;
 pub const STACK_TOP: u64 = 0x8000_0000;
-pub const STACK_PAGES: u64 = 4;
+pub const STACK_PAGES: u64 = 16;
 pub const STACK_GUARD: u64 = STACK_TOP - (STACK_PAGES + 1) * PAGE_SIZE;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

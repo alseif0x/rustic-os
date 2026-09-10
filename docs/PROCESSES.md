@@ -11,8 +11,8 @@ exception records a fault result and allows peers to continue. Creation, inspect
 stepping, termination and waiting/reaping are typed internal operations, independent
 of a shell, filesystem, network or model.
 
-This is a single-CPU implementation with at most four resident processes.
-Each program has up to 256 data/code/stack pages, including four stack pages.
+This is a single-CPU implementation with at most eight resident processes.
+Each program has up to 256 data/code/stack pages, including sixteen stack pages (64 KiB).
 Page tables and process metadata are accounted for separately. Exited processes
 occupy their slot and memory until the owner reaps the result; the bounded table
 prevents unlimited zombies. Identities are monotonic during the manager's lifetime;
@@ -23,8 +23,7 @@ There are no threads, fork, dynamic linking, TLS, signals, priorities, SMP,
 demand paging or per-process floating-point/SIMD state. Instructions in the last
 category fault the process rather than accidentally sharing extended registers.
 The initial integer-call protocol is in [PROCESS-ABI.md](PROCESS-ABI.md);
-[IPC, handles and buffer copying](IPC.md) arrive in #34; service authority belongs
-to #13. The GUI and agents will consume later services.
+[IPC, handles and buffer copying](IPC.md) are implemented. The [native runtime](NATIVE-RUNTIME.md) adds dormant provisioning and authenticated supervisor calls; broader service authority remains in #13. The GUI and agents will consume later services.
 
 ## Separation of responsibilities
 
@@ -161,7 +160,7 @@ free memory before/after. Timings include self-tests and are not product-boot
 latency. The future integrated scenario's 2 GiB budget still requires raising
 the #9 physical limit; this test does not establish it.
 
-`PROCESS_MEMORY` records maximum frames used when all four slots are filled,
+`PROCESS_MEMORY` records maximum frames used when all eight slots are filled,
 including page tables and user stacks, the actual `Manager` size and the
 additional 20 KiB entry-stack reservation (including guard). This static
 reservation is not charged again per process. Each fixture ELF occupies

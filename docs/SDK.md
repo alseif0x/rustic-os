@@ -21,7 +21,7 @@ Implemented for #11 on the R0 single-CPU x86_64 target. This is an allocation-fr
 
 The kernel depends on shared ABI contracts, never on the SDK. The test image embeds the independently linked ELF as opaque bytes; it does not link application Rust code as kernel functions. Runtime SDK calls are exposed only for `x86_64-unknown-none`; host tests exercise portable encoding and parsing without executing host INT 0x80.
 
-`entry!(run)` accepts a function `fn(u64, u64, u64) -> u64`. The trusted launcher supplies RDI/RSI/RDX integers and a 16 KiB private stack with a guard page. The startup code clears the direction flag and calls Rust with the correct stack alignment; it checks both ABI versions before calling the application. Returning invokes EXIT. The example panic handler exits with 127; startup version mismatch exits with 126.
+`entry!(run)` accepts a function `fn(u64, u64, u64) -> u64`. The trusted launcher supplies RDI/RSI/RDX integers and a 64 KiB private stack with a guard page. The startup code clears the direction flag and calls Rust with the correct stack alignment; it checks both ABI versions before calling the application. Returning invokes EXIT. The example panic handler exits with 127; startup version mismatch exits with 126.
 
 `process::report` is the existing eight-value integer diagnostic facility, not text output. `Endpoint::from_bootstrap` wraps a token without granting anything; the kernel validates owner, lifetime and rights on every operation. There is no public create/transfer-channel or kill-by-PID call.
 
@@ -29,9 +29,9 @@ Messages own 88 bytes of storage and expose at most 64 payload bytes. Outbound s
 
 ## Memory and runtime limits
 
-Rust `core`, stack variables, static data, slices and fixed arrays are available. Image segments retain the loader's R/RX/RW permissions. The SDK has no allocator, allocation/free syscalls, `alloc`, `std`, files, networking, threads, TLS, floating point or SIMD support. It does not publish placeholders for those functions. The pinned target avoids a red zone and SIMD. Do not add dependencies that require a runtime the OS has not implemented.
+Rust `core`, stack variables, static data, slices and fixed arrays are available. Image segments retain the loader's R/RX/RW permissions. The SDK has no allocator, allocation/free syscalls, `alloc`, `std`, networking, threads, TLS, floating point or SIMD support. It does not publish placeholders for those functions. The pinned target avoids a red zone and SIMD. Do not add dependencies that require a runtime the OS has not implemented.
 
-A later service adds a cohesive client module when its actual contract exists, conforming to the [versioned service schemas](SERVICE-CONTRACTS.md) from #6. The initial schemas and host descriptors do not add native service calls. #44 supplies the lower-level [block API](BLOCK-ACCESS.md); #12 will add file-service encoding and clients. A 512-byte block is separate from the logical file-operation payload limit. Service versions remain separate from the process/IPC ABI. MCP is an adapter above services and does not block native SDK use.
+A later service adds a cohesive client module when its actual contract exists, conforming to the [versioned service schemas](SERVICE-CONTRACTS.md) from #6. The initial schemas and host descriptors do not add native service calls. #44 supplies the lower-level [block API](BLOCK-ACCESS.md); The [bounded file-service protocol and clients](FILES.md) now support the terminal; durable service-v1 effect/receipt conformance remains in #12. A 512-byte block is separate from the logical file-operation payload limit. Service versions remain separate from the process/IPC ABI. MCP is an adapter above services and does not block native SDK use.
 
 ## Manifest schema 1
 
@@ -47,7 +47,7 @@ The kernel independently parses exactly 128 bytes with explicit little-endian de
 | 12 | 4 | Required process ABI, 65536 (1.0), exact match |
 | 16 | 2 | Required IPC extension, 1, exact match |
 | 18 | 6 | Application major/minor/patch, three u16 integers |
-| 24 | 8 | Capability requests: bit 0 IPC, bit 1 diagnostic, bit 2 block; unknown bits rejected |
+| 24 | 8 | Capability requests: bit 0 IPC, bit 1 diagnostic, bit 2 block, bit 3 console, bit 4 supervisor control; unknown bits rejected |
 | 32 | 32 | Application identity |
 | 64 | 32 | Executable filename, ending in `.elf` |
 | 96 | 32 | Reserved, all zero |
@@ -56,7 +56,7 @@ Names contain 1–31 ASCII bytes, start with a lowercase letter, and otherwise a
 
 Admission rejects a mismatch between the manifest's executable name and the trusted launcher's selected name, unavailable requests, invalid manifest/ABI versions and invalid ELF before execution. Name and version are descriptive metadata, not authenticated publisher identity. This manifest provides no signature, package integrity or installation system.
 
-**Requests never grant authority.** The caller supplies the available feature set for admission and must separately provision actual handles. The test launcher creates an endpoint for each process and supplies its token. Diagnostics are already a bounded ambient syscall; the diagnostic request states a requirement, not a new per-app enforcement mechanism. [ADR-0002](architecture/ADR-0002-authority-and-delegation.md) defines the authority baseline; supervisor identities, grants and revocation enforcement remain #13.
+**Requests never grant authority.** The caller supplies the available feature set for admission and must separately provision actual handles. The test launcher creates an endpoint for each process and supplies its token. Diagnostics are already a bounded ambient syscall; the diagnostic request states a requirement, not a new per-app enforcement mechanism. [ADR-0002](architecture/ADR-0002-authority-and-delegation.md) defines the authority baseline; the [native runtime](NATIVE-RUNTIME.md) now supplies the trusted supervisor identity; file services enforce scoped grants, expiry and revocation. Broader #13 authority cases remain open.
 
 ## Build and run the example
 
@@ -76,7 +76,7 @@ The image builder compiles the application first, then builds the kernel with `s
 
 The app linker script emits a static ET_EXEC with separate PT_LOAD segments at 0x400000. No ELF parser relaxation was required. The observed release executable is 20,184 bytes; this is a measurement with Rust 1.98.1, not a fixed format requirement. The loader continues to enforce its 1 MiB file, 256-page process and W^X limits.
 
-To create another native utility, follow the example's Cargo package, linker script, entry function and panic handler. Add it to the workspace and explicitly extend the host build/launcher to select it. The builder and bootstrap harness deliberately select two named templates; arbitrary application discovery, installation and shell launch are later work.
+To create another native utility, follow the example's Cargo package, linker script, entry function and panic handler. Add it to the workspace and explicitly extend the host build/launcher to select it. The builder selects six applications: two probes, supervisor, file server, shell and utility. The shell launches fixed utility roles through the supervisor. Arbitrary discovery, installation and executable-file launch remain later work.
 
 The example runs two instances with opposite roles. They verify identity, reject an oversized payload and invalid handle, exchange four correlated requests/replies with authenticated sender IDs, close their endpoints and report completion. Malformed example roles or peer identities return a nonzero exit code.
 

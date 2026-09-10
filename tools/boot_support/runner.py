@@ -30,6 +30,9 @@ def run(image, timeout):
     from .block_evidence import MODES
     from . import block_runner
     metadata = json.loads((Path(image).resolve().parent / "image.json").read_text())
+    if metadata["mode"] == "terminal-test":
+        from terminal_support.acceptance import verify
+        return verify(image, timeout)
     if metadata["mode"] in MODES:
         return block_runner.run(image, timeout, run_once)
     return run_once(image, timeout)

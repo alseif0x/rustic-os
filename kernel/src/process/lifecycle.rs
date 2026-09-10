@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Fixed-capacity round robin; PID allocation is monotonic and fails on overflow.
-pub const CAPACITY: usize = 4;
+pub const CAPACITY: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pid(pub u64);
@@ -18,6 +18,7 @@ pub enum Exit {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
+    Dormant,
     Ready,
     Running,
     Blocked,
@@ -76,6 +77,25 @@ impl Table {
             state: State::Ready,
         });
         Ok((slot, pid))
+    }
+    /// Hold a newly created child until its owner finishes provisioning.
+    pub fn hold(&mut self, pid: Pid) -> Result<(), Error> {
+        let slot = self.slot(pid)?;
+        let record = self.slots[slot].as_mut().unwrap();
+        if record.state != State::Ready {
+            return Err(Error::NotRunning);
+        }
+        record.state = State::Dormant;
+        Ok(())
+    }
+    pub fn start(&mut self, pid: Pid) -> Result<(), Error> {
+        let slot = self.slot(pid)?;
+        let record = self.slots[slot].as_mut().unwrap();
+        if record.state != State::Dormant {
+            return Err(Error::NotRunning);
+        }
+        record.state = State::Ready;
+        Ok(())
     }
     pub fn slot(&self, pid: Pid) -> Result<usize, Error> {
         self.slots

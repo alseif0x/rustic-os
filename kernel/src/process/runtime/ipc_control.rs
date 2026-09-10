@@ -8,7 +8,7 @@ impl Manager {
     pub(super) fn live(&self, pid: Pid) -> Result<usize, Error> {
         if matches!(
             self.table.state(pid),
-            Ok(State::Ready | State::Running | State::Blocked)
+            Ok(State::Dormant | State::Ready | State::Running | State::Blocked)
         ) {
             self.table.slot(pid).map_err(|_| Error::Handle)
         } else {

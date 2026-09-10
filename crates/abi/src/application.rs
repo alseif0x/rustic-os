@@ -5,7 +5,9 @@ pub const VERSION: u16 = 1;
 pub const IPC: u64 = 1;
 pub const DIAGNOSTIC: u64 = 2;
 pub const BLOCK: u64 = 4;
-pub const KNOWN: u64 = IPC | DIAGNOSTIC | BLOCK;
+pub const CONSOLE: u64 = 8;
+pub const CONTROL: u64 = 16;
+pub const KNOWN: u64 = IPC | DIAGNOSTIC | BLOCK | CONSOLE | CONTROL;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {

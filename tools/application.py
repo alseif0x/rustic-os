@@ -9,7 +9,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = {"schema", "identity", "executable", "version", "process_abi", "ipc_version", "requests"}
-CAPABILITIES = {"ipc": 1, "diagnostic": 2, "block": 4}
+CAPABILITIES = {"ipc": 1, "diagnostic": 2, "block": 4, "console": 8, "control": 16}
 
 
 def encode(document):
@@ -65,6 +65,8 @@ def build_one(root, env, offline, name, manifest_name):
 def build(root=ROOT, env=None, offline=False):
     output = build_one(root, env, offline, "sdk-probe", "app.manifest")
     build_one(root, env, offline, "block-probe", "block-probe.manifest")
+    for name in ("file-server", "supervisor", "shell", "utility"):
+        build_one(root, env, offline, name, name + ".manifest")
     return output
 
 

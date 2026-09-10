@@ -14,6 +14,8 @@ use rustic_kernel::{
 };
 
 pub(super) struct Manager {
+    #[cfg(feature = "sdk-test")]
+    pub(super) session: super::native::Session,
     pub(super) table: Table,
     pub(super) processes: [Option<Process>; CAPACITY],
     pub(super) broker: Broker,
@@ -22,6 +24,8 @@ pub(super) struct Manager {
 impl Manager {
     pub(super) fn new() -> Self {
         Self {
+            #[cfg(feature = "sdk-test")]
+            session: Default::default(),
             table: Table::new(),
             processes: [const { None }; CAPACITY],
             broker: Broker::new(),
@@ -44,6 +48,10 @@ impl Manager {
             }
         };
         self.processes[slot] = Some(Process {
+            #[cfg(feature = "sdk-test")]
+            parent: 0,
+            #[cfg(feature = "sdk-test")]
+            program: 0,
             space: loaded.space,
             frame: Frame::user(loaded.entry, elf::STACK_TOP, args),
             preemptions: 0,
@@ -78,6 +86,19 @@ impl Manager {
                 }
                 Action::Resume
             }
+            #[cfg(feature = "sdk-test")]
+            128 if process.frame.call().0 == rustic_abi::runtime::CONTROL => {
+                self.control(pid, memory)
+            }
+            #[cfg(feature = "sdk-test")]
+            128 if (15..=19).contains(&process.frame.call().0) => super::native::dispatch(
+                process.frame.call().0,
+                process,
+                &self.broker,
+                pid.0,
+                self.session.console,
+                memory,
+            ),
             128 => syscall::dispatch(process, &mut self.broker, &mut self.block, pid.0, memory),
             vector => {
                 let exit = Exit::Fault {
@@ -89,6 +110,7 @@ impl Manager {
                 return Ok(Some(pid));
             }
         };
+        let process = self.processes[slot].as_mut().expect("scheduled process");
         match action {
             Action::Exit(code) => {
                 self.finish(pid, Exit::Code(code))?;
@@ -118,6 +140,10 @@ impl Manager {
     }
     fn finish(&mut self, pid: Pid, exit: Exit) -> Result<(), Error> {
         self.table.finish(pid, exit)?;
+        #[cfg(feature = "sdk-test")]
+        if self.session.console == pid.0 {
+            self.session.console = 0;
+        }
         self.processes[self.table.slot(pid)?]
             .as_mut()
             .unwrap()

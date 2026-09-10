@@ -14,6 +14,32 @@ impl Manager {
             }
             let process = self.processes[slot].as_mut().unwrap();
             let result = match process.pending.expect("blocked process owns a wait") {
+                #[cfg(feature = "sdk-test")]
+                super::record::Pending::Console => {
+                    if self.session.console != pid.0 {
+                        rustic_abi::runtime::Error::Denied.code()
+                    } else if super::native::console::readiness() {
+                        0
+                    } else {
+                        continue;
+                    }
+                }
+                #[cfg(feature = "sdk-test")]
+                super::record::Pending::Any {
+                    handles,
+                    count,
+                    deadline,
+                } => {
+                    let Some(value) = super::native::wait::readiness(
+                        &self.broker,
+                        pid.0,
+                        &handles[..count],
+                        deadline,
+                    ) else {
+                        continue;
+                    };
+                    value
+                }
                 super::record::Pending::Ipc(handle) => match self.broker.peek(pid.0, handle) {
                     Ok(_) => 0,
                     Err(Error::WouldBlock) => continue,

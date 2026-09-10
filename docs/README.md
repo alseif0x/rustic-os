@@ -9,6 +9,7 @@ Start with the [project overview](../README.md) for current capabilities and the
 | Guide | Purpose |
 | --- | --- |
 | [Development](DEVELOPMENT.md) | Reference environment, workspace layout and checks |
+| [Native terminal](TERMINAL.md) | Interactive commands, persistent disk, process control, permissions and recovery |
 | [Boot and VM tests](BOOT.md) | Build an image, run QEMU and interpret evidence |
 | [Isolated executor](EXECUTOR.md) | Test exact revisions with resource and network restrictions |
 
@@ -24,6 +25,13 @@ Start with the [project overview](../README.md) for current capabilities and the
 | [Block storage](BLOCK.md) | Bounded VirtIO I/O, DMA ownership, disposable disks and restart persistence |
 | [User-mode block access](BLOCK-ACCESS.md) | Copied asynchronous requests, scoped handles, cancellation and safe DMA lifetime |
 | [IPC](IPC.md) | Message format, handles, buffers, waits and resource lifetime |
+
+## Native service foundations
+
+| Contract | Scope |
+| --- | --- |
+| [Session runtime](NATIVE-RUNTIME.md) | Owned process/control calls, console, wait sets and bounded capacity |
+| [File service](FILES.md) | Original volume format, native protocol, scopes, persistence and explicit limits |
 
 ## Requirements and design
 

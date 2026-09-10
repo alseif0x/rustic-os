@@ -63,6 +63,12 @@ pub(crate) fn initialize() -> Option<Controller> {
 }
 
 impl Controller {
+    #[cfg(feature = "sdk-test")]
+    pub(crate) fn idle(&mut self) {
+        let guard = Mask::acquire();
+        guard.sleep();
+    }
+
     pub(crate) fn stall(&mut self) -> ! {
         tests::stall(self)
     }

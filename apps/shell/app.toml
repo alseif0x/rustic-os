@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+schema = 1
+identity = "rustic.shell"
+executable = "shell.elf"
+version = [0, 1, 0]
+process_abi = 65536
+ipc_version = 1
+requests = ["ipc", "console"]

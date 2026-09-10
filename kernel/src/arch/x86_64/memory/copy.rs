@@ -4,7 +4,7 @@ use super::{Error, Memory, UserSpace};
 use rustic_kernel::memory::PAGE_SIZE;
 
 impl Memory {
-    fn validate_buffer(
+    pub(crate) fn validate_buffer(
         &self,
         space: &UserSpace,
         address: u64,

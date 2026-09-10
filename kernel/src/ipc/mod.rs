@@ -17,3 +17,5 @@ impl From<crate::handles::Error> for Error {
         }
     }
 }
+
+pub const CHANNELS: usize = 8;

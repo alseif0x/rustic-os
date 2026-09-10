@@ -14,7 +14,7 @@ def evidence():
         if address is None:
             address = 0xffffffff80012000
         lines.append(f"RUSTIC PROCESS_FAULT case={name} ring=3 vector={vector} error={error:#x} address={address:#x} survivor=1 reclaimed=1")
-    lines.append("RUSTIC PROCESS_MEMORY slots=4 peak_frames=52 metadata_bytes=1200 entry_stack_bytes=20480 oom_cases=3")
+    lines.append("RUSTIC PROCESS_MEMORY slots=8 peak_frames=200 metadata_bytes=1200 entry_stack_bytes=20480 oom_cases=3")
     return "\n".join(lines)
 
 
@@ -27,7 +27,7 @@ class ProcessEvidence(unittest.TestCase):
                                       ("reclaimed=1", "reclaimed=0"), ("error=0x4", "error=0x5"),
                                       ("address=0x700008", "address=0x600008"),
                                       ("0xffffffff80012000", "0x400000"), ("vector=14", "vector=8"),
-                                      ("oom_cases=3", "oom_cases=0"), ("peak_frames=52", "peak_frames=0")]:
+                                      ("oom_cases=3", "oom_cases=0"), ("peak_frames=200", "peak_frames=0")]:
             self.assertFalse(verified(good.replace(original, replacement, 1), records), original)
 
     def test_missing_or_duplicate_faults_and_partial_summary_fail(self):

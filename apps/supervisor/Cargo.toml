@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "rustic-supervisor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+[lints]
+workspace = true
+[features]
+native = []
+[dependencies]
+rustic-sdk = { path = "../../crates/sdk" }
+[[bin]]
+name = "supervisor"
+path = "src/main.rs"
+required-features = ["native"]
+test = false
+bench = false

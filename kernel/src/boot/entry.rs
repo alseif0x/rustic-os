@@ -43,6 +43,14 @@ pub(crate) fn run() -> ! {
     let mut memory = arch::memory::Memory::initialize(layout, adapter::memory_regions())
         .unwrap_or_else(|error| panic!("memory initialization: {error:?}"));
     match mode {
+        #[cfg(feature = "sdk-test")]
+        BootMode::Terminal | BootMode::TerminalInit => {
+            crate::process::terminal(&mut memory, &mut interrupts, mode == BootMode::TerminalInit)
+        }
+        #[cfg(not(feature = "sdk-test"))]
+        BootMode::Terminal | BootMode::TerminalInit => {
+            panic!("terminal requires native applications")
+        }
         #[cfg(not(feature = "sdk-test"))]
         BootMode::BlockUser | BootMode::BlockUserFaults => {
             panic!("native block acceptance requires sdk-test");

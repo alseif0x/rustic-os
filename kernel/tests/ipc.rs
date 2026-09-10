@@ -111,11 +111,17 @@ fn foreign_stale_and_transferred_handles_cannot_gain_rights() {
 fn bounded_channels_recover_without_reusing_tokens() {
     let mut broker = Broker::new();
     let (old, _) = broker.connect(1, 1).unwrap();
-    for _ in 0..3 {
+    for _ in 1..rustic_kernel::ipc::CHANNELS {
         broker.connect(1, 1).unwrap();
     }
     assert_eq!(broker.connect(2, 3), Err(Error::Quota));
-    assert_eq!(broker.counts(), (4, 8));
+    assert_eq!(
+        broker.counts(),
+        (
+            rustic_kernel::ipc::CHANNELS,
+            2 * rustic_kernel::ipc::CHANNELS
+        )
+    );
     broker.close_owner(1);
     for _ in 0..1000 {
         let (new, _) = broker.connect(1, 2).unwrap();

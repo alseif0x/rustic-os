@@ -17,7 +17,7 @@ The goal is agent control without mandatory screen interpretation. A graphical i
 
 ## Current status
 
-**Early, experimental kernel development.** RusticOS boots its own modular Rust kernel in QEMU through Limine and UEFI. It already runs isolated test programs in user mode and exchanges messages between processes. There is no interactive shell, desktop, browser, or integrated agent yet.
+**A working native terminal on an experimental Rust OS.** RusticOS boots its own modular kernel in QEMU through Limine and UEFI. A separate supervisor, file server and shell run in user mode: enter commands, save files across reboots, inspect processes and revoke scoped utility access. A desktop, browser and integrated agent remain roadmap work.
 
 | Available today | What is verified |
 | --- | --- |
@@ -29,9 +29,11 @@ The goal is agent control without mandatory screen interpretation. A graphical i
 | [IPC and handles](docs/IPC.md) | Versioned messages, kernel-provided sender identity, validated buffers, ownership, waits and closure |
 | [Block storage](docs/BLOCK.md) | Bounded VirtIO reads/writes, flush, restart persistence, device errors and DMA recovery |
 | [User-mode disk access](docs/BLOCK-ACCESS.md) | Typed SDK, scoped handles, asynchronous sector I/O, cancellation and process-death recovery |
+| [Native terminal](docs/TERMINAL.md) | Real keyboard input, file commands, isolated utilities, permissions, service restart and reboot persistence |
+| [File service](docs/FILES.md) | Bounded copy-on-write volume, version checks, scopes, recovery model and independent disk verification |
 | [Isolated test executor](docs/EXECUTOR.md) | Exact Git revisions, offline jobs, resource limits, cancellation and structured evidence |
 
-The current acceptance suite covers **46 Rust tests, 30 Python tests, 20 VM scenarios and 24 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [user-mode storage acceptance](https://github.com/alseif0x/rustic-os/issues/44) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees. Separately, the [service contract suite](docs/SERVICE-CONTRACTS.md) validates 62 messages, nine exchanges and 14 host checks; those do not execute guest services.
+The current acceptance suite covers **59 Rust tests, 32 Python tests, 21 VM scenarios and 25 isolated executor scenarios**, including user-mode exchanges and disk persistence across separate VM boots. See [terminal acceptance and limits](docs/TERMINAL.md) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml). These are checks of the reference configuration, not production security guarantees. Separately, the [service contract suite](docs/SERVICE-CONTRACTS.md) validates 62 messages, nine exchanges and 14 host checks; those do not execute guest services.
 
 The current VM uses **x86_64, one CPU and 256 MiB RAM**. Process and IPC limits are deliberately small; see their contracts before building on them.
 
@@ -59,7 +61,7 @@ Rust kernel: memory · processes · IPC · isolation
 - **Verifiable effects:** operations need inspectable state, meaningful errors and independent outcome checks.
 - **Measured adaptability:** hardware, application compatibility and interaction modes expand through tested capabilities and deterministic fallback policies.
 
-The kernel does not depend on MCP or a model. The service, tool and agent layers above it are roadmap work. The first eight [shared service contracts](docs/SERVICE-CONTRACTS.md) now have checked schemas and generated descriptors; [agent integration](docs/architecture/agent-integration.md) records the adapter design and open experiments.
+The kernel does not depend on MCP or a model. Native file/supervision services now support the manual terminal. The broader service-v1 transaction, tool and agent layers remain roadmap work. The first eight [shared service contracts](docs/SERVICE-CONTRACTS.md) now have checked schemas and generated descriptors; [agent integration](docs/architecture/agent-integration.md) records the adapter design and open experiments.
 
 The [systems research agenda](docs/architecture/systems-roadmap.md) explores a further goal: tasks whose state, authority, effects and recovery remain understandable across people and replaceable agents. It includes prior work, stage gates and a small executed host model; these proposals are distinct from the implemented features above.
 
@@ -79,11 +81,14 @@ python3 tools/environment.py install
 cargo xtask check
 python3 -m unittest discover -s tools/tests -v
 
-# Build the image and run the guest's acceptance checks.
-python3 tools/boot.py run --mode ok
+# First interactive launch: create a new dedicated sparse data image.
+python3 tools/terminal.py --initialize
+
+# Later launches: mount the same persistent disk.
+python3 tools/terminal.py
 ```
 
-A successful run produces serial evidence and exits; it does not open an interactive desktop. Build artifacts and logs are written under `artifacts/boot/ok/`.
+Type help in the native terminal. Try write hello "Hello from RusticOS", cat hello, ps, services and mem; exit stops the VM. The dedicated disk stays in artifacts/terminal/data.raw. See [terminal syntax, permissions and recovery](docs/TERMINAL.md). Initialization refuses an existing disk.
 
 For the complete VM suite:
 
@@ -99,8 +104,9 @@ See [boot commands and expected results](docs/BOOT.md) and the [isolated executo
 | --- | --- |
 | [`kernel/`](kernel/) | Pure kernel contracts plus architecture-specific boot, memory and process execution |
 | [`crates/abi/`](crates/abi/) | Shared `no_std` binary contracts, independent of kernel implementation |
-| [`crates/sdk/`](crates/sdk/) | Native application startup, process calls and typed IPC/block clients |
-| [`apps/`](apps/) | Independently compiled Rust applications for IPC and persistent block access |
+| [`crates/sdk/`](crates/sdk/) | Native entry, runtime/console, IPC/block and file-service clients |
+| [`crates/fs/`](crates/fs/) · [`crates/file-service/`](crates/file-service/) | Pure volume format and bounded file authority/staging, independent of kernel and SDK |
+| [`apps/`](apps/) | Independent supervisor, file server, shell and utility applications, plus acceptance probes |
 | [`contracts/`](contracts/services/v1/catalog.json) | Versioned logical service schemas, descriptor metadata and positive/negative examples |
 | [`tools/`](tools/) | Host-side checks, image construction, QEMU execution and sandbox orchestration |
 | [`docs/`](docs/README.md) | Requirements, architecture decisions, subsystem contracts and evidence guides |
@@ -118,7 +124,7 @@ Modules follow ownership and trust boundaries. Entry points compose components; 
 | H4 — Desktop and browser | Graphical interaction and a browser engine running inside RusticOS | Planned |
 | H5 — Experimental v0.1 | Verified candidates, activation, recovery and integrated acceptance | Planned |
 
-**Next:** build the user-mode [file service](https://github.com/alseif0x/rustic-os/issues/12) on the implemented [bounded block API](docs/BLOCK-ACCESS.md), following the [specified service contracts](docs/SERVICE-CONTRACTS.md). The [authority decision](docs/architecture/ADR-0002-authority-and-delegation.md) adopts explicit resource/action grants shared by all clients; enforcement, supervision and shell remain ahead. Fixed permission tiers and a general delegation framework are not prerequisites.
+**Next:** complete the durable effect/receipt and recovery contracts in [#12](https://github.com/alseif0x/rustic-os/issues/12), extend the native authority mission in [#13](https://github.com/alseif0x/rustic-os/issues/13), and measure the service topology in #20. The terminal establishes the manual path; it does not yet provide idempotency receipts, a general delegation framework or production filesystem guarantees. [Current boundaries](docs/TERMINAL.md).
 
 The experimental v0.1 target includes a native console, optional agent, locally running browser engine and a verifiable change/recovery cycle. The model, compiler and test environment may be external, with that dependency declared. Broad hardware support and universal application compatibility are long-term research goals, not current promises.
 

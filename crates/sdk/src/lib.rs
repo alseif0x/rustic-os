@@ -5,9 +5,15 @@
 mod arch;
 pub mod block;
 pub mod error;
+#[cfg(all(target_arch = "x86_64", target_os = "none"))]
+pub mod files;
 pub mod ipc;
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 pub mod process;
+#[cfg(all(target_arch = "x86_64", target_os = "none"))]
+pub mod rpc;
+#[cfg(all(target_arch = "x86_64", target_os = "none"))]
+pub mod runtime;
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 mod startup;
 pub use error::Error;

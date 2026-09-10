@@ -7,7 +7,7 @@ use super::{
 use rustic_abi::ipc::{ALL, READ, WRITE};
 
 pub struct Broker {
-    channels: [Option<Channel>; 4],
+    channels: [Option<Channel>; super::CHANNELS],
     handles: Table,
     next_channel: u64,
 }
@@ -19,7 +19,7 @@ impl Default for Broker {
 impl Broker {
     pub const fn new() -> Self {
         Self {
-            channels: [const { None }; 4],
+            channels: [const { None }; super::CHANNELS],
             handles: Table::new(0, ALL, rustic_abi::ipc::TRANSFER),
             next_channel: 1,
         }

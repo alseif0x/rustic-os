@@ -19,7 +19,7 @@ def prepare():
         reference.mkdir()
         for name in ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "LICENSE"):
             shutil.copyfile(ROOT / name, reference / name)
-        for name in ("kernel", "crates", "apps", "licenses", ".cargo", "tools/xtask", "tools/boot_support"):
+        for name in ("kernel", "crates", "apps", "licenses", ".cargo", "tools/xtask", "tools/boot_support", "tools/terminal_support"):
             shutil.copytree(ROOT / name, reference / name, ignore=shutil.ignore_patterns("__pycache__"))
         for name in ("environment.py", "environment.toml", "application.py"):
             shutil.copyfile(ROOT / "tools" / name, reference / "tools" / name)

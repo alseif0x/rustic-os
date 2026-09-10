@@ -6,6 +6,10 @@ use rustic_abi::ipc as abi;
 /// Explicit close; process exit also reclaims handles. Never clone or serialize as authority.
 pub struct Endpoint(u64);
 impl Endpoint {
+    /// Local token for a copied wait set; knowing it never grants another owner access.
+    pub fn token(&self) -> u64 {
+        self.0
+    }
     /// Wrap a bootstrap token; this does not create a channel or grant access.
     pub fn from_bootstrap(token: u64) -> Self {
         Self(token)

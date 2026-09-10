@@ -3,6 +3,8 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BootMode {
     Ok,
+    Terminal,
+    TerminalInit,
     Panic,
     Hang,
     Exception,
@@ -27,6 +29,8 @@ impl BootMode {
     /// Reject all unsupported input instead of silently selecting success.
     pub fn parse(input: &[u8]) -> Option<Self> {
         match input {
+            b"mode=terminal" => Some(Self::Terminal),
+            b"mode=terminal-init" | b"mode=terminal-test" => Some(Self::TerminalInit),
             b"mode=ok" => Some(Self::Ok),
             b"mode=panic" => Some(Self::Panic),
             b"mode=hang" => Some(Self::Hang),

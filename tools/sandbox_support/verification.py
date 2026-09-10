@@ -27,13 +27,14 @@ def suite(revision):
              ("build_hang", candidate(revision, 'fn main() { eprintln!("RUSTIC_BUILD_HANG"); loop { std::thread::sleep(std::time::Duration::from_secs(1)); } }\n'),
               "ok", 15, 30, "build_timeout")]
     cases[8:8] = [(mode, revision, mode, 120, 30, "boot_failed") for mode in MEMORY_FAULTS]
+    cases.insert(0, ("terminal-test", revision, "terminal-test", 120, 60, "success"))
     cases[13:13] = [(mode, revision, mode, 120, 30, "success") for mode in BLOCK_MODES]
     for name, commit, mode, build_seconds, boot_seconds, expected in cases:
         result = execute(commit, mode, build_seconds, boot_seconds)
         if result["status"] != expected:
             raise RuntimeError(f"{name}: expected {expected}, got {result['status']}; job {result['job_id']}")
         directory = JOBS / result["job_id"]
-        if (name in ("ok", "exception", "gp", "doublefault", "timer-stall") or name in MEMORY_FAULTS or name in BLOCK_MODES) and not reached(mode, (directory / "serial.log").read_text()):
+        if (name in ("ok", "exception", "gp", "doublefault", "timer-stall", "terminal-test") or name in MEMORY_FAULTS or name in BLOCK_MODES) and not reached(mode, (directory / "serial.log").read_text()):
             raise RuntimeError(name + ": guest did not verify the expected interrupt fixture")
         marker = {"compile_error": ("build.log", "RUSTIC_COMPILE_FIXTURE"),
                   "build_hang": ("build.log", "RUSTIC_BUILD_HANG"),

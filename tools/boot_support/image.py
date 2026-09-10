@@ -55,6 +55,7 @@ def build(mode):
         "application_manifest_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "app.manifest"),
         "block_application_elf_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "block-probe.elf"),
         "block_application_manifest_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "block-probe.manifest"),
+        "native_applications": {name: {suffix: environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / (name + suffix)) for suffix in (".elf", ".manifest")} for name in ("file-server", "supervisor", "shell", "utility")},
         "rustc": subprocess.check_output(["rustc", "--version", "--verbose"], text=True),
     }
     return package(kernel, mode, build_id, provenance)

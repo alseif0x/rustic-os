@@ -41,9 +41,9 @@ is rejected without enqueueing. The #6 service contracts will be another layer.
 
 ## Ownership, rights and limits
 
-The broker owns at most four duplex channels, with two messages per direction.
-The table has a defensive limit of 16 entries and eight per owner; four channels
-without duplication produce at most eight active handles. Monotonic tokens are
+The broker owns at most eight duplex channels, with two messages per direction.
+The table has a defensive limit of 32 entries and sixteen per owner; eight channels
+without duplication produce at most sixteen active handles. Monotonic tokens are
 not reused during the broker's lifetime and are checked together with the owner.
 Knowing or guessing another process's token does not allow its use.
 They are not claimed to be cryptographic secrets.
@@ -127,7 +127,7 @@ misclassified error cannot become success.
 
 R0 retains one CPU, 256 MiB, QEMU 8.2.2 q35/qemu64/TCG, OVMF 2024.02 and
 Rust 1.98.1. At #34 acceptance these checks were integrated into 13 VM and 17 isolated scenarios; [block storage](BLOCK.md) later expands both suites.
-A local sample measures 3,648 bytes for the manager with broker and states,
+The historical #34 local sample measured 3,648 bytes for the manager with broker and states,
 compared with 1,040 in #10; the four processes still use 52 frames for their
 pages/tables. The first boot with IPC took around 8.9 seconds including self-tests.
 These are executor-identified samples, not universal limits.
@@ -138,6 +138,6 @@ not establish SMP, DMA to buffers, shared memory, a name service, message-attach
 transfers or product authority. Internal launcher grants and cancellations are
 not an open application API; #13 must give them an authority context before
 exposure. Reliable IPC does not establish files, shell or an agent. The native SDK now wraps this contract.
-The next increment, #11, will consume the ABI for Rust applications.
+The [native terminal](TERMINAL.md) now uses the SDK and separate services on this IPC. [Runtime extension 1](NATIVE-RUNTIME.md) adds copied wait sets, owner control and eight-channel capacity. Broad service-v1 transaction/authority conformance remains separate.
 
 #44 reuses the owner/rights table in `kernel/src/handles/` with disjoint type domains. IPC tokens retain domain 0; block tokens use domain 1. Each call resolves the complete opaque token in its own object table and validates the current owner, preventing cross-type interpretation. IPC limits and wire version remain unchanged. Readiness for both typed waits is coordinated in `process/runtime/waiters.rs`.
