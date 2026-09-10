@@ -20,6 +20,9 @@ pub const SHUTDOWN: u64 = 9;
 pub const DEVICE: u64 = 11;
 pub const CLOSE_ENDPOINT: u64 = 12;
 pub const MOVE_ENDPOINT: u64 = 13;
+// Explicit owner-only native fault diagnostics, outside ordinary block grants.
+pub const HOLD_COMPLETION: u64 = 14;
+pub const OBSERVATION_STATUS: u64 = 15;
 pub const FILES: u64 = 1;
 pub const SHELL: u64 = 2;
 pub const UTILITY: u64 = 3;
@@ -68,7 +71,8 @@ impl Error {
 /// Strict shape validation is shared with host contract tests.
 pub fn validate_control(w: [u64; 8]) -> Result<(), Error> {
     let end = match w[0] {
-        INFO | SHUTDOWN | DEVICE => 1,
+        INFO | SHUTDOWN | DEVICE | OBSERVATION_STATUS => 1,
+        HOLD_COMPLETION => 4,
         SPAWN | CONSOLE_GRANT | PROCESS | KILL | REAP => 2,
         CONNECT | CLOSE_ENDPOINT => 3,
         START | BLOCK_GRANT | MOVE_ENDPOINT => 5,

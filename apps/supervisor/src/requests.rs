@@ -5,7 +5,7 @@ use rustic_sdk::{abi::supervisor as s, runtime::abi as k};
 impl State {
     pub fn request(&mut self, w: [u64; 8]) -> Result<[u64; 8], u64> {
         let end = match w[0] {
-            s::INFO | s::EXIT | s::SERVICES | s::RESTART | s::ROTATE_RECEIPTS => 1,
+            s::INFO | s::EXIT | s::SERVICES | s::RESTART | s::ROTATE_RECEIPTS | s::IO_STATUS => 1,
             s::PROCESS
             | s::KILL
             | s::REAP
@@ -13,7 +13,9 @@ impl State {
             | s::REVOKE
             | s::REVOCATION
             | s::ACT_STATUS
-            | s::STALL_FILES => 2,
+            | s::STALL_FILES
+            | s::JOB_STATUS => 2,
+            s::HOLD_IO => 3,
             s::RUN => 6,
             s::HELPER_START => 4,
             s::ACT | s::MOVE_CHECK => 3,
@@ -32,17 +34,7 @@ impl State {
                 Ok([0, r[0], r[1], r[2], r[3], r[4], r[5], r[6]])
             }
             s::RESTART => self.restart(),
-            s::ROTATE_RECEIPTS => {
-                if !self.administrative_ready() {
-                    return Err(3);
-                }
-                let r = self
-                    .admin
-                    .words([36, 0, 0, 0, 0, 0, 0, 0])
-                    .map_err(|_| 4u64)?;
-                // Preserve the file error in a successful owner-control envelope.
-                Ok([0, r[0], r[1], 0, 0, 0, 0, 0])
-            }
+            s::ROTATE_RECEIPTS => self.start_admin(s::ROTATE_RECEIPTS, [36, 0, 0, 0, 0, 0, 0, 0]),
             s::SERVICES => Ok([
                 0,
                 self.files,
@@ -53,16 +45,14 @@ impl State {
                 0,
                 0,
             ]),
-            s::RUN => self
-                .launch(
-                    w[1],
-                    u32::try_from(w[2]).map_err(|_| 1u64)?,
-                    u32::try_from(w[3]).map_err(|_| 1u64)?,
-                    u8::try_from(w[4]).map_err(|_| 1u64)?,
-                    w[5],
-                    0,
-                )
-                .map(|pid| [0, pid, 0, 0, 0, 0, 0, 0]),
+            s::RUN => self.launch(
+                w[1],
+                u32::try_from(w[2]).map_err(|_| 1u64)?,
+                u32::try_from(w[3]).map_err(|_| 1u64)?,
+                u8::try_from(w[4]).map_err(|_| 1u64)?,
+                w[5],
+                0,
+            ),
             s::KILL => {
                 if !self.children.iter().flatten().any(|c| c.pid == w[1]) {
                     return Err(2);
@@ -94,21 +84,19 @@ impl State {
             }
             s::REVOCATION => self.takeover.status(w[1]),
             s::ACT_STATUS => self.actor_status(w[1]),
+            s::JOB_STATUS => self.work.status(w[1], self.files),
             s::STALL_FILES => {
                 if w[1] > 1000 {
                     return Err(1);
                 }
-                if !self.administrative_ready() {
-                    return Err(3);
-                }
-                let r = self
-                    .admin
-                    .words([39, w[1], 0, 0, 0, 0, 0, 0])
-                    .map_err(|_| 4u64)?;
-                if r[0] != 0 {
-                    return Err(4);
-                }
-                self.degraded = true;
+                self.start_admin(s::STALL_FILES, [39, w[1], 0, 0, 0, 0, 0, 0])
+            }
+            s::IO_STATUS => {
+                let r = call([k::OBSERVATION_STATUS, 0, 0, 0, 0, 0, 0, 0]).map_err(|_| 4u64)?;
+                Ok([0, r[0], r[1], r[2], r[3], r[4], r[5], r[6]])
+            }
+            s::HOLD_IO => {
+                call([k::HOLD_COMPLETION, self.files, w[1], w[2], 0, 0, 0, 0]).map_err(|_| 1u64)?;
                 Ok([0; 8])
             }
             s::REVOKE => self.revoke_session(w[1]),

@@ -55,6 +55,7 @@ pub enum Error {
     ExpiredEpoch = 26,
     OutcomeUnknown = 27,
     IdempotencyConflict = 28,
+    Interrupted = 29,
 }
 impl Error {
     pub fn parse(value: u8) -> Result<(), Self> {
@@ -88,6 +89,7 @@ impl Error {
             26 => Self::ExpiredEpoch,
             27 => Self::OutcomeUnknown,
             28 => Self::IdempotencyConflict,
+            29 => Self::Interrupted,
             _ => Self::Protocol,
         })
     }

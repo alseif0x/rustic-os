@@ -16,7 +16,7 @@ python3 tools/terminal.py               # Later launches: mount the same disk.
 
 Run one command at a time. The launcher builds the applications/kernel, packages a read-only UEFI boot image and attaches `artifacts/terminal/data.raw`. Initialization uses exclusive file creation and refuses an existing file. Normal launch refuses a missing, linked, wrong-size or concurrently used image. It never chooses a physical disk. The 4 GiB logical data image is sparse; the receipt-capable format uses only 174 sectors. Do not include it in Git.
 
-Type `exit` to stop cleanly. Ctrl-C cancels the current input line. Ctrl-U clears it; Backspace/Delete removes the last character. QEMU's Ctrl-A X is an emergency exit, without a guest shutdown acknowledgement. The stdio backend disables host signal handling so Ctrl-C reaches the guest. Console ownership belongs to the shell; a utility cannot write directly to its prompt.
+Type `exit` to stop cleanly. Ctrl-C cancels the current input line or interrupts a foreground file/job wait; it does not undo admitted effects. See [foreground control and recovery](FOREGROUND-CONTROL.md). Ctrl-U clears it; Backspace/Delete removes the last character. QEMU's Ctrl-A X is an emergency exit, without a guest shutdown acknowledgement. The stdio backend disables host signal handling so Ctrl-C reaches the guest. Console ownership belongs to the shell; a utility cannot write directly to its prompt.
 
 ## Commands
 
@@ -57,7 +57,8 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `actor-status PID`, `revocation PID` | Query pending/complete actor work or requested/unconfirmed/fenced access without waiting for files |
 | `stall files TICKS` | Owner-only stopped-service diagnostic; 0 is indefinite, 1–1000 is bounded; [procedure and limits](TAKEOVER.md) |
 | `services`, `mem` | Query service identities, owner-policy state, frame/process/channel counts |
-| `restart files` | End utility sessions, remount the file service and issue fresh owner bindings |
+| `restart files [async]`, `job-status [ID]` | End utility sessions, drain pending I/O and remount; optionally return a job ID immediately, then collect its fresh binding |
+| `hold-io SKIP TICKS`, `io-status` | Owner-only [real-submission completion-observation diagnostic](FOREGROUND-CONTROL.md); skip 0–16 writes/flushes, hold for 1–500 ticks |
 | `retry-key PATH KEY`, `replace PATH VERSION TOKEN TEXT`, `receipt ID TOKEN` | Prepare an explicit retry token, commit a tracked whole-file replacement, inspect its retained result |
 | `rotate-receipts` | Deliberately advance the retry epoch and expire the two retained receipts after reconciliation |
 | `exit` | Request supervisor shutdown and release process/device resources |
@@ -70,7 +71,7 @@ The shell is an interpreter for a fixed command set. There are no pipelines, red
 
 The four roots are `/system` (read-only), `/data`, `/config` and `/workspaces`. Limits are 32 total objects including roots, 31-byte component names, 1 KiB per file and two staged file replacements. The line limit includes the command and path, so the maximum one-line text is less than the file-format maximum. See [FILES.md](FILES.md).
 
-The supervisor owns a private administrative channel; the shell owns a separate manual control channel. Each utility has its own identity, endpoint and explicit scope. Spin/fault/exit utilities receive no file authority. Scoped readers cannot use another file, raw disk, console or supervisor control. Revocation is acknowledged by the file service after earlier serialized operations; an already admitted commit can finish before that acknowledgement. Expiry is checked at request admission, not at every physical write. The system does not claim rollback of completed effects. Revocation and actor commands are asynchronous: command acceptance does not establish their completion. The prompt and `pwd` use the last validated directory path. [Stopped-service acceptance](TAKEOVER.md) verifies independent owner progress, late acknowledgments and explicit recovery; ordinary foreground file commands and startup still have bounded synchronous waits.
+The supervisor owns a private administrative channel; the shell owns a separate manual control channel. Each utility has its own identity, endpoint and explicit scope. Spin/fault/exit utilities receive no file authority. Scoped readers cannot use another file, raw disk, console or supervisor control. Revocation is acknowledged by the file service after earlier serialized operations; an already admitted commit can finish before that acknowledgement. Expiry is checked at request admission, not at every physical write. The system does not claim rollback of completed effects. Revocation and actor commands are asynchronous: command acceptance does not establish their completion. The prompt and `pwd` use the last validated directory path. [Stopped-service acceptance](TAKEOVER.md) verifies independent owner progress, late acknowledgments and explicit recovery; [foreground waits are interruptible and supervisor startup/provisioning/restart advance as jobs](FOREGROUND-CONTROL.md).
 
 `/config/owner-policy` stores the bounded initial rule:
 

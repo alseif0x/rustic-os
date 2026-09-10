@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 mod authority;
 mod files;
+mod management;
 mod processes;
 mod recovery;
 mod takeover;
@@ -12,6 +13,7 @@ pub enum Error {
     Unknown,
     File(rustic_sdk::files::Error),
     Service(u64),
+    Pending(u64),
 }
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -19,6 +21,10 @@ impl core::fmt::Display for Error {
             Self::Usage => f.write_str("invalid arguments; type help"),
             Self::Unknown => f.write_str("unknown command; type help"),
             Self::File(e) => write!(f, "{e:?}"),
+            Self::Pending(id) => write!(
+                f,
+                "wait interrupted; job={id} remains queryable with job-status {id}"
+            ),
             Self::Service(code) => write!(
                 f,
                 "service {}",
@@ -26,6 +32,7 @@ impl core::fmt::Display for Error {
                     1 => "invalid request",
                     2 => "denied",
                     3 => "busy or full",
+                    6 => "superseded; earlier submitted effects may still exist",
                     _ => "unavailable",
                 }
             ),
@@ -55,7 +62,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         "help" => {
             exact(a, 1)?;
             output::text(
-                "help | pwd | cd PATH | ls [PATH] | mkdir PATH | touch PATH\r\nwrite PATH TEXT | cat PATH | stat PATH | rm PATH | echo TEXT | status\r\nrun spin|fault|exit | run read FILE | run probe FILE OTHER | run watch FILE [TICKS]\r\nps | kill PID | reap PID | permissions [PID] | revoke PID\r\nservices | mem | restart files | exit\r\nretry-key PATH KEY | replace PATH VERSION TOKEN TEXT | receipt ID TOKEN | rotate-receipts\r\nsession FILE OTHER [TICKS] | helper PID FILE OTHER | act PID read|stage|commit|flood|drain|stale\r\nmove-check CLIENT HELPER (moves its file endpoint)\r\nactor-status PID | revocation PID | stall files TICKS (0 = indefinite diagnostic)\r\nPaths: /system (read-only), /data, /config, /workspaces.\r\nLimits: 32 objects, 1024 bytes/file, 2 utility slots. No AI/network required.\r\n",
+                "help | pwd | cd PATH | ls [PATH] | mkdir PATH | touch PATH\r\nwrite PATH TEXT | cat PATH | stat PATH | rm PATH | echo TEXT | status\r\nrun spin|fault|exit | run read FILE | run probe FILE OTHER | run watch FILE [TICKS]\r\nps | kill PID | reap PID | permissions [PID] | revoke PID\r\nservices | mem | restart files | exit\r\nretry-key PATH KEY | replace PATH VERSION TOKEN TEXT | receipt ID TOKEN | rotate-receipts\r\nsession FILE OTHER [TICKS] | helper PID FILE OTHER | act PID read|stage|commit|flood|drain|stale\r\nmove-check CLIENT HELPER (moves its file endpoint)\r\nactor-status PID | revocation PID | stall files TICKS (0 = indefinite diagnostic)\r\njob-status [ID] | restart files [async] | hold-io SKIP TICKS | io-status\r\nCtrl-C interrupts a wait, not an already submitted effect.\r\nPaths: /system (read-only), /data, /config, /workspaces.\r\nLimits: 32 objects, 1024 bytes/file, 2 utility slots. No AI/network required.\r\n",
             );
         }
         "echo" => {
@@ -84,6 +91,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
             authority::execute(s, a)?
         }
         "retry-key" | "receipt" | "replace" | "rotate-receipts" => recovery::execute(s, a)?,
+        "job-status" | "hold-io" | "io-status" => management::execute(s, a)?,
         "run" | "ps" | "kill" | "reap" | "permissions" | "revoke" | "services" | "mem"
         | "restart" => processes::execute(s, a)?,
         _ => return Err(Error::Unknown),

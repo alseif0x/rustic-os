@@ -65,17 +65,19 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             output::format(format_args!("started pid={}\r\n", r[1]));
         }
         "restart" => {
-            exact(a, 2)?;
-            if argument(a, 1)? != "files" {
+            if !(2..=3).contains(&a.len()) || argument(a, 1)? != "files" {
                 return Err(Error::Usage);
             }
-            let r = s.service([p::RESTART, 0, 0, 0, 0, 0, 0, 0])?;
-            let old = core::mem::replace(
-                &mut s.files,
-                rustic_sdk::files::Client::new(r[2], r[1], r[3] as u32),
-            );
-            let _ = old.close();
-            output::text("files restarted; utility sessions revoked\r\n");
+            if a.len() == 3 {
+                if argument(a, 2)? != "async" {
+                    return Err(Error::Usage);
+                }
+                let r = s.request([p::RESTART, 0, 0, 0, 0, 0, 0, 0])?;
+                output::format(format_args!("files restart requested job={}\r\n", r[1]));
+            } else {
+                s.service([p::RESTART, 0, 0, 0, 0, 0, 0, 0])?;
+                output::text("files restarted; utility sessions revoked\r\n");
+            }
         }
         "ps" => {
             exact(a, 1)?;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::{Client, Receipt, Retry};
 use rustic_abi::files::*;
-impl Client {
+impl<P: crate::rpc::Progress> Client<P> {
     /// Caller chooses a nonzero key and retains this complete token before submitting.
     pub fn retry_token(&mut self, id: u32, key: u64) -> Result<Retry, Error> {
         if key == 0 {

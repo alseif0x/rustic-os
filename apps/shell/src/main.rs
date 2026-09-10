@@ -2,7 +2,10 @@
 #![no_std]
 #![no_main]
 mod commands;
+mod control;
 mod output;
+#[cfg(feature = "native")]
+mod progress;
 mod session;
 rustic_sdk::entry!(run);
 fn run(files: u64, control: u64, generation: u64) -> u64 {

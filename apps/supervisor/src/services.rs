@@ -17,6 +17,7 @@ pub struct State {
     pub(super) takeover: super::takeover::Takeover,
     pub(super) degraded: bool,
     pub(super) stopping: bool,
+    pub(super) work: super::work::Work,
 }
 pub fn call(w: [u64; 8]) -> Result<[u64; 8], ()> {
     runtime::control(w).map_err(|_| ())
@@ -32,48 +33,6 @@ pub fn start(pid: u64, args: [u64; 3]) -> Result<(), ()> {
     call([k::START, pid, args[0], args[1], args[2], 0, 0, 0])?;
     Ok(())
 }
-pub fn grant(
-    admin: &mut Rpc,
-    slot: usize,
-    peer: u64,
-    endpoint: u64,
-    scope: u32,
-    rights: u8,
-    expires: u64,
-) -> Result<u32, ()> {
-    let r = admin
-        .words([
-            32,
-            slot as u64,
-            peer,
-            endpoint,
-            scope as u64,
-            rights as u64,
-            expires,
-            0,
-        ])
-        .map_err(|_| ())?;
-    if r[0] != 0 {
-        return Err(());
-    }
-    u32::try_from(r[1]).map_err(|_| ())
-}
-/// The local owner is a stable recovery subject, never a client-supplied identity.
-pub fn owner_grant(admin: &mut Rpc, slot: usize, peer: u64, endpoint: u64) -> Result<u32, ()> {
-    let r = admin
-        .words([32, slot as u64, peer, endpoint, 0, 7, 0, 1])
-        .map_err(|_| ())?;
-    if r[0] != 0 {
-        return Err(());
-    }
-    u32::try_from(r[1]).map_err(|_| ())
-}
-pub fn detach(admin: &mut Rpc, slot: usize) -> Result<(), ()> {
-    let r = admin
-        .words([35, slot as u64, 0, 0, 0, 0, 0, 0])
-        .map_err(|_| ())?;
-    if r[0] == 0 { Ok(()) } else { Err(()) }
-}
 pub fn close(owner: u64, token: u64) {
     if token != 0 {
         let _ = call([k::CLOSE_ENDPOINT, owner, token, 0, 0, 0, 0, 0]);
@@ -88,6 +47,7 @@ impl State {
         loop {
             self.collect();
             self.poll_takeover();
+            self.poll_work();
             match self.control.receive() {
                 Ok(message) => {
                     if message.sender() != self.shell {
@@ -122,7 +82,8 @@ impl State {
                         tokens[n] = self.admin.endpoint.token();
                         n += 1;
                     }
-                    let timeout = if self.takeover.pending()
+                    let timeout = if self.work.pending()
+                        || self.takeover.pending()
                         || self.children.iter().flatten().any(|c| c.control.pending())
                     {
                         1

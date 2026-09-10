@@ -15,8 +15,7 @@ impl State {
             .find(|c| c.pid == parent && c.role == s::SESSION && c.rights != 0)
             .ok_or(2u64)?
             .root;
-        let pid = self.launch(s::HELPER, scope, other, 1, 0, root)?;
-        Ok([0, pid, 0, 0, 0, 0, 0, 0])
+        self.launch(s::HELPER, scope, other, 1, 0, root)
     }
     pub(super) fn actor(&mut self, pid: u64, action: u64) -> Result<[u64; 8], u64> {
         if !matches!(

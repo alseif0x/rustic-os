@@ -93,6 +93,8 @@ def verify(image, timeout=60, output=None):
                         assert observed["nodes"][base["old"]["id"]]["version"] == base["old"]["version"]
                     (output / (name + ".bin")).write_bytes(prefix)
                     cases.append({"case":name,"cut":cut,"committed":committed,"verified":True,"revocation_reports_recovery_required":True,"sha256":observed["selected_sha256"]})
+            from .inflight_cases import exercise as inflight_exercise
+            cases.extend(inflight_exercise(session,mount,temporary,base,output))
             # Derive the old format from an independently inspected native volume; preserve its file bytes.
             legacy = bytearray(base["bytes"])
             legacy[512:1024] = bytes(512)

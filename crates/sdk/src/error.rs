@@ -6,6 +6,7 @@ pub enum Error {
     Quota,
     Ipc(ipc::Error),
     Protocol,
+    Interrupted,
 }
 #[cfg(any(test, all(target_arch = "x86_64", target_os = "none")))]
 pub(crate) fn decode(value: u64) -> Result<u64, Error> {

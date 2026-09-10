@@ -55,6 +55,10 @@ impl State {
                 mask |= 1 << (slot + 2);
             }
         }
+        if let Some((slot, helper)) = self.work.pending_helper(root) {
+            members[slot] = helper;
+            mask |= 1 << (slot + 2);
+        }
         if !self
             .takeover
             .records
@@ -80,6 +84,9 @@ impl State {
         self.takeover.status(pid)
     }
     pub(super) fn poll_takeover(&mut self) {
+        if self.stopping {
+            return;
+        }
         if let Some(index) = self.takeover.active {
             let record = self.takeover.records[index].as_mut().unwrap();
             match self.admin.poll() {
@@ -130,7 +137,8 @@ impl State {
         }
     }
     pub(super) fn administrative_ready(&self) -> bool {
-        !self.degraded
+        !self.work.pending()
+            && !self.degraded
             && !self.stopping
             && !self.takeover.pending()
             && !self.admin.pending()

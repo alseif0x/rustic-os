@@ -31,6 +31,10 @@ pub fn run(files: &mut Client, control: &Endpoint, owner: u64, scope: u32, other
                 let denied = runtime::control([k::SPAWN, k::UTILITY, 0, 0, 0, 0, 0, 0])
                     == Err(runtime::Error::Denied)
                     && runtime::control([k::MOVE_ENDPOINT, 0, 0, 0, 3, 0, 0, 0])
+                        == Err(runtime::Error::Denied)
+                    && runtime::control([k::HOLD_COMPLETION, 0, 0, 400, 0, 0, 0, 0])
+                        == Err(runtime::Error::Denied)
+                    && runtime::control([k::OBSERVATION_STATUS, 0, 0, 0, 0, 0, 0, 0])
                         == Err(runtime::Error::Denied);
                 if let Ok(meta) = files.stat(scope) {
                     version = meta.version;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Internal sector contract, independent of transport and filesystem policy.
 pub mod access;
+pub mod observation;
 pub mod queue;
 pub const SECTOR: usize = 512;
 pub const MAX_BYTES: usize = SECTOR;

@@ -13,7 +13,7 @@ pub struct Metadata {
     name_length: usize,
 }
 impl Metadata {
-    pub(super) fn decode(p: Packet) -> Result<Self, Error> {
+    pub fn decode(p: Packet) -> Result<Self, Error> {
         let n = p.data[2] as usize;
         if p.count != 40 || !(1..=2).contains(&p.data[0]) || n > 31 || p.id == 0 {
             return Err(Error::Protocol);

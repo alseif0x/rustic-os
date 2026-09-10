@@ -19,6 +19,7 @@ struct Record {
 }
 /// Owned snapshot returned to the sole device dispatcher, never to untrusted code.
 pub struct Pending {
+    pub owner: u64,
     pub id: u64,
     pub operation: Operation,
     pub sector: u64,
@@ -136,6 +137,7 @@ impl Broker {
             .min_by_key(|r| r.result.id)?;
         record.phase = Phase::Active;
         Some(Pending {
+            owner: record.owner,
             id: record.result.id,
             operation: record.result.operation,
             sector: record.sector,

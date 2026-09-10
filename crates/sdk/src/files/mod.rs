@@ -2,6 +2,7 @@
 //! Native file client. No path authority is inferred from strings or manifests.
 mod client;
 mod recovery;
+mod transport;
 pub use rustic_abi::files::recovery::{Receipt, Retry};
 mod metadata;
 mod paths;

@@ -6,18 +6,31 @@ use crate::{
     ipc::{Endpoint, Message},
     runtime,
 };
-pub struct Rpc {
+pub struct Rpc<P = super::Blocking> {
+    pub progress: P,
     pub endpoint: Endpoint,
     peer: u64,
     state: State,
 }
 impl Rpc {
     pub fn new(token: u64, peer: u64) -> Self {
+        Self::with_progress(token, peer, super::Blocking)
+    }
+}
+impl<P: super::Progress> Rpc<P> {
+    pub fn with_progress(token: u64, peer: u64, progress: P) -> Self {
         Self {
             endpoint: Endpoint::from_bootstrap(token),
             peer,
             state: State::default(),
+            progress,
         }
+    }
+    pub fn rebind(&mut self, token: u64, peer: u64) {
+        let old = core::mem::replace(&mut self.endpoint, Endpoint::from_bootstrap(token));
+        let _ = old.close();
+        self.peer = peer;
+        self.state = State::default();
     }
     pub fn pending(&self) -> bool {
         self.state.pending()
@@ -84,7 +97,9 @@ impl Rpc {
         loop {
             match self.begin(bytes) {
                 Ok(()) => break,
-                Err(Error::Ipc(IpcError::WouldBlock)) if runtime::clock() < deadline => {}
+                Err(Error::Ipc(IpcError::WouldBlock)) if runtime::clock() < deadline => {
+                    self.progress.wait(self.endpoint.token())?;
+                }
                 Err(e) => return Err(e),
             }
         }
@@ -96,9 +111,9 @@ impl Rpc {
                 self.state.fail();
                 return Err(Error::Protocol);
             }
-            if runtime::wait_set(&[self.endpoint.token()], 100).is_err() {
+            if let Err(error) = self.progress.wait(self.endpoint.token()) {
                 self.state.fail();
-                return Err(Error::Protocol);
+                return Err(error);
             }
         }
     }

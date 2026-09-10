@@ -31,6 +31,8 @@ MOVE_ENDPOINT=13 takes source PID, source token, target PID and attenuated IPC r
 
 CLOSE_ENDPOINT=12 takes an owned PID/token to roll back trusted provisioning. It cannot close a foreign process's authority. Full-capacity loader/lifecycle tests cover all eight slots; the terminal deliberately limits utilities to two.
 
+HOLD_COMPLETION=14 takes an owned live PID, a 0–16 mutating-submission skip and a 1–500-tick observation hold. OBSERVATION_STATUS=15 reads the bounded arm/held-request state. Both require the trusted supervisor and the sdk-test catalog configuration; ordinary utility/device grants are denied. The real device is notified before observation is withheld. See [the diagnostic and admitted-I/O proof](FOREGROUND-CONTROL.md).
+
 ## Accounting and limitations
 
 The normal topology is three resident processes and four channels: supervisor–files admin, supervisor–files owner data, supervisor–shell control and shell–files data. Two scoped utilities raise it to five processes and eight channels. Each program has at most 256 data/code/stack pages, including 16 stack pages; page tables are separately accounted. Pending wait sets copy at most eight tokens. Block capacity remains two request records/four grants, with one active device operation and three DMA frames.
@@ -39,4 +41,4 @@ Runtime errors use `u64::MAX - 64 - index`: Denied, Address, Size, Invalid, Busy
 
 Terminal images currently use the sdk-test build feature to include the native catalog alongside acceptance probes. The non-catalog boot-image target remains checked separately. This is an explicit packaging boundary, not a claim of production image hardening. No syscall allows arbitrary executable bytes, arbitrary supervisor identity or device selection.
 
-The boot supervisor is the trusted capability root. Services implement owner/helper rules through their private channels; manifests are admission requests only. Recovery is explicit and bounded, not an automatic restart storm. A failed supervisor stops the native session. A filesystem mount failure preserves the image and fails startup; offline repair is not implemented.
+The boot supervisor is the trusted capability root. Services implement owner/helper rules through their private channels; manifests are admission requests only. Recovery is explicit and bounded, not an automatic restart storm. A failed supervisor stops the native session. A filesystem mount failure preserves the image and reports a failed startup job. The shell starts first, allowing Ctrl-C to leave its mount wait and reach owner status/retry commands; offline repair is not implemented.

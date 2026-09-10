@@ -5,6 +5,8 @@ use rustic_kernel::block::{Error as DeviceError, Geometry, access::Broker};
 
 pub(in super::super) struct Service {
     pub(in super::super) broker: Broker,
+    #[cfg(feature = "sdk-test")]
+    pub(in super::super) observation: rustic_kernel::block::observation::Hold,
     device: Option<Device>,
     geometry: Geometry,
     #[cfg(feature = "sdk-test")]
@@ -16,6 +18,8 @@ impl Service {
     pub(in super::super) fn new() -> Self {
         Self {
             broker: Broker::new(),
+            #[cfg(feature = "sdk-test")]
+            observation: Default::default(),
             device: None,
             geometry: Geometry {
                 sectors: 0,
@@ -45,6 +49,13 @@ impl Service {
     }
     pub(in super::super) fn tick(&mut self, memory: &mut Memory) {
         if let Some(id) = self.broker.active() {
+            #[cfg(feature = "sdk-test")]
+            if self
+                .observation
+                .withheld(id, crate::arch::interrupts::ticks())
+            {
+                return;
+            }
             let mut data = [0; SECTOR];
             if let Some(result) = self
                 .device
@@ -96,6 +107,23 @@ impl Service {
                     .finish(request.id, Status::Unavailable, [0; SECTOR]);
                 if error == DeviceError::Protocol {
                     self.recover(memory);
+                }
+            } else {
+                #[cfg(feature = "sdk-test")]
+                if self.observation.submitted(
+                    request.owner,
+                    request.id,
+                    request.operation != Operation::Read,
+                    crate::arch::interrupts::ticks(),
+                ) {
+                    use core::fmt::Write;
+                    if let Some(mut serial) = crate::arch::Serial::take() {
+                        let _ = writeln!(
+                            serial,
+                            "RUSTIC IO_OBSERVATION held=1 owner={} request={}",
+                            request.owner, request.id
+                        );
+                    }
                 }
             }
         }

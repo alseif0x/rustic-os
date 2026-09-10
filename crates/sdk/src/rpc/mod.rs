@@ -2,6 +2,10 @@
 //! Bounded correlated exchanges; native clients can poll without blocking control.
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 mod client;
+#[cfg(all(target_arch = "x86_64", target_os = "none"))]
+mod progress;
+#[cfg(all(target_arch = "x86_64", target_os = "none"))]
+pub use progress::{Blocking, Progress};
 pub mod state;
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 pub use client::Rpc;

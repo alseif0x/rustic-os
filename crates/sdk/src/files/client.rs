@@ -2,42 +2,37 @@
 use super::Metadata;
 use crate::rpc::Rpc;
 use rustic_abi::files::*;
-pub struct Client {
-    pub(super) rpc: Rpc,
+pub struct Client<P = crate::rpc::Blocking> {
+    pub(super) rpc: Rpc<P>,
     pub context: u32,
+    pub(super) pending: Option<Packet>,
 }
 impl Client {
     pub fn new(token: u64, peer: u64, context: u32) -> Self {
+        Self::with_progress(token, peer, context, crate::rpc::Blocking)
+    }
+}
+impl<P: crate::rpc::Progress> Client<P> {
+    pub fn with_progress(token: u64, peer: u64, context: u32, progress: P) -> Self {
         Self {
-            rpc: Rpc::new(token, peer),
+            rpc: Rpc::with_progress(token, peer, progress),
             context,
+            pending: None,
         }
+    }
+    pub fn progress(&mut self) -> &mut P {
+        &mut self.rpc.progress
+    }
+    pub fn rebind(&mut self, token: u64, peer: u64, context: u32) {
+        self.rpc.rebind(token, peer);
+        self.context = context;
+        self.pending = None;
     }
     pub fn close(self) -> Result<(), crate::Error> {
         self.rpc.endpoint.close()
     }
     pub fn token(&self) -> u64 {
         self.rpc.endpoint.token()
-    }
-    pub fn request(&mut self, mut p: Packet) -> Result<Packet, Error> {
-        p.context = self.context;
-        let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT);
-        let malformed = if durable {
-            Error::Uncertain
-        } else {
-            Error::Protocol
-        };
-        let message = self.rpc.exchange(&p.encode()).map_err(|e| match e {
-            _ if durable => Error::Uncertain,
-            crate::Error::Ipc(crate::abi::ipc::Error::Closed) => Error::Closed,
-            _ => Error::Protocol,
-        })?;
-        let reply = Packet::decode(message.payload()).map_err(|_| malformed)?;
-        if reply.op != p.op || reply.context != p.context {
-            return Err(malformed);
-        }
-        Error::parse(reply.status)?;
-        Ok(reply)
     }
     pub fn stat(&mut self, id: u32) -> Result<Metadata, Error> {
         let mut p = Packet::new(STAT);

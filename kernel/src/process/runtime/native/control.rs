@@ -161,6 +161,16 @@ impl Manager {
                 }
             }
             SHUTDOWN => self.session.shutdown = true,
+            #[cfg(feature = "sdk-test")]
+            HOLD_COMPLETION => {
+                let owner = self.owned(w[1])?;
+                self.live(owner).map_err(|_| Error::NotFound)?;
+                if !self.block.observation.arm(owner.0, w[2], w[3]) {
+                    return Err(Error::Invalid);
+                }
+            }
+            #[cfg(feature = "sdk-test")]
+            OBSERVATION_STATUS => r = self.block.observation.status(),
             DEVICE => {
                 let g = self.block.geometry().map_err(|_| Error::NotFound)?;
                 r[0] = g.sectors;

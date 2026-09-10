@@ -2,4 +2,5 @@
 #![no_std]
 #![forbid(unsafe_code)]
 pub mod editor;
+pub mod input;
 pub mod parser;

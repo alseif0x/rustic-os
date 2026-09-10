@@ -6,25 +6,15 @@ use rustic_shell::{
     parser,
 };
 pub struct Session {
-    pub files: Client,
+    pub files: Client<super::progress::Console>,
     pub supervisor: Rpc,
     pub cwd: u32,
     pub status: u64,
     pub path: [u8; 256],
     pub path_length: usize,
+    pub(super) binding_job: u64,
 }
 impl Session {
-    pub fn service(&mut self, w: [u64; 8]) -> Result<[u64; 8], super::commands::Error> {
-        let r = self
-            .supervisor
-            .words(w)
-            .map_err(|_| super::commands::Error::Service(4))?;
-        if r[0] != 0 {
-            Err(super::commands::Error::Service(r[0]))
-        } else {
-            Ok(r)
-        }
-    }
     fn prompt(&self) {
         output::text("rustic:");
         output::bytes(&self.path[..self.path_length]);
@@ -33,22 +23,29 @@ impl Session {
 }
 pub fn run(files: u64, control: u64, generation: u32) -> u64 {
     let mut state = Session {
-        files: Client::new(files, 0, generation),
+        files: Client::with_progress(files, 0, generation, super::progress::Console::default()),
         supervisor: Rpc::new(control, 0),
         cwd: 4,
         status: 0,
         path: [0; 256],
         path_length: 11,
+        binding_job: 0,
     };
     state.path[..11].copy_from_slice(b"/workspaces");
     output::text(
         "\r\nRusticOS native terminal 0.1\r\nRust user processes | persistent files | explicit permissions\r\nType help for commands. Ctrl-C cancels a line; exit stops the VM.\r\n",
     );
+    if files == 0 {
+        output::text("Starting files; Ctrl-C keeps owner control available.\r\n");
+        if let Err(e) = state.wait_job(generation as u64) {
+            output::format(format_args!("error: {e}\r\n"));
+        }
+    }
     let mut editor = Editor::new();
     state.prompt();
     loop {
         let mut byte = [0; 1];
-        match runtime::console_read(&mut byte) {
+        match state.files.progress().read(&mut byte) {
             Ok(1) => {}
             Err(runtime::Error::WouldBlock) => {
                 if runtime::console_wait().is_err() {
@@ -109,6 +106,9 @@ pub fn run(files: u64, control: u64, generation: u32) -> u64 {
                         state.status = 2;
                         output::format(format_args!("error: {e:?}\r\n"));
                     }
+                }
+                if core::mem::take(&mut state.files.progress().overflow) {
+                    output::text("error: typeahead overflow; complete input line discarded\r\n");
                 }
                 editor.reset();
                 state.prompt();

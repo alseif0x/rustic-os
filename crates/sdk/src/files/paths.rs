@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::{Client, Error};
-impl Client {
+impl<P: crate::rpc::Progress> Client<P> {
     pub fn resolve(&mut self, cwd: u32, path: &str) -> Result<u32, Error> {
         if path.is_empty() || path.len() > 255 {
             return Err(Error::Invalid);

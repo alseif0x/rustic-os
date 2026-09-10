@@ -20,6 +20,9 @@ pub const MOVE_CHECK: u64 = 15;
 pub const ACT_STATUS: u64 = 16;
 pub const REVOCATION: u64 = 17;
 pub const STALL_FILES: u64 = 18;
+pub const JOB_STATUS: u64 = 19;
+pub const HOLD_IO: u64 = 20;
+pub const IO_STATUS: u64 = 21;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Deterministic native actor commands; the owner supplies no arbitrary program.
