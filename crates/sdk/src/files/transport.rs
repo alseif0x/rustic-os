@@ -18,7 +18,7 @@ impl<P: crate::rpc::Progress> Client<P> {
         let Some(p) = self.pending else {
             return Ok(None);
         };
-        let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT);
+        let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT | REPLACE_COMMIT);
         let error = if durable {
             Error::Uncertain
         } else {
@@ -39,7 +39,7 @@ impl<P: crate::rpc::Progress> Client<P> {
     pub fn request(&mut self, mut p: Packet) -> Result<Packet, Error> {
         self.require_binding()?;
         p.context = self.context;
-        let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT);
+        let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT | REPLACE_COMMIT);
         let malformed = if durable {
             Error::Uncertain
         } else {

@@ -5,6 +5,7 @@
 mod authority;
 mod dispatch;
 mod grants;
+mod operations;
 mod read;
 mod recovery;
 mod reply;

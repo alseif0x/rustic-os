@@ -30,6 +30,7 @@ impl State {
                 | s::actor::READ_OPEN
                 | s::actor::READ_NEXT
                 | s::actor::FILL
+                | s::actor::OPERATION_GET
         ) {
             return Err(1);
         }

@@ -18,7 +18,9 @@ SESSIONS = ("initial", "reboot",
             *(name + ending for name in ("data", "receipt", "metadata", "header", "final_flush")
               for ending in ("-fault", "-reboot")),
             "admitted_data", "admitted_data-reboot", "admitted_final_flush",
-            "admitted_final_flush-reboot", "legacy", "upgrade")
+            "admitted_final_flush-reboot", "legacy", "upgrade", "operations-initial", "operations-reboot",
+            *("operations-" + name + ending for name in ("data", "receipt", "metadata", "header", "final_flush")
+              for ending in ("-fault", "-reboot")))
 
 
 def session_files(name):

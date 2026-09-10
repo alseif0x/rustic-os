@@ -4,7 +4,7 @@
 
 This increment connects the logical [`files.read` contract](SERVICE-CONTRACTS.md) to the real file service, typed Rust SDK, manual shell and deterministic native clients. It reads at most 1,024 bytes, identifies the observed version and hashes exactly the returned range. No model, network, image interpretation or MCP server is involved.
 
-The implementation covers one operation. The eight-operation catalog remains `specified_not_implemented` as a complete surface: live discovery, logical replacement/operation tracking, cancellation and events retain their own implementation work in #12/#13/#22/#43. Existing native write receipts and supervisor jobs do not become service-v1 operations through this read binding.
+This guide covers the native read operation. The separate [completed-operation binding](FILE-OPERATIONS.md) now implements bounded files.replace and operations.get through the same service and SDK. The eight-operation catalog remains specified_not_implemented as a complete surface: live discovery, general asynchronous lifecycle, cancellation and events retain their own implementation work in #12/#13/#22/#43.
 
 ## Identity and authority
 
@@ -27,7 +27,7 @@ The native text encoding is canonical lowercase ASCII:
 
 Zero lineage, IDs, versions and epochs are invalid. Parsers reject uppercase alternatives, changed separators, whitespace, truncated forms and extra bytes. Workspace and resource fields must describe the same workspace. These encodings fit the logical schema's 64-character token bound; they are not integer kernel handles.
 
-The returned retry epoch is an observation of the volume's current retention generation. Read-only clients, including helpers without a recovery subject, may receive it after a permitted read. It does not grant receipt inspection, replacement or cancellation. The current epoch is volume-wide; per-workspace mutation/retry namespaces remain a separate integration obligation. The `e_` value is not a complete token for the existing `replace`/`receipt` commands.
+The returned retry epoch is an observation of the volume current retention generation. Read-only clients, including helpers without a recovery subject, may receive it after a permitted read. It does not grant receipt inspection, replacement or cancellation. The [workspace replacement binding](FILE-OPERATIONS.md) consumes this epoch with a canonical key; its retry namespace is workspace-scoped, but the epoch and two retained slots remain volume-wide. The e_ value is not a complete token for the legacy replace/receipt commands.
 
 ## Manual use
 

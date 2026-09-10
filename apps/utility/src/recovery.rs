@@ -5,15 +5,44 @@ use rustic_sdk::{
     files::Client,
     ipc::{Endpoint, Message},
 };
-pub fn discard_reply(files: &mut Client, id: u32, other: u32) -> [u64; 8] {
+pub fn discard_reply(files: &mut Client, id: u32, other: u32, logical: bool) -> [u64; 8] {
     let result = (|| {
         if !matches!(files.stat(other), Err(Error::Denied)) {
             return Err(Error::Protocol);
         }
         let retry = files.retry_token(id, 77)?;
-        let version = files.stat(id)?.version;
-        files.stage_tracked(id, version, retry, b"reply deliberately unobserved")?;
-        let mut p = Packet::new(COMMIT);
+        let metadata = files.stat(id)?;
+        if logical {
+            use rustic_sdk::abi::files::{
+                operation::{Key, Replacement, Retry},
+                reference::{Epoch, Version},
+            };
+            let refs = files.references(metadata.parent, id)?;
+            files.stage_replace(
+                Replacement {
+                    workspace: refs.workspace,
+                    resource: refs.resource,
+                    expected_version: Version::new(metadata.version)?,
+                    retry: Retry {
+                        epoch: Epoch::new(retry.epoch)?,
+                        key: Key::new(77)?,
+                    },
+                },
+                b"reply deliberately unobserved",
+            )?;
+        } else {
+            files.stage_tracked(
+                id,
+                metadata.version,
+                retry,
+                b"reply deliberately unobserved",
+            )?;
+        }
+        let mut p = Packet::new(if logical {
+            rustic_sdk::abi::files::REPLACE_COMMIT
+        } else {
+            COMMIT
+        });
         p.id = id;
         p.context = files.context;
         let endpoint = Endpoint::from_bootstrap(files.token());

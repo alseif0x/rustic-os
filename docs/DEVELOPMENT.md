@@ -124,3 +124,16 @@ Use a new output directory; omit `--image` to build the current recovery image. 
 ## Repeated native measurements
 
 The [measurement guide](MEASUREMENTS.md) defines the separate #20 protocol, metric boundaries, environment identity and regression decision. Run `python3 tools/measure.py verify --host-label local-wsl-r0 --samples 5 --output artifacts/measurements/new-run` after activating the pinned Rust environment. The output directory must be new. Each successful check performs 36 actual VM boots: three batches, each with one excluded warmup and five measured repetitions, with two VMs per repetition. The CI measurements job uses its own same-job baseline; it does not compare GitHub timings to WSL.
+
+## Completed workspace operations
+
+The [operation guide](FILE-OPERATIONS.md) defines the bounded files.replace/operations.get profile, explicit format migration, current authority and historical lookup. With the pinned validator environment installed:
+
+```sh
+.cache/contracts-venv/bin/python -m tools.contracts operations-check --output artifacts/operations-host.json
+python3 tools/boot.py run --mode recovery-test --timeout 60
+.cache/contracts-venv/bin/python -m tools.contracts operations-native \
+  --evidence artifacts/boot/recovery-test/recovery.json --output artifacts/operations-native.json
+```
+
+The current combined recovery inventory is 15 groups across 30 VM boots, including six workspace-operation groups. Ten payload vectors produce 30 shared replacement/lookup exchanges; host fixture and native evidence are identified separately. The full direct suite still has 22 scenarios, and the isolated suite 26. Rebuild the reviewed executor infrastructure with `python3 tools/sandbox.py prepare` before testing a committed candidate with the new drivers/fixtures. Earlier counts in dated or explicitly historical increment records describe those older revisions.

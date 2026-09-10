@@ -61,6 +61,17 @@ pub fn dispatch(
             x if x == STATUS as u64 && w[1..].iter().all(|x| *x == 0) => {
                 r[1] = server.pending() as u64;
             }
+            41 if w[1..].iter().all(|x| *x == 0) => {
+                if server.pending() != 0 {
+                    return Err(Error::Busy);
+                }
+                server.volume.enable_operations(disk).map_err(|e| match e {
+                    rustic_fs::Error::Unsupported => Error::Unsupported,
+                    rustic_fs::Error::Uncertain => Error::Uncertain,
+                    rustic_fs::Error::Exhausted => Error::Exhausted,
+                    _ => Error::Io,
+                })?;
+            }
             36 if w[1..].iter().all(|x| *x == 0) => {
                 r[1] = server.volume.advance_epoch(disk).map_err(|e| match e {
                     rustic_fs::Error::Uncertain => Error::Uncertain,

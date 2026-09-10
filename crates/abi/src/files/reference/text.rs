@@ -3,7 +3,7 @@
 use super::{Epoch, Error, Resource, Version, Workspace};
 use core::{fmt, str::FromStr};
 
-fn hex<const N: usize>(bytes: &[u8]) -> Result<[u8; N], Error> {
+pub(crate) fn hex<const N: usize>(bytes: &[u8]) -> Result<[u8; N], Error> {
     if bytes.len() != N * 2 {
         return Err(Error::Invalid);
     }
@@ -18,7 +18,7 @@ fn hex<const N: usize>(bytes: &[u8]) -> Result<[u8; N], Error> {
     }
     Ok(result)
 }
-fn lineage(f: &mut fmt::Formatter<'_>, value: [u8; 16]) -> fmt::Result {
+pub(crate) fn lineage(f: &mut fmt::Formatter<'_>, value: [u8; 16]) -> fmt::Result {
     for byte in value {
         write!(f, "{byte:02x}")?;
     }

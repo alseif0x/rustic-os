@@ -13,7 +13,7 @@ mod references;
 mod storage;
 mod volume;
 pub use namespace::{Kind, Node};
-pub use recovery::{RETAINED, Receipt, Retry};
+pub use recovery::{Operation, RETAINED, Receipt, Replacement, Retry};
 pub use storage::Disk;
 pub use volume::Volume;
 pub const OBJECTS: usize = 32;

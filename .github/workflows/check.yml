@@ -35,6 +35,7 @@ jobs:
           .cache/contracts-venv/bin/python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r tools/contracts/requirements.txt
           .cache/contracts-venv/bin/python -m tools.contracts check --output artifacts/service-contracts.json
           .cache/contracts-venv/bin/python -m tools.contracts read-check --output artifacts/read-host-conformance.json
+          .cache/contracts-venv/bin/python -m tools.contracts operations-check --output artifacts/operations-host-conformance.json
           .cache/contracts-venv/bin/python -m unittest discover -s tools/contracts/tests -v 2>&1 | tee artifacts/service-contract-tests.log
           .cache/contracts-venv/bin/python -m tools.contracts export --output artifacts/service-descriptors.json
       - name: Preserve evidence
@@ -104,13 +105,14 @@ jobs:
         run: python3 tools/boot.py test --timeout 45
       - name: Verify delayed device completion and recovery
         run: python3 tools/latency_test.py --image artifacts/boot/recovery-test/rustic-os.img --output artifacts/boot/latency-test
-      - name: Check native read contract evidence
+      - name: Check native service contract evidence
         shell: bash
         run: |
           set -euo pipefail
           python3.12 -m venv .cache/contracts-venv
           .cache/contracts-venv/bin/python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r tools/contracts/requirements.txt
           .cache/contracts-venv/bin/python -m tools.contracts read-native --evidence artifacts/boot/terminal-test/terminal.json --output artifacts/boot/terminal-test/read-conformance.json
+          .cache/contracts-venv/bin/python -m tools.contracts operations-native --evidence artifacts/boot/recovery-test/recovery.json --output artifacts/boot/recovery-test/operation-conformance.json
       - name: Preserve boot evidence and images
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -2,7 +2,9 @@
 //! Bounded durable replacement evidence, independent from client authorization.
 mod codec;
 mod operations;
+mod scoped;
 use crate::{Error, MAX_FILE};
+pub use scoped::{Operation, Replacement};
 pub const RETAINED: usize = 2;
 pub const RECOVERY_SECTORS: usize = 7;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,12 +25,14 @@ pub struct Receipt {
 pub(super) struct Record {
     pub(super) subject: u64,
     pub(super) receipt: Receipt,
+    pub(super) namespace: Option<(u32, u64)>, // workspace, original service incarnation
     pub(super) bytes: [u8; MAX_FILE],
 }
 #[derive(Clone)]
 pub(super) struct Recovery {
     pub(super) lineage: [u8; 16],
     pub(super) epoch: u64,
+    pub(super) scoped: bool,
     pub(super) records: [Option<Record>; RETAINED],
 }
 impl Recovery {
@@ -39,6 +43,7 @@ impl Recovery {
         Ok(Self {
             lineage,
             epoch: 1,
+            scoped: false,
             records: [None; RETAINED],
         })
     }
@@ -53,7 +58,7 @@ impl Recovery {
             .records
             .iter()
             .flatten()
-            .find(|r| r.subject == subject && r.receipt.retry == retry)
+            .find(|r| r.namespace.is_none() && r.subject == subject && r.receipt.retry == retry)
         {
             return Ok(Some(record));
         }

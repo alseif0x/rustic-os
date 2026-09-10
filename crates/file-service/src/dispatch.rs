@@ -8,6 +8,7 @@ pub struct Server {
     pub(super) roots: [u32; CLIENTS],
     pub(super) next: u32,
     pub(super) transfers: Transfers,
+    pub(super) instance: u64,
 }
 impl Server {
     pub fn new(volume: Volume) -> Self {
@@ -17,6 +18,7 @@ impl Server {
             roots: [0; CLIENTS],
             next: 1,
             transfers: Transfers::new(),
+            instance: 0,
         }
     }
     pub fn handle(
@@ -33,6 +35,10 @@ impl Server {
             crate::validation::request(&request)?;
             let grant = self.grant_at(slot).ok_or(Error::Denied)?;
             grant.check(peer, request.context, now)?;
+            if (REPLACE_OPEN..=OPERATION_PART).contains(&request.op) {
+                response = self.operation_request(disk, slot, grant, request)?;
+                return Ok(());
+            }
             if matches!(request.op, REFERENCES | READ_OPEN | READ_CHUNK) {
                 response = self.read_request(disk, grant, request)?;
                 return Ok(());

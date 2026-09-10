@@ -23,6 +23,7 @@ pub const STALL_FILES: u64 = 18;
 pub const JOB_STATUS: u64 = 19;
 pub const HOLD_IO: u64 = 20;
 pub const IO_STATUS: u64 = 21;
+pub const ENABLE_OPERATIONS: u64 = 22;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Deterministic native actor commands; the owner supplies no arbitrary program.
@@ -38,6 +39,7 @@ pub mod actor {
     pub const READ_OPEN: u64 = 9;
     pub const READ_NEXT: u64 = 10;
     pub const FILL: u64 = 11;
+    pub const OPERATION_GET: u64 = 12;
 }
 pub const SPIN: u64 = 1;
 pub const FAULT: u64 = 2;
@@ -46,3 +48,4 @@ pub const PROBE: u64 = 4;
 pub const FINISH: u64 = 5;
 pub const WATCH: u64 = 6;
 pub const LOST_REPLY: u64 = 7;
+pub const LOST_OPERATION: u64 = 10;

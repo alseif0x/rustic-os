@@ -127,6 +127,9 @@ def verify(image, timeout=60, output=None):
                 assert upgraded["files"][(4,"hello")] == b"before" and upgraded["epoch"] == 1
                 assert not upgraded["records"]
                 cases.append({"case":"legacy_mount_and_explicit_upgrade", "verified":True,"sha256":upgraded["selected_sha256"]})
+            from .operation_cases import verify as verify_operations
+            operation_cases, selected = verify_operations(session, owned_disk, temporary, image, mount)
+            cases.extend(operation_cases)
         (output / "files.bin").write_bytes(selected)
         evidence = {"verified":True,"boots":len(serials),"cases":cases,"kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"]}
         (output / "recovery.json").write_text(json.dumps(evidence,indent=2)+"\n")

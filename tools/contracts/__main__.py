@@ -32,17 +32,21 @@ def check(catalog):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("check", "export", "read-check", "read-native"))
+    parser.add_argument("command", choices=("check", "export", "read-check", "read-native", "operations-check", "operations-native"))
     parser.add_argument("--output", type=Path)
     parser.add_argument("--evidence", type=Path, help="terminal.json from the native read fixture")
     args = parser.parse_args()
-    if (args.command == "read-native") != (args.evidence is not None):
-        parser.error("--evidence is required only for read-native")
+    if (args.command in ("read-native", "operations-native")) != (args.evidence is not None):
+        parser.error("--evidence is required only for native evidence commands")
     catalog = Catalog()
     if args.command == "check":
         result = check(catalog)
     elif args.command == "export":
         result = catalog.descriptors()
+    elif args.command in ("operations-check", "operations-native"):
+        from .operation_conformance import host_check, native_check
+        from .read_conformance import load_native
+        result = host_check(catalog) if args.command == "operations-check" else native_check(catalog, load_native(args.evidence))
     else:
         from .read_conformance import host_check, load_native, native_check
         result = (host_check(catalog) if args.command == "read-check"

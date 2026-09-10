@@ -20,6 +20,14 @@ pub const RECEIPT: u8 = 14;
 pub const REFERENCES: u8 = 15;
 pub const READ_OPEN: u8 = 16;
 pub const READ_CHUNK: u8 = 17;
+pub const REPLACE_OPEN: u8 = 18;
+pub const REPLACE_CHUNK: u8 = 19;
+pub const REPLACE_COMMIT: u8 = 20;
+pub const REPLACE_ABORT: u8 = 21;
+pub const OPERATION_RETRY: u8 = 22;
+pub const OPERATION_ID: u8 = 23;
+pub const OPERATION_PART: u8 = 24;
+pub mod operation;
 pub const INSPECT_RIGHT: u8 = 4;
 pub mod read;
 pub mod recovery;
@@ -144,7 +152,7 @@ impl Packet {
         if b.len() != SIZE
             || b[0] != VERSION
             || b[3] as usize > DATA
-            || !matches!(b[1],1..=17|32..=34)
+            || !matches!(b[1],1..=24|32..=34)
         {
             return Err(Error::Protocol);
         }

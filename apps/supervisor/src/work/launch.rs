@@ -43,7 +43,7 @@ impl Draft {
                 self.scope as u64,
                 self.rights as u64,
                 self.expires,
-                u64::from(self.role == s::LOST_REPLY),
+                u64::from(matches!(self.role, s::LOST_REPLY | s::LOST_OPERATION)),
             ]
         }
     }
@@ -150,6 +150,7 @@ impl State {
                 | s::FINISH
                 | s::WATCH
                 | s::LOST_REPLY
+                | s::LOST_OPERATION
                 | s::SESSION
                 | s::HELPER
         ) || lease > 360000
@@ -158,7 +159,13 @@ impl State {
         }
         let file_access = matches!(
             role,
-            s::READ | s::PROBE | s::WATCH | s::LOST_REPLY | s::SESSION | s::HELPER
+            s::READ
+                | s::PROBE
+                | s::WATCH
+                | s::LOST_REPLY
+                | s::LOST_OPERATION
+                | s::SESSION
+                | s::HELPER
         );
         if file_access {
             if !self.administrative_ready() {
@@ -167,7 +174,7 @@ impl State {
             if self.policy == 0
                 || scope == 0
                 || rights
-                    != if role == s::LOST_REPLY {
+                    != if matches!(role, s::LOST_REPLY | s::LOST_OPERATION) {
                         7
                     } else if role == s::SESSION {
                         3

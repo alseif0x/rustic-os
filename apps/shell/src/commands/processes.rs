@@ -28,10 +28,14 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                     exact(a, 3)?;
                     (p::READ, s.files.resolve(s.cwd, argument(a, 2)?)?, 0, 1)
                 }
-                "lost-reply" => {
+                "lost-reply" | "lost-operation" => {
                     exact(a, 4)?;
                     (
-                        p::LOST_REPLY,
+                        if a.get(1) == Some("lost-operation") {
+                            p::LOST_OPERATION
+                        } else {
+                            p::LOST_REPLY
+                        },
                         s.files.resolve(s.cwd, argument(a, 2)?)?,
                         s.files.resolve(s.cwd, argument(a, 3)?)?,
                         7,

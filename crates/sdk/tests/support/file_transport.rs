@@ -4,8 +4,10 @@ use rustic_abi::files::Packet;
 use rustic_sdk::ipc::Message;
 use std::cell::RefCell;
 
+type Handler = Box<dyn FnMut(Packet) -> Packet>;
 #[derive(Default)]
 struct Transport {
+    handler: Option<Handler>,
     sent: Vec<(u64, u64, Packet)>,
     reply: Option<Message>,
     clock_calls: usize,
@@ -14,6 +16,10 @@ struct Transport {
 }
 thread_local! {
     static TRANSPORT: RefCell<Transport> = RefCell::new(Transport::default());
+}
+#[allow(dead_code)]
+pub fn respond(handler: impl FnMut(Packet) -> Packet + 'static) {
+    TRANSPORT.with(|state| state.borrow_mut().handler = Some(Box::new(handler)));
 }
 pub fn reset() {
     TRANSPORT.with(|state| *state.borrow_mut() = Transport::default());
@@ -27,6 +33,7 @@ pub fn counts() -> (usize, usize, usize) {
 pub fn requests() -> Vec<(u64, u64, Packet)> {
     TRANSPORT.with(|state| state.borrow().sent.clone())
 }
+#[allow(dead_code)]
 pub fn wrong_peer(value: bool) {
     TRANSPORT.with(|state| state.borrow_mut().wrong_peer = value);
 }
@@ -53,6 +60,11 @@ pub mod ipc {
                 state.sent.push((self.0, message.correlation(), packet));
                 // Canonical immediate response. Sender mismatch exercises the
                 // production RPC poison/rebind state without native syscalls.
+                let packet = if let Some(handler) = &mut state.handler {
+                    handler(packet)
+                } else {
+                    packet
+                };
                 let reply = Message::new(message.correlation(), &packet.encode()).unwrap();
                 let mut bytes = reply.wire().to_vec();
                 let peer = if state.wrong_peer { 8u64 } else { 7u64 };

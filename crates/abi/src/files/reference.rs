@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Stable object identities. These values identify objects; they confer no authority.
-mod text;
+pub(crate) mod text;
 use super::{Error, Packet, REFERENCES};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

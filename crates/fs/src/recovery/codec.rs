@@ -4,7 +4,11 @@ use crate::{Error, MAX_FILE};
 impl Recovery {
     pub(crate) fn encode(&self) -> [u8; RECOVERY_SECTORS * 512] {
         let mut b = [0; RECOVERY_SECTORS * 512];
-        b[..8].copy_from_slice(b"RUSTREC1");
+        b[..8].copy_from_slice(if self.scoped {
+            b"RUSTREC2"
+        } else {
+            b"RUSTREC1"
+        });
         b[8..24].copy_from_slice(&self.lineage);
         b[24..32].copy_from_slice(&self.epoch.to_le_bytes());
         for (slot, record) in self.records.iter().enumerate() {
@@ -17,6 +21,10 @@ impl Recovery {
             p[28..30].copy_from_slice(&r.receipt.length.to_le_bytes());
             p[32..40].copy_from_slice(&r.receipt.previous.to_le_bytes());
             p[40..48].copy_from_slice(&r.receipt.committed.to_le_bytes());
+            if let Some((workspace, instance)) = r.namespace {
+                p[48..52].copy_from_slice(&workspace.to_le_bytes());
+                p[56..64].copy_from_slice(&instance.to_le_bytes());
+            }
             p[512..].copy_from_slice(&r.bytes);
         }
         b
@@ -25,11 +33,15 @@ impl Recovery {
         b: &[u8; RECOVERY_SECTORS * 512],
         sequence: u64,
         next: u32,
+        scoped: bool,
     ) -> Result<Self, Error> {
-        if &b[..8] != b"RUSTREC1" || b[32..512].iter().any(|v| *v != 0) {
+        if &b[..8] != (if scoped { b"RUSTREC2" } else { b"RUSTREC1" })
+            || b[32..512].iter().any(|v| *v != 0)
+        {
             return Err(Error::Corrupt);
         }
         let mut value = Self::new(b[8..24].try_into().unwrap()).map_err(|_| Error::Corrupt)?;
+        value.scoped = scoped;
         value.epoch = u64::from_le_bytes(b[24..32].try_into().unwrap());
         if value.epoch == 0 || value.epoch > sequence {
             return Err(Error::Corrupt);
@@ -39,6 +51,13 @@ impl Recovery {
             if p.iter().all(|v| *v == 0) {
                 continue;
             }
+            let workspace = u32::from_le_bytes(p[48..52].try_into().unwrap());
+            let instance = u64::from_le_bytes(p[56..64].try_into().unwrap());
+            let namespace = if workspace == 0 && instance == 0 {
+                None
+            } else {
+                Some((workspace, instance))
+            };
             let receipt = Receipt {
                 retry: Retry {
                     lineage: value.lineage,
@@ -61,11 +80,21 @@ impl Recovery {
                 || receipt.committed > sequence
                 || receipt.length as usize > MAX_FILE
                 || p[30..32] != [0; 2]
-                || p[48..512].iter().any(|v| *v != 0)
+                || p[52..56].iter().chain(&p[64..512]).any(|v| *v != 0)
+                || namespace.is_some_and(|(w, i)| {
+                    !scoped
+                        || w == 0
+                        || w >= next
+                        || w == receipt.id
+                        || i == 0
+                        || i > receipt.committed
+                })
                 || p[512 + receipt.length as usize..].iter().any(|v| *v != 0)
                 || value.records.iter().flatten().any(|r| {
                     r.receipt.committed == receipt.committed
-                        || r.subject == subject && r.receipt.retry == receipt.retry
+                        || r.subject == subject
+                            && r.namespace.map(|n| n.0) == namespace.map(|n| n.0)
+                            && r.receipt.retry == receipt.retry
                 })
             {
                 return Err(Error::Corrupt);
@@ -73,6 +102,7 @@ impl Recovery {
             value.records[slot] = Some(Record {
                 subject,
                 receipt,
+                namespace,
                 bytes: p[512..].try_into().unwrap(),
             });
         }

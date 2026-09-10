@@ -23,9 +23,9 @@ def prepare():
             shutil.copytree(ROOT / name, reference / name, ignore=shutil.ignore_patterns("__pycache__"))
         for name in ("environment.py", "environment.toml", "application.py"):
             shutil.copyfile(ROOT / "tools" / name, reference / "tools" / name)
-        # The trusted UART harness shares only stdlib read vectors, not the host validator.
+        # The trusted UART harness shares stdlib read/replacement vectors, not the host validator.
         for name in ("tools/contracts/__init__.py", "tools/contracts/read_vectors.py",
-                     "contracts/services/v1/fixtures/read-ranges.json"):
+                     "contracts/services/v1/fixtures/read-ranges.json", "contracts/services/v1/fixtures/replace-cases.json"):
             destination = reference / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / name, destination)

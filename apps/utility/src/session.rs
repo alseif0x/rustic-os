@@ -28,6 +28,7 @@ pub fn run(files: &mut Client, control: &Endpoint, owner: u64, scope: u32, other
             a::API_READ | a::READ_OPEN | a::READ_NEXT | a::FILL => {
                 read.execute(w[0], files, scope, other)
             }
+            a::OPERATION_GET => super::operations::inspect(files, scope),
             a::READ => {
                 let mut bytes = [0; 1024];
                 let first = files.read(scope, &mut bytes);

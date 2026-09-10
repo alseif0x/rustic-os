@@ -105,3 +105,27 @@ An explicitly unbound file client (endpoint token zero) returns `files::Error::U
 #44 adds `block::Device`. The trusted launcher supplies its handle; `from_bootstrap` wraps it without granting rights. Query the independent block wire version with `Device::version()`. `read`, `write` and `flush` return a request ID after admission; `wait(id)` yields until completion, and `result()` copies and consumes the retained result. Check completion status/effect as well as syscall success. Write admission snapshots exactly 512 bytes, so the source slice need not live until completion. Read buffers are supplied only during collection.
 
 `cancel(id)` returns true only for cancellation before device submission; false means too late and requires reading the actual result. Closing a handle consumes the wrapper but does not roll back submitted writes. Errors, byte layouts, quotas, scope, resource recovery, both new VM modes and their measured evidence are specified in [BLOCK-ACCESS.md](BLOCK-ACCESS.md). The example is independently linked and executes under RusticOS; the host encoder/compiler does not perform its I/O.
+
+## Workspace replacements and operation lookup
+
+The [completed-operation binding](FILE-OPERATIONS.md) adds Client::replace_file and Client::operation_get alongside stable reads. Types are exported through rustic_sdk::files::operation; use operation::Retry for workspace keys, distinct from the legacy files::Retry token. Callers retain exact arguments before submission and recover an uncertain write by its original key. No automatic mutation replay occurs.
+
+```rust
+use rustic_sdk::files::operation::{Key, Lookup, Replacement, Retry};
+let retry = Retry { epoch: info.retry_epoch, key: Key::new(42)? };
+let request = Replacement {
+    workspace: references.workspace,
+    resource: references.resource,
+    expected_version: info.version,
+    retry,
+};
+let completed = files.replace_file(request, b"after")?;
+let observed = files.operation_get(Lookup::Id(completed.id))?;
+// After losing the first response, use the saved tuple instead:
+let recovered = files.operation_get(Lookup::Retry {
+    workspace: request.workspace,
+    retry,
+})?;
+```
+
+The snippet assumes previously resolved references, a successful bounded read and an explicitly upgraded volume. Each receipt uses a fixed 104-byte collector and three independently authorized frames. Identity, lengths, reserved fields, expected arguments and replacement digest must agree. Any failure after commit may have been admitted is Uncertain; observational failures remain lookup errors. The two retained slots and epoch are volume-wide, shared with legacy receipts. General queued/running and cancellation APIs are not added.

@@ -47,6 +47,7 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                         "read-open" => p::actor::READ_OPEN,
                         "read-next" => p::actor::READ_NEXT,
                         "fill" => p::actor::FILL,
+                        "operation-get" => p::actor::OPERATION_GET,
                         _ => return Err(Error::Usage),
                     },
                 )

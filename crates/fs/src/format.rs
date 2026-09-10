@@ -54,8 +54,13 @@ impl Metadata {
         disk.flush()?;
         let mut b = [0; 512];
         b[..8].copy_from_slice(b"RUSTFS1\0");
-        b[8..10]
-            .copy_from_slice(&(if self.recovery.is_some() { 2u16 } else { 1u16 }).to_le_bytes());
+        b[8..10].copy_from_slice(
+            &(self
+                .recovery
+                .as_ref()
+                .map_or(1u16, |r| if r.scoped { 3 } else { 2 }))
+            .to_le_bytes(),
+        );
         b[32..36].copy_from_slice(&recovery_crc.to_le_bytes());
         b[10..12].copy_from_slice(&512u16.to_le_bytes());
         b[12..20].copy_from_slice(&self.sequence.to_le_bytes());
@@ -73,7 +78,7 @@ impl Metadata {
             return Err(Error::Empty);
         }
         if &b[..8] != b"RUSTFS1\0"
-            || !matches!(b[8], 1 | 2)
+            || !matches!(b[8], 1..=3)
             || b[9..12] != [0, 0, 2]
             || b[36..].iter().any(|b| *b != 0)
             || b[8] == 1 && b[32..36] != [0; 4]
@@ -105,7 +110,7 @@ impl Metadata {
         {
             *node = Node::decode(chunk)?;
         }
-        if b[8] == 2 {
+        if b[8] >= 2 {
             let mut records = [0; crate::recovery::RECOVERY_SECTORS * 512];
             for (i, chunk) in records.as_chunks_mut::<512>().0.iter_mut().enumerate() {
                 disk.read(160 + u64::from(bank) * 7 + i as u64, chunk)?;
@@ -117,6 +122,7 @@ impl Metadata {
                 &records,
                 result.sequence,
                 result.next,
+                b[8] == 3,
             )?);
         }
         result.validate()?;

@@ -96,6 +96,7 @@ impl Volume {
         let mut record = Record {
             subject,
             receipt,
+            namespace: None,
             bytes: [0; MAX_FILE],
         };
         record.bytes[..bytes.len()].copy_from_slice(bytes);

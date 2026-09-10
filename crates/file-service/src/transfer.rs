@@ -3,6 +3,7 @@ use rustic_abi::files::{Error, Packet};
 use rustic_fs::MAX_FILE;
 pub(super) struct Transfer {
     pub(super) client: usize,
+    pub(super) logical: Option<rustic_abi::files::operation::Replacement>,
     pub(super) retry: Option<rustic_abi::files::recovery::Retry>,
     pub(super) context: u32,
     pub(super) id: u32,
@@ -50,6 +51,11 @@ impl Transfers {
             .ok_or(Error::Busy)?;
         self.slots[slot] = Some(Transfer {
             client,
+            logical: if request.op == rustic_abi::files::REPLACE_OPEN {
+                Some(rustic_abi::files::operation::Replacement::decode(request)?)
+            } else {
+                None
+            },
             retry: if request.op == rustic_abi::files::TRACK_BEGIN {
                 Some(rustic_abi::files::recovery::Retry::decode(
                     request.payload(),
@@ -69,6 +75,9 @@ impl Transfers {
     pub(super) fn chunk(&mut self, client: usize, request: &Packet) -> Result<(), Error> {
         let index = self.index(client, request.id, request.context)?;
         let slot = self.slots[index].as_mut().unwrap();
+        if slot.logical.is_some() != (request.op == rustic_abi::files::REPLACE_CHUNK) {
+            return Err(Error::Protocol);
+        }
         if request.arg as usize != slot.received
             || request.count == 0
             || slot.received + usize::from(request.count) > slot.total
@@ -86,7 +95,22 @@ impl Transfers {
         {
             return Err(Error::Offset);
         }
+        if self.slots[index].as_ref().unwrap().logical.is_some()
+            != (request.op == rustic_abi::files::REPLACE_COMMIT)
+        {
+            return Err(Error::Protocol);
+        }
         Ok(self.slots[index].take().unwrap())
+    }
+    pub(super) fn logical(
+        &self,
+        client: usize,
+    ) -> Option<rustic_abi::files::operation::Replacement> {
+        self.slots
+            .iter()
+            .flatten()
+            .find(|s| s.client == client)
+            .and_then(|s| s.logical)
     }
     pub(super) fn tracked(&self, client: usize) -> bool {
         self.slots
