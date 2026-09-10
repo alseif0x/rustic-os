@@ -13,6 +13,8 @@ from .connection import Connection
 from .oracle import snapshot
 from .recovery_cases import exercise, verify_final
 from .recovery_faults import CUTS
+from .cases import pid
+from .authority_cases import actor
 
 
 def verify(image, timeout=60, output=None):
@@ -66,7 +68,12 @@ def verify(image, timeout=60, output=None):
                 with disk(temporary / ("cut-" + name + ".raw"), True) as data:
                     with data.open("r+b") as f: f.write(base["bytes"])
                     with session(mount, data, name + "-fault", cut) as uart:
+                        c = pid(uart, "session hello other")
+                        h = pid(uart, f"helper {c} hello other")
                         uart.command(f'replace hello {base["old"]["version"]} {base["retry"]} "after"', "Uncertain")
+                        uart.command(f"revoke {c}", "access=fenced members=2 discarded_staging=0 effects=recovery-required")
+                        actor(uart, h, "read", 18)
+                        uart.command("mem", "pending_io=0")
                         uart.command("restart files", "utility sessions revoked")
                         _, observed = snapshot(data)
                         committed = bool(observed["records"])
@@ -85,7 +92,7 @@ def verify(image, timeout=60, output=None):
                     else:
                         assert observed["nodes"][base["old"]["id"]]["version"] == base["old"]["version"]
                     (output / (name + ".bin")).write_bytes(prefix)
-                    cases.append({"case":name,"cut":cut,"committed":committed,"verified":True,"sha256":observed["selected_sha256"]})
+                    cases.append({"case":name,"cut":cut,"committed":committed,"verified":True,"revocation_reports_recovery_required":True,"sha256":observed["selected_sha256"]})
             # Derive the old format from an independently inspected native volume; preserve its file bytes.
             legacy = bytearray(base["bytes"])
             legacy[512:1024] = bytes(512)

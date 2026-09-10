@@ -7,6 +7,7 @@ mod policy;
 mod recovery;
 mod requests;
 mod services;
+mod sessions;
 rustic_sdk::entry!(run);
 fn run(initialize: u64, _: u64, _: u64) -> u64 {
     match bootstrap::start(initialize == 1) {

@@ -51,3 +51,7 @@ The trusted owner-control path is a different authority context from an ordinary
 The walkthroughs cover subject, action, resource, lifetime, helper scope, indirect access, mode independence, revocation/regrant, partial/unknown effects, egress, credentials, activation and full-control limits. Allowed and denied outcomes follow the explicit fixture; no Low/Medium/Total or replacement tier is needed.
 
 Current kernel/IPC/SDK/block evidence remains evidence only for those implemented mechanisms. The earlier finite model covers different, deliberately limited state transitions. #13 and each later service must provide actual guest/transport evidence before their implementation issues close. Review was by the implementing agent, without independent audit.
+
+## Native implementation evidence — 2026-09-10
+
+The [native C/H mission](../AUTHORITY.md) now exercises A01–A05 for the bounded file surface, A06/A07 for privileged control and the file service, A08 for queued requests/staging and shared fencing, A10 for inherited expiry/root death/service restart, and A12 for settled I/O failures that require recovery. It also moves a real kernel handle and checks identity and revocation after movement. The separate recovery suite supplies A11. Portable tests exercise regrant rejection under A09; full native service-v1 regrant/reference integration remains open. This evidence does not close the entire matrix: links are unsupported, a missing acknowledgment or still-pending device effect is not yet covered, and A13–A20 retain their listed service owners.

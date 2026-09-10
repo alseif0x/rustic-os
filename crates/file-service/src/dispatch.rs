@@ -4,8 +4,9 @@ use rustic_abi::files::*;
 use rustic_fs::{Disk, Kind, Volume};
 pub struct Server {
     pub volume: Volume,
-    grants: [Option<Grant>; CLIENTS],
-    next: u32,
+    pub(super) grants: [Option<Grant>; CLIENTS],
+    pub(super) roots: [u32; CLIENTS],
+    pub(super) next: u32,
     pub(super) transfers: Transfers,
 }
 impl Server {
@@ -13,57 +14,10 @@ impl Server {
         Self {
             volume,
             grants: [None; CLIENTS],
+            roots: [0; CLIENTS],
             next: 1,
             transfers: Transfers::new(),
         }
-    }
-    /// Trusted administrative boundary; applications must authenticate the private admin endpoint.
-    pub fn grant(&mut self, slot: usize, mut grant: Grant) -> Result<u32, Error> {
-        if slot >= CLIENTS
-            || grant.peer == 0
-            || grant.endpoint == 0
-            || grant.rights == 0
-            || grant.rights & !(READ_RIGHT | WRITE_RIGHT | INSPECT_RIGHT) != 0
-            || (grant.rights & INSPECT_RIGHT != 0 && grant.subject == 0)
-            || (grant.scope != 0 && self.volume.stat(grant.scope).is_err())
-        {
-            return Err(Error::Invalid);
-        }
-        let next = self.next.checked_add(1).ok_or(Error::Exhausted)?;
-        grant.generation = self.next;
-        self.next = next;
-        self.transfers.clear(slot);
-        self.grants[slot] = Some(grant);
-        Ok(grant.generation)
-    }
-    pub fn revoke(&mut self, slot: usize) -> Result<(), Error> {
-        let grant = self
-            .grants
-            .get_mut(slot)
-            .and_then(Option::as_mut)
-            .ok_or(Error::NotFound)?;
-        grant.rights = 0;
-        self.transfers.clear(slot);
-        Ok(())
-    }
-    pub fn detach(&mut self, slot: usize) {
-        if slot < CLIENTS {
-            self.transfers.clear(slot);
-            self.grants[slot] = None;
-        }
-    }
-    pub fn grant_at(&self, slot: usize) -> Option<Grant> {
-        self.grants.get(slot).copied().flatten()
-    }
-    pub fn expire(&mut self, now: u64) {
-        for slot in 0..CLIENTS {
-            if self.grants[slot].is_some_and(|g| g.expires != 0 && now >= g.expires) {
-                self.transfers.clear(slot);
-            }
-        }
-    }
-    pub fn pending(&self) -> usize {
-        self.transfers.count()
     }
     pub fn handle(
         &mut self,

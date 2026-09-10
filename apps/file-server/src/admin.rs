@@ -2,7 +2,12 @@
 //! Only the private bootstrap channel invokes these administrative operations.
 use rustic_file_service::{Grant, Server};
 use rustic_sdk::abi::files::{Error, GRANT, REVOKE, STATUS};
-pub fn dispatch(server: &mut Server, disk: &mut impl rustic_fs::Disk, w: [u64; 8]) -> [u64; 8] {
+pub fn dispatch(
+    server: &mut Server,
+    disk: &mut impl rustic_fs::Disk,
+    w: [u64; 8],
+    now: u64,
+) -> [u64; 8] {
     let mut r = [0; 8];
     let result = (|| {
         let slot = usize::try_from(w[1]).map_err(|_| Error::Invalid)?;
@@ -21,7 +26,29 @@ pub fn dispatch(server: &mut Server, disk: &mut impl rustic_fs::Disk, w: [u64; 8
                     },
                 )? as u64;
             }
-            x if x == REVOKE as u64 && w[2..].iter().all(|x| *x == 0) => server.revoke(slot)?,
+            x if x == REVOKE as u64 && w[2..].iter().all(|x| *x == 0) => {
+                let before = server.pending();
+                r[1] = server.revoke(slot)? as u64;
+                r[2] = (before - server.pending()) as u64;
+                r[3] = server.volume.stat(1).is_err() as u64;
+                r[4] = server.volume.sequence();
+            }
+            37 => {
+                r[1] = server.derive(
+                    slot,
+                    u32::try_from(w[2]).map_err(|_| Error::Invalid)?,
+                    Grant {
+                        peer: w[3],
+                        endpoint: w[4],
+                        scope: u32::try_from(w[5]).map_err(|_| Error::Invalid)?,
+                        rights: u8::try_from(w[6]).map_err(|_| Error::Invalid)?,
+                        expires: w[7],
+                        generation: 0,
+                        subject: 0,
+                    },
+                    now,
+                )? as u64;
+            }
             35 if slot < 4 && w[2..].iter().all(|x| *x == 0) => server.detach(slot),
             x if x == STATUS as u64 && w[1..].iter().all(|x| *x == 0) => {
                 r[1] = server.pending() as u64;

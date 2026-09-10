@@ -57,8 +57,9 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
                         Ok(words) => {
                             let slot = words[1] as usize;
                             let old = server.grant_at(slot);
-                            let r = super::admin::dispatch(server, disk, words);
-                            if r[0] == 0 && matches!(words[0], 32 | 33 | 35) && slot < CLIENTS {
+                            let r = super::admin::dispatch(server, disk, words, runtime::clock());
+                            if r[0] == 0 && matches!(words[0], 32 | 33 | 35 | 37) && slot < CLIENTS
+                            {
                                 // Never deliver a queued reply into a newly granted context.
                                 replies[slot] = None;
                                 if let Some(old) = old
@@ -67,6 +68,13 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
                                         .is_none_or(|g| g.endpoint != old.endpoint)
                                 {
                                     let _ = Endpoint::from_bootstrap(old.endpoint).close();
+                                }
+                            }
+                            if r[0] == 0 && words[0] == 33 {
+                                for (index, reply) in replies[..CLIENTS].iter_mut().enumerate() {
+                                    if r[1] & (1 << index) != 0 {
+                                        *reply = None;
+                                    }
                                 }
                             }
                             r
@@ -93,7 +101,9 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
             match endpoint.receive() {
                 Ok(message) => {
                     let output = match Packet::decode(message.payload()) {
-                        Ok(request) => server.handle(disk, slot, message.sender(), request, now),
+                        Ok(request) => {
+                            server.handle(disk, slot, message.sender(), request, runtime::clock())
+                        }
                         Err(_) => {
                             let mut p = Packet::new(1);
                             p.status = 1;

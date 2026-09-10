@@ -99,6 +99,14 @@ impl Manager {
                     )
                     .map_err(|_| Error::Denied)?;
             }
+            MOVE_ENDPOINT => {
+                let owner = self.owned(w[1])?;
+                let target = self.owned(w[3])?;
+                let rights = u8::try_from(w[4]).map_err(|_| Error::Invalid)?;
+                r[0] = self
+                    .transfer(owner, w[2], target, rights)
+                    .map_err(|_| Error::Denied)?;
+            }
             CLOSE_ENDPOINT => {
                 let p = self.owned(w[1])?;
                 self.broker.close(p.0, w[2]).map_err(|_| Error::Invalid)?;

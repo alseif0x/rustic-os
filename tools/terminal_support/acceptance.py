@@ -8,6 +8,7 @@ from boot_support.image import package
 from .machine import machine, disk
 from .connection import Connection
 from .cases import exercise
+from .authority_cases import exercise as authority_exercise
 from .oracle import inspect
 
 def verify(image, timeout=60, output=None):
@@ -34,6 +35,8 @@ def verify(image, timeout=60, output=None):
                             uart.until()
                             if phase == 1:
                                 cases = exercise(uart)
+                                authority = authority_exercise(uart, data)
+                                cases = uart.commands
                             else:
                                 uart.command("cat hello", "Hello from native Rust")
                                 uart.command("cat /config/owner-policy", "helpers=explicit")
@@ -48,7 +51,7 @@ def verify(image, timeout=60, output=None):
                 allocation = data.stat().st_blocks * 512
         (output / "files.bin").write_bytes(selected)
         evidence = {"verified":True,"boots":2,"commands_phase_one":cases,"oracle":oracle,"allocated_bytes":allocation,
-                    "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"]}
+                    "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"authority":authority}
         (output / "terminal.json").write_text(json.dumps(evidence,indent=2)+"\n")
         result = {"outcome":"success","returncode":33,"timed_out":False,"elapsed_seconds":round(time.monotonic()-started,3),
                   "build_id":metadata["build_id"],"image_sha256":metadata["image_sha256"],"terminal":evidence}

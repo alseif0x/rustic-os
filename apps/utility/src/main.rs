@@ -2,7 +2,9 @@
 #![no_std]
 #![no_main]
 mod actions;
+mod pressure;
 mod recovery;
+mod session;
 rustic_sdk::entry!(run);
 fn run(files: u64, control: u64, peer: u64) -> u64 {
     let endpoint = rustic_sdk::ipc::Endpoint::from_bootstrap(control);
@@ -16,6 +18,18 @@ fn run(files: u64, control: u64, peer: u64) -> u64 {
         return 3;
     };
     let mut client = rustic_sdk::files::Client::new(files, peer, words[3] as u32);
+    if matches!(
+        words[0],
+        rustic_sdk::abi::supervisor::SESSION | rustic_sdk::abi::supervisor::HELPER
+    ) {
+        return session::run(
+            &mut client,
+            &endpoint,
+            message.sender(),
+            words[1] as u32,
+            words[2] as u32,
+        );
+    }
     let report = actions::run(&mut client, words);
     let message =
         rustic_sdk::ipc::Message::new(0, &rustic_sdk::abi::runtime::encode(report)).unwrap();

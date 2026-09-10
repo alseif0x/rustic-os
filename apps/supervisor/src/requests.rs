@@ -8,6 +8,8 @@ impl State {
             s::INFO | s::EXIT | s::SERVICES | s::RESTART | s::ROTATE_RECEIPTS => 1,
             s::PROCESS | s::KILL | s::REAP | s::PERMISSIONS | s::REVOKE => 2,
             s::RUN => 6,
+            s::HELPER_START => 4,
+            s::ACT | s::MOVE_CHECK => 3,
             _ => return Err(1),
         };
         if w[end..].iter().any(|v| *v != 0) {
@@ -39,6 +41,7 @@ impl State {
                     u32::try_from(w[3]).map_err(|_| 1u64)?,
                     u8::try_from(w[4]).map_err(|_| 1u64)?,
                     w[5],
+                    0,
                 )
                 .map(|pid| [0, pid, 0, 0, 0, 0, 0, 0]),
             s::KILL => {
@@ -70,22 +73,14 @@ impl State {
                     c.report[2],
                 ])
             }
-            s::REVOKE => {
-                let slot = self
-                    .children
-                    .iter()
-                    .position(|c| c.as_ref().is_some_and(|c| c.pid == w[1]))
-                    .ok_or(2u64)?;
-                let r = self
-                    .admin
-                    .words([33, (slot + 2) as u64, 0, 0, 0, 0, 0, 0])
-                    .map_err(|_| 4u64)?;
-                if r[0] != 0 {
-                    return Err(4);
-                }
-                self.children[slot].as_mut().unwrap().rights = 0;
-                Ok([0; 8])
-            }
+            s::REVOKE => self.revoke_session(w[1]),
+            s::HELPER_START => self.helper(
+                w[1],
+                u32::try_from(w[2]).map_err(|_| 1u64)?,
+                u32::try_from(w[3]).map_err(|_| 1u64)?,
+            ),
+            s::ACT => self.actor(w[1], w[2]),
+            s::MOVE_CHECK => self.move_check(w[1], w[2]),
             s::EXIT => {
                 call([k::SHUTDOWN, 0, 0, 0, 0, 0, 0, 0]).map_err(|_| 4u64)?;
                 Ok([0; 8])

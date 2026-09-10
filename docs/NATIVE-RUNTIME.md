@@ -27,6 +27,8 @@ The control packet is eight little-endian u64 words. Word 0 is the opcode. INFO=
 
 File-service scope generations are separately bound to the authenticated client endpoint/PID. A moved token cannot create a new service grant. Console ownership is independent from file rights: child output cannot write directly to the owner's prompt. Services wait on bounded endpoint sets; when all user processes wait, the kernel sleeps until the next timer interrupt and continues polling disk/input and deadlines. No permanently spinning control process is required for an idle terminal.
 
+MOVE_ENDPOINT=13 takes source PID, source token, target PID and attenuated IPC rights. Only the trusted supervisor may call it, both processes must be live and supervisor-owned, and it returns the new target token while invalidating the old token. File-service identity and session roots are unchanged; [native authority acceptance](AUTHORITY.md) checks movement, denial and root death.
+
 CLOSE_ENDPOINT=12 takes an owned PID/token to roll back trusted provisioning. It cannot close a foreign process's authority. Full-capacity loader/lifecycle tests cover all eight slots; the terminal deliberately limits utilities to two.
 
 ## Accounting and limitations

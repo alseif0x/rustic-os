@@ -8,6 +8,7 @@ fn control_shapes_reject_unknown_operations_and_reserved_words() {
         (START, 5),
         (CONNECT, 3),
         (CLOSE_ENDPOINT, 3),
+        (MOVE_ENDPOINT, 5),
         (BLOCK_GRANT, 5),
         (CONSOLE_GRANT, 2),
         (PROCESS, 2),

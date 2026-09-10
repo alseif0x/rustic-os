@@ -52,7 +52,8 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `run read FILE`, `run probe FILE OTHER` | Read selected file; probe additionally verifies denial of the other file and privileged kernel/console calls |
 | `run watch FILE [TICKS]` | Repeated reads in a separate utility; optional grant lifetime in PIT ticks (100 ticks/second) |
 | `ps`, `kill PID`, `reap PID` | Inspect processes; terminate/reap only this shell's utility children |
-| `permissions [PID]`, `revoke PID` | Inspect file scope/rights/generation/deadline/report; revoke a utility's current file context |
+| `permissions [PID]`, `revoke PID` | Inspect file scope/rights/generation/deadline/report; fence the utility's whole client/helper session and report staging/effect status |
+| `session FILE OTHER [TICKS]`, `helper PID FILE OTHER`, `act PID ACTION`, `move-check C H` | Run the [deterministic client/helper authority mission](AUTHORITY.md); explicit subsets and shared revocation |
 | `services`, `mem` | Query service identities, owner-policy state, frame/process/channel counts |
 | `restart files` | End utility sessions, remount the file service and issue fresh owner bindings |
 | `retry-key PATH KEY`, `replace PATH VERSION TOKEN TEXT`, `receipt ID TOKEN` | Prepare an explicit retry token, commit a tracked whole-file replacement, inspect its retained result |

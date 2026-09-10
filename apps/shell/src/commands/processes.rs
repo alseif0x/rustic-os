@@ -117,7 +117,21 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 _ => p::REVOKE,
             };
             let r = s.service([op, number(a, 1)?, 0, 0, 0, 0, 0, 0])?;
-            output::format(format_args!("ok exit_kind={} code={}\r\n", r[1], r[2]));
+            if op == p::REVOKE {
+                output::format(format_args!(
+                    "ok access=fenced members={} discarded_staging={} effects={} sequence={}\r\n",
+                    r[1],
+                    r[2],
+                    if r[3] == 0 {
+                        "settled"
+                    } else {
+                        "recovery-required"
+                    },
+                    r[4]
+                ));
+            } else {
+                output::format(format_args!("ok exit_kind={} code={}\r\n", r[1], r[2]));
+            }
         }
         "permissions" => {
             if a.len() > 2 {

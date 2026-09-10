@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+mod authority;
 mod files;
 mod processes;
 mod recovery;
@@ -53,7 +54,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         "help" => {
             exact(a, 1)?;
             output::text(
-                "help | pwd | cd PATH | ls [PATH] | mkdir PATH | touch PATH\r\nwrite PATH TEXT | cat PATH | stat PATH | rm PATH | echo TEXT | status\r\nrun spin|fault|exit | run read FILE | run probe FILE OTHER | run watch FILE [TICKS]\r\nps | kill PID | reap PID | permissions [PID] | revoke PID\r\nservices | mem | restart files | exit\r\nretry-key PATH KEY | replace PATH VERSION TOKEN TEXT | receipt ID TOKEN | rotate-receipts\r\nPaths: /system (read-only), /data, /config, /workspaces.\r\nLimits: 32 objects, 1024 bytes/file, 2 utility slots. No AI/network required.\r\n",
+                "help | pwd | cd PATH | ls [PATH] | mkdir PATH | touch PATH\r\nwrite PATH TEXT | cat PATH | stat PATH | rm PATH | echo TEXT | status\r\nrun spin|fault|exit | run read FILE | run probe FILE OTHER | run watch FILE [TICKS]\r\nps | kill PID | reap PID | permissions [PID] | revoke PID\r\nservices | mem | restart files | exit\r\nretry-key PATH KEY | replace PATH VERSION TOKEN TEXT | receipt ID TOKEN | rotate-receipts\r\nsession FILE OTHER [TICKS] | helper PID FILE OTHER | act PID read|stage|commit|flood|drain|stale\r\nmove-check CLIENT HELPER (moves its file endpoint)\r\nPaths: /system (read-only), /data, /config, /workspaces.\r\nLimits: 32 objects, 1024 bytes/file, 2 utility slots. No AI/network required.\r\n",
             );
         }
         "echo" => {
@@ -78,6 +79,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         "pwd" | "cd" | "ls" | "mkdir" | "touch" | "write" | "cat" | "stat" | "rm" => {
             files::execute(s, a)?
         }
+        "session" | "helper" | "act" | "move-check" => authority::execute(s, a)?,
         "retry-key" | "receipt" | "replace" | "rotate-receipts" => recovery::execute(s, a)?,
         "run" | "ps" | "kill" | "reap" | "permissions" | "revoke" | "services" | "mem"
         | "restart" => processes::execute(s, a)?,

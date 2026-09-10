@@ -14,6 +14,21 @@ pub const SERVICES: u64 = 9;
 pub const GRANT: u64 = 10;
 pub const RESTART: u64 = 11;
 pub const ROTATE_RECEIPTS: u64 = 12;
+pub const HELPER_START: u64 = 13;
+pub const ACT: u64 = 14;
+pub const MOVE_CHECK: u64 = 15;
+pub const SESSION: u64 = 8;
+pub const HELPER: u64 = 9;
+/// Deterministic native actor commands; the owner supplies no arbitrary program.
+pub mod actor {
+    pub const READ: u64 = 1;
+    pub const STAGE: u64 = 2;
+    pub const COMMIT: u64 = 3;
+    pub const FLOOD: u64 = 4;
+    pub const DRAIN: u64 = 5;
+    pub const MOVED: u64 = 6;
+    pub const STALE: u64 = 7;
+}
 pub const SPIN: u64 = 1;
 pub const FAULT: u64 = 2;
 pub const READ: u64 = 3;

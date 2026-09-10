@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 mod authority;
 mod dispatch;
+mod grants;
 mod recovery;
 mod reply;
 mod transfer;
