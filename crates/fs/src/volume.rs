@@ -149,12 +149,14 @@ impl Volume {
             .sequence
             .checked_add(1)
             .ok_or(Error::Exhausted)?;
+        // Fence before crossing the adapter boundary, including adapter unwind.
+        self.poisoned = true;
         if next.write(disk, 1 - self.bank).is_err() {
-            self.poisoned = true;
             return Err(Error::Uncertain);
         }
         self.metadata = next;
         self.bank = 1 - self.bank;
+        self.poisoned = false;
         Ok(())
     }
 }

@@ -98,6 +98,7 @@ impl Volume {
             receipt,
             namespace: None,
             bytes: [0; MAX_FILE],
+            admission: None,
         };
         record.bytes[..bytes.len()].copy_from_slice(bytes);
         let mut next = self.metadata.clone();
@@ -111,6 +112,12 @@ impl Volume {
         self.ready()?;
         let mut next = self.metadata.clone();
         let r = next.recovery.as_mut().ok_or(Error::Unsupported)?;
+        if r.records.iter().flatten().any(|r| {
+            r.admission
+                .is_some_and(|a| a.state == crate::AdmissionState::Admitted)
+        }) {
+            return Err(Error::Busy);
+        }
         r.epoch = r.epoch.checked_add(1).ok_or(Error::Exhausted)?;
         r.records.fill(None);
         let epoch = r.epoch;

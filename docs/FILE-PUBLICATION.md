@@ -12,7 +12,7 @@ The distinction matters: a service that waits inside a complete replacement cann
 
 `advance()` completes exactly one synchronous write or flush, then returns control. There is no outstanding command between synchronous calls. `poll_advance()` instead uses `PollDisk`, returning `Pending` while its adapter owns one command. Polling repeats that command's completion query; it never admits a second command. `pending()` identifies this unsettled interval. The synchronous entry point refuses to submit while an asynchronous command remains pending. `result()` returns no speculative version or receipt; it exposes the result only after the final flush succeeds, or for an existing committed replay. Repeated terminal calls issue no I/O.
 
-The ordering and on-disk encoding remain compatible with formats 1–3:
+The ordering supports formats 1–3 and the explicit [format-4 admission extension](FILE-ADMISSION.md):
 
 1. Write the two inactive data sectors and flush them.
 2. Write the inactive recovery bank when enabled, then the four metadata sectors, and flush them.
@@ -35,7 +35,7 @@ These are local mechanics states, not service-v1 operation states or transport d
 | `Cancelled` | `Cancelled` | Repeated cancellation/advance calls perform no I/O. |
 | `Uncertain` | `Error::Uncertain` | Further commands are forbidden until explicit recovery/remount. |
 
-A successful early cancellation leaves the previous file version and bytes selected. It stores **no durable cancellation record**, reserves no retry key and allocates no operation ID. After restart, lookup of that uncommitted preparation still returns `OutcomeUnknown`. A later explicit submission can therefore use that key. This is not sufficient for a public promise that an accepted operation remains cancelled across restart.
+A successful early cancellation leaves the previous file version and bytes selected. For `prepare_replace`/`prepare_scoped`, it stores **no durable cancellation record**, reserves no retry key and allocates no operation ID. After restart, lookup of that uncommitted preparation still returns `OutcomeUnknown`. A later explicit submission can therefore use that key. The separate [admission storage API](FILE-ADMISSION.md) reserves an identity first; early publication cancellation there leaves the record admitted until an explicit terminal metadata transition settles.
 
 Any failed write/flush is conservatively uncertain, including a failure before the header. Failure is not proof that the device made no change. Cancellation cannot relabel that failure as rollback. Dropping a healthy preparation before publication releases the live writer only if no command remains pending; dropping during I/O or final settlement leaves it fenced. A forgotten publication guard also leaves the writer fenced. Fencing is established before I/O, including an adapter panic that unwinds on the host; successful settlement or known safe cancellation releases it.
 

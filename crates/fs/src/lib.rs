@@ -2,6 +2,7 @@
 //! Bounded volume mechanics. No kernel, SDK, allocation or host filesystem dependency.
 #![no_std]
 #![forbid(unsafe_code)]
+mod admission;
 mod checksum;
 mod format;
 mod mutations;
@@ -13,6 +14,7 @@ mod recovery;
 mod references;
 mod storage;
 mod volume;
+pub use admission::{Admission, AdmissionId, AdmissionState, AdmissionStatus};
 pub use namespace::{Kind, Node};
 pub use publication::{Publication, PublicationCancel, PublicationPhase};
 pub use recovery::{Operation, RETAINED, Receipt, Replacement, Retry};
@@ -43,4 +45,6 @@ pub enum Error {
     ExpiredEpoch,
     OutcomeUnknown,
     IdempotencyConflict,
+    Busy,
+    Cancelled,
 }

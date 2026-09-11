@@ -37,5 +37,8 @@ pub(super) fn error(error: rustic_fs::Error) -> Error {
         E::ExpiredEpoch => Error::ExpiredEpoch,
         E::OutcomeUnknown => Error::OutcomeUnknown,
         E::IdempotencyConflict => Error::IdempotencyConflict,
+        E::Busy => Error::Busy,
+        // The completed-only wire profile cannot describe a durable cancellation.
+        E::Cancelled => Error::Unsupported,
     }
 }

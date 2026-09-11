@@ -49,10 +49,15 @@ impl Metadata {
     fn publication_header(&self) -> [u8; 512] {
         let mut bytes = [0; 512];
         bytes[..8].copy_from_slice(b"RUSTFS1\0");
-        let version = self
-            .recovery
-            .as_ref()
-            .map_or(1u16, |r| if r.scoped { 3 } else { 2 });
+        let version = self.recovery.as_ref().map_or(1u16, |r| {
+            if r.admissions {
+                4
+            } else if r.scoped {
+                3
+            } else {
+                2
+            }
+        });
         bytes[8..10].copy_from_slice(&version.to_le_bytes());
         bytes[10..12].copy_from_slice(&512u16.to_le_bytes());
         bytes[12..20].copy_from_slice(&self.sequence.to_le_bytes());

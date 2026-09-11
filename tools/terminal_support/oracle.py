@@ -3,6 +3,7 @@
 import hashlib
 import struct
 import zlib
+from . import oracle_admission
 
 def snapshot(data):
     with data.open("rb") as stream:
@@ -14,7 +15,7 @@ def snapshot(data):
     banks = []
     for sector in (8, 13):
         header = bytearray(selected[sector*512:(sector+1)*512])
-        if header[:8] != b"RUSTFS1\0" or header[8] not in (1, 2, 3) or header[9:12] != b"\0\0\x02":
+        if header[:8] != b"RUSTFS1\0" or header[8] not in (1, 2, 3, 4) or header[9:12] != b"\0\0\x02":
             continue
         expected = struct.unpack_from("<I", header, 28)[0]
         header[28:32] = bytes(4)
@@ -47,7 +48,7 @@ def snapshot(data):
         nodes[struct.unpack_from("<I",node,8)[0]] = {"version":struct.unpack_from("<Q",node,16)[0],"content":content[:length]}
     records = []
     if recovery is not None:
-        if recovery[:8] != (b"RUSTREC2" if version == 3 else b"RUSTREC1") or any(recovery[32:512]):
+        if recovery[:8] != {2: b"RUSTREC1", 3: b"RUSTREC2", 4: b"RUSTREC3"}[version] or any(recovery[32:512]):
             raise AssertionError("invalid recovery state")
         lineage = recovery[8:24].hex()
         envelope = bytearray(selected[512:1024])
@@ -61,19 +62,21 @@ def snapshot(data):
             if not any(p):
                 continue
             length = struct.unpack_from("<H",p,28)[0]
-            if length > 1024 or any(p[30:32]) or any(p[52:56]) or any(p[64:512]) or version == 2 and any(p[48:64]) or any(p[512+length:]):
+            if length > 1024 or any(p[30:32]) or any(p[52:56]) or version == 2 and any(p[48:64]) or any(p[512+length:]):
                 raise AssertionError("invalid receipt padding/length")
             records.append({"subject":struct.unpack_from("<Q",p)[0],"epoch":struct.unpack_from("<Q",p,8)[0],"key":struct.unpack_from("<Q",p,16)[0],"id":struct.unpack_from("<I",p,24)[0],"previous":struct.unpack_from("<Q",p,32)[0],"committed":struct.unpack_from("<Q",p,40)[0],"content":p[512:512+length]})
             workspace = struct.unpack_from("<I", p, 48)[0]
             instance = struct.unpack_from("<Q", p, 56)[0]
             record = records[-1]
             if workspace or instance:
-                if not (0 < workspace < next_id and workspace != record["id"] and 0 < instance <= record["committed"]):
+                if not (0 < workspace < next_id and workspace != record["id"] and instance > 0):
                     raise AssertionError("invalid historical operation namespace")
                 record.update(workspace=workspace, instance=instance, sha256=hashlib.sha256(record["content"]).hexdigest())
-            if not (record["subject"] > 0 and record["key"] > 0 and record["epoch"] == epoch and 4 < record["id"] < next_id and 0 < record["previous"] < record["committed"] <= sequence):
+            oracle_admission.decode(p, version, record, sequence)
+            bound = record.get("admission", record["committed"])
+            if not (record["subject"] > 0 and record["key"] > 0 and record["epoch"] == epoch and 4 < record["id"] < next_id and 0 < record["previous"] < bound <= sequence and instance <= bound):
                 raise AssertionError("invalid retained operation identity")
-            if any(old["committed"] == record["committed"] or (old["subject"], old.get("workspace"), old["key"]) == (record["subject"], record.get("workspace"), record["key"]) for old in records[:-1]):
+            if any(oracle_admission.numbers(old) & oracle_admission.numbers(record) or (old["subject"], old.get("workspace"), old["key"]) == (record["subject"], record.get("workspace"), record["key"]) for old in records[:-1]):
                 raise AssertionError("duplicate retained operation identity")
     else:
         lineage, epoch = None, None

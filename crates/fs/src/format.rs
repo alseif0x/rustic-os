@@ -45,7 +45,7 @@ impl Metadata {
             return Err(Error::Empty);
         }
         if &b[..8] != b"RUSTFS1\0"
-            || !matches!(b[8], 1..=3)
+            || !matches!(b[8], 1..=4)
             || b[9..12] != [0, 0, 2]
             || b[36..].iter().any(|b| *b != 0)
             || b[8] == 1 && b[32..36] != [0; 4]
@@ -89,7 +89,7 @@ impl Metadata {
                 &records,
                 result.sequence,
                 result.next,
-                b[8] == 3,
+                b[8],
             )?);
         }
         result.validate()?;

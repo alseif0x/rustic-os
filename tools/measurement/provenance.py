@@ -32,7 +32,7 @@ def configuration(root, output, label):
     sources = [*Path(__file__).parent.glob("*.py"), root / "tools/measure.py"]
     sources += [root / "tools/terminal_support" / n for n in
                 ("machine.py", "connection.py", "cases.py", "authority_cases.py",
-                 "management_cases.py", "oracle.py", "provision.py")]
+                 "management_cases.py", "oracle.py", "oracle_admission.py", "provision.py")]
     sources += [root / "tools/boot_support" / n for n in
                 ("runner.py", "scenarios.py", "image.py", "process_evidence.py",
                  "ipc_evidence.py", "sdk_evidence.py", "block_evidence.py", "block_user_evidence.py")]

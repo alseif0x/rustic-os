@@ -22,18 +22,20 @@ pub struct Receipt {
     pub length: u16,
 }
 #[derive(Clone, Copy)]
-pub(super) struct Record {
-    pub(super) subject: u64,
-    pub(super) receipt: Receipt,
-    pub(super) namespace: Option<(u32, u64)>, // workspace, original service incarnation
-    pub(super) bytes: [u8; MAX_FILE],
+pub(crate) struct Record {
+    pub(crate) subject: u64,
+    pub(crate) receipt: Receipt,
+    pub(crate) namespace: Option<(u32, u64)>, // workspace, original service incarnation
+    pub(crate) bytes: [u8; MAX_FILE],
+    pub(crate) admission: Option<crate::admission::Stored>,
 }
 #[derive(Clone)]
-pub(super) struct Recovery {
-    pub(super) lineage: [u8; 16],
-    pub(super) epoch: u64,
-    pub(super) scoped: bool,
-    pub(super) records: [Option<Record>; RETAINED],
+pub(crate) struct Recovery {
+    pub(crate) lineage: [u8; 16],
+    pub(crate) epoch: u64,
+    pub(crate) scoped: bool,
+    pub(crate) admissions: bool,
+    pub(crate) records: [Option<Record>; RETAINED],
 }
 impl Recovery {
     pub(super) fn new(lineage: [u8; 16]) -> Result<Self, Error> {
@@ -44,6 +46,7 @@ impl Recovery {
             lineage,
             epoch: 1,
             scoped: false,
+            admissions: false,
             records: [None; RETAINED],
         })
     }

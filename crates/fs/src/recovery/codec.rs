@@ -4,7 +4,9 @@ use crate::{Error, MAX_FILE};
 impl Recovery {
     pub(crate) fn encode(&self) -> [u8; RECOVERY_SECTORS * 512] {
         let mut b = [0; RECOVERY_SECTORS * 512];
-        b[..8].copy_from_slice(if self.scoped {
+        b[..8].copy_from_slice(if self.admissions {
+            b"RUSTREC3"
+        } else if self.scoped {
             b"RUSTREC2"
         } else {
             b"RUSTREC1"
@@ -25,6 +27,9 @@ impl Recovery {
                 p[48..52].copy_from_slice(&workspace.to_le_bytes());
                 p[56..64].copy_from_slice(&instance.to_le_bytes());
             }
+            if let Some(a) = r.admission {
+                a.encode(p);
+            }
             p[512..].copy_from_slice(&r.bytes);
         }
         b
@@ -33,15 +38,25 @@ impl Recovery {
         b: &[u8; RECOVERY_SECTORS * 512],
         sequence: u64,
         next: u32,
-        scoped: bool,
+        version: u8,
     ) -> Result<Self, Error> {
-        if &b[..8] != (if scoped { b"RUSTREC2" } else { b"RUSTREC1" })
+        let scoped = version >= 3;
+        let admissions = version == 4;
+        if &b[..8]
+            != (if admissions {
+                b"RUSTREC3"
+            } else if scoped {
+                b"RUSTREC2"
+            } else {
+                b"RUSTREC1"
+            })
             || b[32..512].iter().any(|v| *v != 0)
         {
             return Err(Error::Corrupt);
         }
         let mut value = Self::new(b[8..24].try_into().unwrap()).map_err(|_| Error::Corrupt)?;
         value.scoped = scoped;
+        value.admissions = admissions;
         value.epoch = u64::from_le_bytes(b[24..32].try_into().unwrap());
         if value.epoch == 0 || value.epoch > sequence {
             return Err(Error::Corrupt);
@@ -70,28 +85,40 @@ impl Recovery {
                 committed: u64::from_le_bytes(p[40..48].try_into().unwrap()),
             };
             let subject = u64::from_le_bytes(p[..8].try_into().unwrap());
+            let admission =
+                crate::admission::Stored::decode(p, admissions, receipt, namespace, sequence)?;
             if subject == 0
                 || receipt.retry.epoch != value.epoch
                 || receipt.retry.key == 0
                 || receipt.id <= 4
                 || receipt.id >= next
                 || receipt.previous == 0
-                || receipt.previous >= receipt.committed
+                || admission.is_none() && receipt.previous >= receipt.committed
                 || receipt.committed > sequence
                 || receipt.length as usize > MAX_FILE
                 || p[30..32] != [0; 2]
-                || p[52..56].iter().chain(&p[64..512]).any(|v| *v != 0)
+                || p[52..56].iter().any(|v| *v != 0)
                 || namespace.is_some_and(|(w, i)| {
                     !scoped
                         || w == 0
                         || w >= next
                         || w == receipt.id
                         || i == 0
-                        || i > receipt.committed
+                        || i > admission.map_or(receipt.committed, |a| a.number)
                 })
                 || p[512 + receipt.length as usize..].iter().any(|v| *v != 0)
                 || value.records.iter().flatten().any(|r| {
-                    r.receipt.committed == receipt.committed
+                    let current = [
+                        receipt.committed,
+                        admission.map_or(0, |a| a.number),
+                        admission.map_or(0, |a| a.terminal),
+                    ];
+                    let old = [
+                        r.receipt.committed,
+                        r.admission.map_or(0, |a| a.number),
+                        r.admission.map_or(0, |a| a.terminal),
+                    ];
+                    current.iter().any(|n| *n != 0 && old.contains(n))
                         || r.subject == subject
                             && r.namespace.map(|n| n.0) == namespace.map(|n| n.0)
                             && r.receipt.retry == receipt.retry
@@ -104,6 +131,7 @@ impl Recovery {
                 receipt,
                 namespace,
                 bytes: p[512..].try_into().unwrap(),
+                admission,
             });
         }
         Ok(value)

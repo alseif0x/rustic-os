@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use super::disk::Disk;
+use crate::volume_disk::Disk;
 use rustic_fs::{
     Error, PublicationCancel as Cancel, PublicationPhase as Phase, Replacement, Volume,
 };

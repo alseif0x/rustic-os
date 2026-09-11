@@ -13,12 +13,14 @@ from boot_support.scenarios import records
 
 def marker(phase):
     faults = phase == "faults"
-    line = (f"RUSTIC BLOCK_USER verified=1 phase={phase} ring=3 applications={14 if faults else 2} "
+    line = (f"RUSTIC BLOCK_USER verified=1 phase={phase} ring=3 applications={14 if faults else 4} "
             f"rejected={53 if faults else 0} lifecycle={6 if faults else 0} control_preemptions=4 "
             "max_bytes=512 queue_slots=2 handle_slots=4 dma_frames=3 peak_frames=79 metadata_bytes=5232 free_before=90 free_after=90")
     if not faults:
         line += (f"\nRUSTIC PUBLICATION verified=1 phase={'write' if phase == 'write' else 'replay'} "
                  f"cancelled={16 if phase == 'write' else 0} too_late=1 committed=1")
+        line += (f"\nRUSTIC ADMISSION verified=1 phase={'write' if phase == 'write' else 'replay'} "
+                 "admitted=1 cancelled=1 committed=1 replay_writes=0")
     return line
 
 
@@ -32,7 +34,9 @@ class BlockUserEvidence(unittest.TestCase):
                     good.replace("max_bytes=512", "max_bytes=1024"), good.replace("dma_frames=3", "dma_frames=0"),
                     good.replace("peak_frames=79", "peak_frames=0"),
                     good.replace("cancelled=16", "cancelled=15"), good.replace("too_late=1", "too_late=0"),
-                    good.replace("committed=1", "committed=0"), good.replace("RUSTIC PUBLICATION ", "MISSING ")]:
+                    good.replace("committed=1", "committed=0"), good.replace("RUSTIC PUBLICATION ", "MISSING "),
+                    good.replace("admitted=1", "admitted=0"), good.replace("replay_writes=0", "replay_writes=1"),
+                    good.replace("RUSTIC ADMISSION ", "MISSING ")]:
             self.assertFalse(verified("block-user", bad, records))
 
     def test_fault_evidence_cannot_omit_denials_or_lifecycle_cases(self):
@@ -77,7 +81,7 @@ class BlockUserEvidence(unittest.TestCase):
                 (output / "qemu.log").write_text("")
                 return {"outcome": "success" if calls == 1 else "timeout", "elapsed_seconds": 0}
             # This test owns second-VM failure propagation, not volume decoding.
-            with patch("boot_support.block_runner.publication_evidence.inspect", return_value={}):
+            with patch("boot_support.block_runner.publication_evidence.inspect", return_value={}), patch("boot_support.block_runner.admission_evidence.inspect", return_value=[]):
                 result = run(image, 1, fake_boot)
             self.assertEqual(calls, 2)
             self.assertEqual(result["outcome"], "unexpected")

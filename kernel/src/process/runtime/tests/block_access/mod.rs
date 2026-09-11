@@ -26,6 +26,11 @@ pub(crate) fn verify(memory: &mut Memory, mode: BootMode) {
         drive(&mut manager, memory, &[pid]);
         let cancelled = reap(&mut manager, memory, pid, 11);
         assert_eq!(cancelled, if value == 1 { 16 } else { 0 });
+        for role in 12..=13 {
+            let (pid, _) = launch(&mut manager, memory, &mut stats, role, value);
+            drive(&mut manager, memory, &[pid]);
+            assert_eq!(reap(&mut manager, memory, pid, role), 1);
+        }
         let mut serial = Serial::take().unwrap();
         writeln!(
             serial,
@@ -33,6 +38,7 @@ pub(crate) fn verify(memory: &mut Memory, mode: BootMode) {
             if value == 1 { "write" } else { "replay" }
         )
         .unwrap();
+        writeln!(serial, "RUSTIC ADMISSION verified=1 phase={} admitted=1 cancelled=1 committed=1 replay_writes=0", if value == 1 { "write" } else { "replay" }).unwrap();
         serial.flush();
         if value == 1 { "write" } else { "read" }
     } else {

@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Native publication mechanics; not a client/server cancellation endpoint.
-mod disk;
 mod verify;
+use crate::volume_disk::Disk;
 use rustic_fs::{Kind, Replacement, Retry, Volume};
 use rustic_sdk::block::Device;
 
+// Keep this fixture's volume buffers out of unrelated role dispatch frames.
+#[inline(never)]
 pub(super) fn run(device: &Device, expected: u64) -> u64 {
-    let mut disk = disk::Disk { device, writes: 0 };
+    let mut disk = Disk {
+        device,
+        writes: 0,
+        base: 256,
+    };
     let mut volume = if expected == 1 {
         let mut volume = Volume::initialize(&mut disk).unwrap();
         volume.enable_operations(&mut disk).unwrap();

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #![no_std]
 #![no_main]
+mod admission;
 mod boundaries;
 mod lifecycle;
 mod persistence;
 mod publication;
 mod raw;
+mod volume_disk;
 use rustic_sdk::{block::Device, process};
 rustic_sdk::entry!(run);
 fn run(handle: u64, role: u64, expected: u64) -> u64 {
@@ -18,6 +20,10 @@ fn run(handle: u64, role: u64, expected: u64) -> u64 {
         3 => boundaries::scoped(&device),
         4..=10 => lifecycle::run(handle, role, expected),
         11 => publication::run(&device, expected),
+        12..=13 => {
+            admission::run(&device, expected, role == 12);
+            1
+        }
         _ => panic!("unknown fixture role"),
     };
     process::report(0xb100_0000 | (role << 16) | result).unwrap();

@@ -20,6 +20,13 @@ pub struct Operation<'a> {
 impl Record {
     fn operation(&self) -> Result<Operation<'_>, Error> {
         let (workspace, instance) = self.namespace.ok_or(Error::OutcomeUnknown)?;
+        if let Some(admission) = self.admission {
+            match admission.state {
+                crate::AdmissionState::Admitted => return Err(Error::Busy),
+                crate::AdmissionState::Cancelled => return Err(Error::Cancelled),
+                crate::AdmissionState::Committed => (),
+            }
+        }
         Ok(Operation {
             workspace,
             instance,
@@ -182,6 +189,7 @@ impl Volume {
             receipt,
             namespace: Some((request.workspace, instance)),
             bytes: [0; MAX_FILE],
+            admission: None,
         };
         record.bytes[..bytes.len()].copy_from_slice(bytes);
         let mut next = self.metadata.clone();
