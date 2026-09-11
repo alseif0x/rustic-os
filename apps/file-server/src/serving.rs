@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Fair bounded dispatch: one request per client per pass, owned pending replies.
+mod control;
 use rustic_file_service::{CLIENTS, Server};
 use rustic_sdk::{
     abi::{files::Packet, runtime as wire},
@@ -93,8 +94,8 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
         }
         let now = runtime::clock();
         server.expire(now);
-        for (slot, reply) in replies[..CLIENTS].iter_mut().enumerate() {
-            if reply.is_some() {
+        for slot in 0..CLIENTS {
+            if replies[slot].is_some() {
                 continue;
             }
             let Some(grant) = server.grant_at(slot) else {
@@ -105,7 +106,24 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
                 Ok(message) => {
                     let output = match Packet::decode(message.payload()) {
                         Ok(request) => {
-                            server.handle(disk, slot, message.sender(), request, runtime::clock())
+                            if request.op == rustic_sdk::abi::files::REPLACE_COMMIT {
+                                let mut owner =
+                                    control::Owner::new(&admin, &mut administrator, &mut replies);
+                                let output =
+                                    owner.commit(server, disk, slot, message.sender(), request);
+                                if owner.lost {
+                                    return 0;
+                                }
+                                output
+                            } else {
+                                server.handle(
+                                    disk,
+                                    slot,
+                                    message.sender(),
+                                    request,
+                                    runtime::clock(),
+                                )
+                            }
                         }
                         Err(_) => {
                             let mut p = Packet::new(1);
@@ -113,7 +131,13 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
                             p
                         }
                     };
-                    *reply = Some(Message::new(message.correlation(), &output.encode()).unwrap());
+                    if server
+                        .grant_at(slot)
+                        .is_some_and(|current| current.endpoint == grant.endpoint)
+                    {
+                        replies[slot] =
+                            Some(Message::new(message.correlation(), &output.encode()).unwrap());
+                    }
                 }
                 Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {}
                 Err(_) => detach(server, slot),

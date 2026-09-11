@@ -64,10 +64,10 @@ impl Server {
                     }
                     Err(e) => return Err(reply::error(e)),
                 }
-                self.transfers.begin(slot, &p)?;
+                self.clients.transfers.begin(slot, &p)?;
             }
             COMMIT => {
-                let transfer = self.transfers.take(slot, &p)?;
+                let transfer = self.clients.transfers.take(slot, &p)?;
                 let retry = stored(transfer.retry.ok_or(Error::Protocol)?);
                 // A replay under inspection-only authority cannot admit a fresh write.
                 match self.volume.receipt(grant.subject, retry) {

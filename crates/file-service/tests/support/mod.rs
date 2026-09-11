@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
+pub mod deferred;
 use rustic_abi::files::*;
 use rustic_file_service::{Grant, Server};
 use rustic_fs::{Disk, Volume};

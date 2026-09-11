@@ -59,7 +59,7 @@ impl Volume {
     }
     /// Prepare a volatile write without issuing I/O. The returned owner permits
     /// cancellation between commands, before the publication header is submitted.
-    pub fn prepare_replace<'a, D: Disk>(
+    pub fn prepare_replace<'a, D>(
         &'a mut self,
         disk: &'a mut D,
         id: u32,
@@ -79,7 +79,7 @@ impl Volume {
         self.prepare_recorded(disk, id, version, bytes, next, |node| node)?
             .run()
     }
-    pub(crate) fn prepare_recorded<'a, D: Disk, T: Copy>(
+    pub(crate) fn prepare_recorded<'a, D, T: Copy>(
         &'a mut self,
         disk: &'a mut D,
         id: u32,

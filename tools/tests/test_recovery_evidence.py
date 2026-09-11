@@ -10,9 +10,9 @@ from terminal_support.operation_cases import operation
 
 
 def transcript():
-    return ("RusticOS native terminal 0.1\n" * 30
+    return ("RusticOS native terminal 0.1\n" * 38
             + "error: Uncertain\n" * 12
-            + "RUSTIC IO_OBSERVATION held=1\n" * 2
+            + "RUSTIC IO_OBSERVATION held=1\n" * 6
             + "IdempotencyConflict\nExpiredEpoch\noperation-v1\npersistent format v3\n")
 
 

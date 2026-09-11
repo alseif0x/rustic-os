@@ -206,3 +206,177 @@ fn legacy_packets_cannot_commit_scoped_staging_and_regrant_discards_it() {
         request.expected_version.value()
     );
 }
+
+#[test]
+fn revocation_during_each_admitted_command_drains_before_returning_and_prevents_early_publication()
+{
+    use support::deferred::Deferred;
+    for cut in 1..=17 {
+        let (mut server, mut disk, request, context, _) = setup_operations();
+        stage(&mut server, &mut disk, request, context, b"controlled");
+        let mut disk = Deferred::new(disk);
+        let signals = disk.signals.clone();
+        let mut p = Packet::new(REPLACE_COMMIT);
+        p.context = context;
+        p.id = request.resource.object();
+        let mut waits = 0;
+        let response = server.commit_with(&mut disk, 0, 10, p, |clients, pending| {
+            if pending && signals.submitted.get() == cut {
+                waits += 1;
+                clients.revoke(0).unwrap();
+                // Continue receiving owner control while this completion is withheld.
+                assert_eq!(clients.grant_at(0).unwrap().rights, 0);
+                signals.release.set(waits >= 4);
+            } else {
+                signals.release.set(true);
+            }
+            1
+        });
+        assert!(waits >= 4);
+        let late = cut >= 16;
+        assert_eq!(
+            response.status,
+            if late {
+                Error::Uncertain
+            } else {
+                Error::Revoked
+            } as u8
+        );
+        assert_eq!(signals.submitted.get(), if late { 17 } else { cut });
+        assert_eq!(signals.settled.get(), signals.submitted.get());
+        assert_eq!(response.count, 0); // No receipt is disclosed after losing authority.
+        let mut disk = disk.disk;
+        let mounted = rustic_fs::Volume::mount(&mut disk).unwrap();
+        let file = mounted.stat(request.resource.object()).unwrap();
+        assert_eq!(file.length, if late { 10 } else { 0 });
+        assert_eq!(
+            mounted
+                .operation_by_retry(
+                    9,
+                    4,
+                    rustic_fs::Retry {
+                        lineage: [7; 16],
+                        epoch: 1,
+                        key: 42,
+                    }
+                )
+                .is_ok(),
+            late
+        );
+    }
+}
+
+#[test]
+fn draining_error_is_uncertain_and_a_fresh_grant_cannot_unfence_storage() {
+    use support::deferred::Deferred;
+    let (mut server, mut disk, request, context, _) = setup_operations();
+    stage(&mut server, &mut disk, request, context, b"controlled");
+    let mut disk = Deferred::new(disk);
+    let signals = disk.signals.clone();
+    let mut p = Packet::new(REPLACE_COMMIT);
+    p.context = context;
+    p.id = request.resource.object();
+    let response = server.commit_with(&mut disk, 0, 10, p, |clients, pending| {
+        if pending {
+            clients.revoke(0).unwrap();
+            signals.release.set(true);
+            signals.fail.set(true);
+        }
+        1
+    });
+    assert_eq!(response.status, Error::Uncertain as u8);
+    assert_eq!(signals.submitted.get(), 1);
+    assert!(matches!(
+        server.volume.stat(p.id),
+        Err(rustic_fs::Error::Uncertain)
+    ));
+    let context = authorize(&mut server, 0, 0, 7, 9);
+    let query = Lookup::Retry {
+        workspace: request.workspace,
+        retry: request.retry,
+    }
+    .packet(context);
+    assert_eq!(
+        send(&mut server, &mut disk.disk, 0, query).status,
+        Error::Uncertain as u8
+    );
+}
+
+#[test]
+fn expiry_and_detachment_stop_pending_work_and_invalid_peers_never_submit() {
+    use support::deferred::Deferred;
+    for detach in [false, true] {
+        let (mut server, mut disk, request, _, _) = setup_operations();
+        let mut grant = server.grant_at(0).unwrap();
+        grant.expires = 5;
+        let context = server.grant(0, grant).unwrap();
+        stage(&mut server, &mut disk, request, context, b"controlled");
+        let mut disk = Deferred::new(disk);
+        let signals = disk.signals.clone();
+        let mut p = Packet::new(REPLACE_COMMIT);
+        p.context = context;
+        p.id = request.resource.object();
+        assert_eq!(
+            server.commit_with(&mut disk, 0, 999, p, |_, _| 1).status,
+            Error::Denied as u8
+        );
+        assert_eq!(signals.submitted.get(), 0);
+        let response = server.commit_with(&mut disk, 0, 10, p, |clients, pending| {
+            if pending {
+                if detach {
+                    clients.detach(0);
+                }
+                signals.release.set(true);
+            }
+            if signals.submitted.get() == 0 { 1 } else { 5 }
+        });
+        assert_eq!(
+            response.status,
+            if detach {
+                Error::Revoked
+            } else {
+                Error::Expired
+            } as u8
+        );
+        assert_eq!(signals.submitted.get(), 1);
+        assert_eq!(signals.settled.get(), 1);
+        assert_eq!(
+            server.volume.stat(p.id).unwrap().version,
+            request.expected_version.value()
+        );
+    }
+}
+
+#[test]
+fn root_revocation_reaches_a_pending_helper_but_an_unrelated_root_does_not() {
+    use support::deferred::Deferred;
+    for same_root in [false, true] {
+        let (mut server, mut disk, request, _, _) = setup_operations();
+        let root = authorize(&mut server, 1, 4, 7, 9);
+        let context = if same_root {
+            let mut helper = server.grant_at(0).unwrap();
+            helper.scope = 4;
+            server.derive(0, root, helper, 1).unwrap()
+        } else {
+            server.grant_at(0).unwrap().generation
+        };
+        stage(&mut server, &mut disk, request, context, b"controlled");
+        let mut disk = Deferred::new(disk);
+        let signals = disk.signals.clone();
+        let mut p = Packet::new(REPLACE_COMMIT);
+        p.context = context;
+        p.id = request.resource.object();
+        let response = server.commit_with(&mut disk, 0, 10, p, |clients, pending| {
+            if pending {
+                assert_eq!(clients.revoke_root(root), if same_root { 3 } else { 2 });
+                signals.release.set(true);
+            }
+            1
+        });
+        assert_eq!(
+            response.status,
+            if same_root { Error::Revoked as u8 } else { 0 }
+        );
+        assert_eq!(signals.submitted.get(), if same_root { 1 } else { 17 });
+    }
+}

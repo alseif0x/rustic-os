@@ -128,7 +128,7 @@ impl Volume {
 
     /// Volatile preparation or an already committed replay. No queued/running
     /// acceptance or durable cancellation is introduced by this mechanics API.
-    pub fn prepare_scoped<'a, D: Disk>(
+    pub fn prepare_scoped<'a, D>(
         &'a mut self,
         disk: &'a mut D,
         subject: u64,

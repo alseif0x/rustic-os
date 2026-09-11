@@ -19,14 +19,15 @@ impl Server {
         now: u64,
     ) -> Result<u32, Error> {
         let index = self
+            .clients
             .grants
             .iter()
             .position(|g| g.is_some_and(|g| g.generation == parent))
             .ok_or(Error::Revoked)?;
-        let source = self.grants[index].unwrap();
+        let source = self.clients.grants[index].unwrap();
         source.check(source.peer, parent, now)?;
         if index == slot
-            || self.roots[index] != parent
+            || self.clients.roots[index] != parent
             || grant.rights & !source.rights != 0
             || !(source.scope == 0 || self.volume.within(grant.scope, source.scope))
             || source.expires != 0 && (grant.expires == 0 || grant.expires > source.expires)
@@ -48,63 +49,32 @@ impl Server {
         {
             return Err(Error::Invalid);
         }
-        let next = self.next.checked_add(1).ok_or(Error::Exhausted)?;
+        let next = self.clients.next.checked_add(1).ok_or(Error::Exhausted)?;
         // Validate first. Replacing a root fences its previous helper before slot reuse.
         self.detach(slot);
-        grant.generation = self.next;
-        self.next = next;
-        self.roots[slot] = if root == 0 { grant.generation } else { root };
-        self.grants[slot] = Some(grant);
+        grant.generation = self.clients.next;
+        self.clients.next = next;
+        self.clients.roots[slot] = if root == 0 { grant.generation } else { root };
+        self.clients.grants[slot] = Some(grant);
         Ok(grant.generation)
     }
 
-    /// Fence every member in one serialized service turn. Already admitted disk calls
-    /// have returned before this method runs; an uncertain volume still needs recovery.
-    /// Returns a slot mask, allowing the transport to discard undelivered old replies.
     pub fn revoke(&mut self, slot: usize) -> Result<u8, Error> {
-        self.grant_at(slot).ok_or(Error::NotFound)?;
-        Ok(self.revoke_root(self.roots[slot]))
+        self.clients.revoke(slot)
     }
-
-    /// Idempotent fencing by incarnation-local root, including already detached slots.
     pub fn revoke_root(&mut self, root: u32) -> u8 {
-        if root == 0 {
-            return 0;
-        }
-        let mut mask = 0;
-        for index in 0..CLIENTS {
-            if self.roots[index] == root
-                && let Some(grant) = self.grants[index].as_mut()
-            {
-                grant.rights = 0;
-                self.transfers.clear(index);
-                mask |= 1 << index;
-            }
-        }
-        mask
+        self.clients.revoke_root(root)
     }
-
     pub fn detach(&mut self, slot: usize) {
-        if let Some(grant) = self.grant_at(slot) {
-            if self.roots[slot] == grant.generation {
-                let _ = self.revoke(slot);
-            }
-            self.transfers.clear(slot);
-            self.grants[slot] = None;
-            self.roots[slot] = 0;
-        }
+        self.clients.detach(slot);
     }
     pub fn grant_at(&self, slot: usize) -> Option<Grant> {
-        self.grants.get(slot).copied().flatten()
+        self.clients.grant_at(slot)
     }
     pub fn expire(&mut self, now: u64) {
-        for slot in 0..CLIENTS {
-            if self.grants[slot].is_some_and(|g| g.expires != 0 && now >= g.expires) {
-                self.transfers.clear(slot);
-            }
-        }
+        self.clients.expire(now);
     }
     pub fn pending(&self) -> usize {
-        self.transfers.count()
+        self.clients.pending()
     }
 }

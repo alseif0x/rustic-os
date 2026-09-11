@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
-use super::{PublicationCancel, PublicationPhase};
-use crate::{Disk, Error, MAX_FILE, Volume, format::Metadata};
+use super::{Command, PublicationCancel, PublicationPhase};
+use crate::{Disk, Error, MAX_FILE, PollDisk, Volume, format::Metadata};
+use core::task::Poll;
 
 /// Exclusively borrows the live volume and its disk through settlement. Preparing
 /// is volatile: it neither reserves a durable operation ID nor acknowledges work.
-/// Each advance completes one synchronous disk command; it is not an async driver.
+/// advance settles one synchronous command. poll_advance submits or polls one
+/// command without blocking, retaining exclusive ownership across Pending.
 /// Disk implementations must not expose another writer to the same volume.
 #[must_use = "drive to settlement or cancel before publication"]
-pub struct Publication<'a, D: Disk, T: Copy> {
+pub struct Publication<'a, D, T: Copy> {
     volume: &'a mut Volume,
     disk: &'a mut D,
     next: Option<Metadata>,
@@ -16,9 +18,11 @@ pub struct Publication<'a, D: Disk, T: Copy> {
     step: usize,
     phase: PublicationPhase,
     result: T,
+    pending: bool,
+    stopping: bool,
 }
 
-impl<'a, D: Disk, T: Copy> Publication<'a, D, T> {
+impl<'a, D, T: Copy> Publication<'a, D, T> {
     pub(crate) fn new(
         volume: &'a mut Volume,
         disk: &'a mut D,
@@ -41,6 +45,8 @@ impl<'a, D: Disk, T: Copy> Publication<'a, D, T> {
             step: 0,
             phase: PublicationPhase::Preparing,
             result,
+            pending: false,
+            stopping: false,
         }
     }
 
@@ -54,6 +60,8 @@ impl<'a, D: Disk, T: Copy> Publication<'a, D, T> {
             step: 0,
             phase: PublicationPhase::Committed,
             result,
+            pending: false,
+            stopping: false,
         }
     }
 
@@ -66,29 +74,50 @@ impl<'a, D: Disk, T: Copy> Publication<'a, D, T> {
         (self.phase == PublicationPhase::Committed).then_some(self.result)
     }
 
-    pub fn advance(&mut self) -> Result<PublicationPhase, Error> {
+    /// True means a submitted command still needs settlement, never cancellation proof.
+    pub fn pending(&self) -> bool {
+        self.pending
+    }
+
+    fn drive(
+        &mut self,
+        execute: impl FnOnce(&Command, &mut D) -> Poll<Result<(), Error>>,
+    ) -> Poll<Result<PublicationPhase, Error>> {
         match self.phase {
-            PublicationPhase::Committed | PublicationPhase::Cancelled => return Ok(self.phase),
-            PublicationPhase::Uncertain => return Err(Error::Uncertain),
+            PublicationPhase::Committed | PublicationPhase::Cancelled => {
+                return Poll::Ready(Ok(self.phase));
+            }
+            PublicationPhase::Uncertain => return Poll::Ready(Err(Error::Uncertain)),
             _ => (),
         }
         let next = self.next.as_ref().unwrap();
-        // Also fence a host Disk implementation that unwinds after submitting I/O.
-        self.phase = PublicationPhase::Uncertain;
-        let result = match self.step {
-            index @ 0..=1 => self.disk.write(
-                self.first_sector + index as u64,
-                &self.data.as_chunks::<512>().0[index],
-            ),
-            2 => self.disk.flush(),
-            index => next.write_step(self.disk, 1 - self.volume.bank, index - 3),
+        let total = 3 + next.write_steps();
+        let before = if self.step >= total - 2 {
+            PublicationPhase::Settling
+        } else {
+            self.phase
         };
-        if result.is_err() {
-            self.phase = PublicationPhase::Uncertain;
-            return Err(Error::Uncertain);
+        let command = match self.step {
+            index @ 0..=1 => Command::Write(
+                self.first_sector + index as u64,
+                self.data.as_chunks::<512>().0[index],
+            ),
+            2 => Command::Flush,
+            index => next.command(1 - self.volume.bank, index - 3).unwrap(),
+        };
+        // Fence adapter unwind before crossing the I/O boundary. The header is
+        // already too late while its completion is pending, not just after success.
+        self.phase = PublicationPhase::Uncertain;
+        self.pending = true;
+        match execute(&command, self.disk) {
+            Poll::Pending => {
+                self.phase = before;
+                return Poll::Pending;
+            }
+            Poll::Ready(Err(_)) => return Poll::Ready(Err(Error::Uncertain)),
+            Poll::Ready(Ok(())) => self.pending = false,
         }
         self.step += 1;
-        let total = 3 + next.write_steps();
         self.phase = if self.step == total {
             self.volume.metadata = self.next.take().unwrap();
             self.volume.bank = 1 - self.volume.bank;
@@ -101,16 +130,26 @@ impl<'a, D: Disk, T: Copy> Publication<'a, D, T> {
         } else {
             PublicationPhase::Preparing
         };
-        Ok(self.phase)
+        if self.stopping {
+            // Only early cancellation can latch this flag; the one outstanding
+            // scratch command has now settled and no header can be submitted.
+            self.phase = PublicationPhase::Cancelled;
+            self.volume.poisoned = false;
+        }
+        Poll::Ready(Ok(self.phase))
     }
 
-    /// All earlier commands have completed. A request after header publication
-    /// must still drive the final flush; cancellation cannot roll that write back.
+    /// An outstanding scratch command must drain before cancellation is confirmed.
+    /// After header submission continue settlement; cancellation is not rollback.
     pub fn cancel(&mut self) -> Result<PublicationCancel, Error> {
         match self.phase {
             PublicationPhase::Preparing
             | PublicationPhase::ReadyToPublish
             | PublicationPhase::Cancelled => {
+                if self.pending {
+                    self.stopping = true;
+                    return Ok(PublicationCancel::Draining);
+                }
                 self.phase = PublicationPhase::Cancelled;
                 self.volume.poisoned = false;
                 Ok(PublicationCancel::Cancelled)
@@ -121,7 +160,25 @@ impl<'a, D: Disk, T: Copy> Publication<'a, D, T> {
             PublicationPhase::Uncertain => Err(Error::Uncertain),
         }
     }
+}
 
+impl<D: PollDisk, T: Copy> Publication<'_, D, T> {
+    pub fn poll_advance(&mut self) -> Poll<Result<PublicationPhase, Error>> {
+        self.drive(|command, disk| command.poll(disk))
+    }
+}
+
+impl<D: Disk, T: Copy> Publication<'_, D, T> {
+    pub fn advance(&mut self) -> Result<PublicationPhase, Error> {
+        // Never turn a pending async command into a second synchronous submission.
+        if self.pending {
+            return Err(Error::Uncertain);
+        }
+        match self.drive(|command, disk| Poll::Ready(command.execute(disk))) {
+            Poll::Ready(result) => result,
+            Poll::Pending => unreachable!(),
+        }
+    }
     pub(crate) fn run(mut self) -> Result<T, Error> {
         while self.phase != PublicationPhase::Committed {
             if self.phase == PublicationPhase::Cancelled {
@@ -133,14 +190,16 @@ impl<'a, D: Disk, T: Copy> Publication<'a, D, T> {
     }
 }
 
-impl<D: Disk, T: Copy> Drop for Publication<'_, D, T> {
+impl<D, T: Copy> Drop for Publication<'_, D, T> {
     fn drop(&mut self) {
         // Dropping before publication abandons scratch writes with no live effect.
         // Dropping during settlement or after an error leaves the volume fenced.
-        if matches!(
-            self.phase,
-            PublicationPhase::Preparing | PublicationPhase::ReadyToPublish
-        ) {
+        if !self.pending
+            && matches!(
+                self.phase,
+                PublicationPhase::Preparing | PublicationPhase::ReadyToPublish
+            )
+        {
             self.volume.poisoned = false;
         }
     }

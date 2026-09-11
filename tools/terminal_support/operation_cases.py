@@ -167,4 +167,6 @@ def verify(session, owned_disk, temporary, image, mount):
             if committed: check(result, wa, ra, a["version"], 1, 77, b"after", state)
             elif state["records"]: raise AssertionError("unexpected operation after unsuccessful publication")
             cases.append({"case":"scoped_operation_"+name,"verified":True,"committed":committed,"sha256":state["selected_sha256"]})
+    from .control_cases import verify as verify_control
+    cases.extend(verify_control(session, owned_disk, temporary, mount, base, wa, ra, a["version"]))
     return cases, selected

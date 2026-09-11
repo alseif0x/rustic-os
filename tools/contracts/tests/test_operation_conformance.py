@@ -45,15 +45,29 @@ class OperationConformance(unittest.TestCase):
         for mutate in mutations:
             value = copy.deepcopy(good); mutate(value)
             with self.assertRaises(ContractError): check_entries(self.catalog,value)
-    def test_native_handoff_requires_complete_cuts_and_image_identity(self):
-        value = {"verified":True,"boots":30,"kernel_sha256":"a"*64,"cases":[{"case":"old"+str(i),"verified":True} for i in range(9)]}
+    def native_evidence(self):
+        value = {"verified":True,"boots":38,"kernel_sha256":"a"*64,"cases":[{"case":"old"+str(i),"verified":True} for i in range(9)]}
         value["cases"].append({"case":"scoped_operations_lost_reply_namespaces_restart_reboot","verified":True,"exchanges":entries(self.catalog)})
         value["cases"] += [{"case":"scoped_operation_"+name,"verified":True,"committed":name=="final_flush"} for name in ("data","receipt","metadata","header","final_flush")]
+        value["cases"] += [{"case":"controlled_operation_"+name,"verified":True,"skip":skip,"committed":skip>=15,
+                            "revoked_while_pending":True,"ack_after_settlement":True,"reboot_verified":True}
+                           for name,skip in (("data",0),("before_header",14),("header",15),("final_flush",16))]
+        return value
+    def test_native_handoff_requires_complete_cuts_and_image_identity(self):
+        value = self.native_evidence()
         self.assertEqual(native_check(self.catalog,value)["shared_exchanges"],30)
         for field, invalid in (("verified",False),("boots",18),("kernel_sha256","unknown")):
             altered = copy.deepcopy(value); altered[field] = invalid
             with self.assertRaises(ContractError): native_check(self.catalog,altered)
         value["cases"][-1]["committed"] = False
         with self.assertRaises(ContractError): native_check(self.catalog,value)
+    def test_native_control_requires_each_boundary_and_settlement_before_acknowledgment(self):
+        good = self.native_evidence()
+        for field in ("revoked_while_pending", "ack_after_settlement", "reboot_verified"):
+            altered = copy.deepcopy(good); altered["cases"][-1][field] = False
+            with self.assertRaises(ContractError): native_check(self.catalog, altered)
+        for invalid in (None, good["cases"][-2], {**good["cases"][-1], "skip": 15}):
+            altered = copy.deepcopy(good); altered["cases"][-1] = invalid
+            with self.assertRaises(ContractError): native_check(self.catalog, altered)
 
 if __name__ == "__main__": unittest.main()

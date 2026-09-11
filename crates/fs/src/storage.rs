@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{Error, MAX_FILE};
+mod poll;
+pub use poll::PollDisk;
 /// Implementations must honor successful flush ordering. Errors are not rollback.
 pub trait Disk {
     fn read(&mut self, sector: u64, bytes: &mut [u8; 512]) -> Result<(), Error>;

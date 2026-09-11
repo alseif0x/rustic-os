@@ -16,7 +16,7 @@ mod volume;
 pub use namespace::{Kind, Node};
 pub use publication::{Publication, PublicationCancel, PublicationPhase};
 pub use recovery::{Operation, RETAINED, Receipt, Replacement, Retry};
-pub use storage::Disk;
+pub use storage::{Disk, PollDisk};
 pub use volume::Volume;
 pub const OBJECTS: usize = 32;
 pub const MAX_FILE: usize = 1024;

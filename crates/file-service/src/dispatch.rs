@@ -1,23 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
-use crate::{CLIENTS, Grant, reply, transfer::Transfers};
+use crate::{Clients, reply};
 use rustic_abi::files::*;
 use rustic_fs::{Disk, Kind, Volume};
 pub struct Server {
     pub volume: Volume,
-    pub(super) grants: [Option<Grant>; CLIENTS],
-    pub(super) roots: [u32; CLIENTS],
-    pub(super) next: u32,
-    pub(super) transfers: Transfers,
+    pub(super) clients: Clients,
     pub(super) instance: u64,
 }
 impl Server {
     pub fn new(volume: Volume) -> Self {
         Self {
             volume,
-            grants: [None; CLIENTS],
-            roots: [0; CLIENTS],
-            next: 1,
-            transfers: Transfers::new(),
+            clients: Clients::new(),
             instance: 0,
         }
     }
@@ -29,6 +23,15 @@ impl Server {
         request: Packet,
         now: u64,
     ) -> Packet {
+        if request.op == REPLACE_COMMIT {
+            return self.commit_with(
+                &mut crate::operations::publication::Synchronous(disk),
+                slot,
+                peer,
+                request,
+                |_, _| now,
+            );
+        }
         let mut response = Packet::new(request.op);
         response.context = request.context;
         let result = (|| {
@@ -36,7 +39,7 @@ impl Server {
             let grant = self.grant_at(slot).ok_or(Error::Denied)?;
             grant.check(peer, request.context, now)?;
             if (REPLACE_OPEN..=OPERATION_PART).contains(&request.op) {
-                response = self.operation_request(disk, slot, grant, request)?;
+                response = self.operation_request(slot, grant, request)?;
                 return Ok(());
             }
             if matches!(request.op, REFERENCES | READ_OPEN | READ_CHUNK) {
@@ -44,7 +47,7 @@ impl Server {
                 return Ok(());
             }
             if matches!(request.op, RECOVERY | TRACK_BEGIN | RECEIPT)
-                || request.op == COMMIT && self.transfers.tracked(slot)
+                || request.op == COMMIT && self.clients.transfers.tracked(slot)
             {
                 response = self.recovery_request(disk, slot, grant, request)?;
                 return Ok(());
@@ -53,7 +56,7 @@ impl Server {
                 request.op,
                 CREATE | MKDIR | REMOVE | BEGIN | CHUNK | COMMIT | ABORT
             );
-            if matches!(request.op, CHUNK | ABORT) && self.transfers.tracked(slot) {
+            if matches!(request.op, CHUNK | ABORT) && self.clients.transfers.tracked(slot) {
                 grant.inspect(&self.volume, request.id)?;
             } else {
                 grant.access(&self.volume, request.id, write)?;
@@ -129,12 +132,12 @@ impl Server {
                     if node.version != request.version {
                         return Err(Error::Version);
                     }
-                    self.transfers.begin(slot, &request)?;
+                    self.clients.transfers.begin(slot, &request)?;
                 }
-                CHUNK => self.transfers.chunk(slot, &request)?,
-                ABORT => self.transfers.clear(slot),
+                CHUNK => self.clients.transfers.chunk(slot, &request)?,
+                ABORT => self.clients.transfers.clear(slot),
                 COMMIT => {
-                    let transfer = self.transfers.take(slot, &request)?;
+                    let transfer = self.clients.transfers.take(slot, &request)?;
                     grant.check(peer, transfer.context, now)?;
                     grant.access(&self.volume, transfer.id, true)?;
                     let n = self

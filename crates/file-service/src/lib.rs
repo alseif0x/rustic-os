@@ -3,6 +3,8 @@
 #![no_std]
 #![forbid(unsafe_code)]
 mod authority;
+mod clients;
+pub use clients::Clients;
 mod dispatch;
 mod grants;
 mod operations;
