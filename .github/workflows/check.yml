@@ -56,7 +56,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Prepare reviewed toolchain
-        run: python3 tools/sandbox.py prepare
+        run: python3 tools/sandbox.py prepare --package-source github
       - name: Verify isolated builds and VM failures
         run: python3 tools/sandbox.py test --revision "$(git rev-parse HEAD)"
       - name: Preserve isolated execution evidence

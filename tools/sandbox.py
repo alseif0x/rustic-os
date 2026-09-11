@@ -3,14 +3,15 @@
 import argparse
 import json
 import subprocess
-from sandbox_support.prepare import prepare
+from sandbox_support.prepare import PACKAGE_SOURCES, prepare
 from sandbox_support.jobs import execute, cancel
 from boot_support.scenarios import MODES
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("prepare")
+    preparation = commands.add_parser("prepare")
+    preparation.add_argument("--package-source", choices=tuple(PACKAGE_SOURCES), default="default")
     run = commands.add_parser("run")
     run.add_argument("--revision", required=True)
     run.add_argument("--mode", choices=MODES, default="ok")
@@ -23,7 +24,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         if args.command == "prepare":
-            result = prepare()
+            result = prepare(args.package_source)
         elif args.command == "cancel":
             result = cancel(args.job_id)
         elif args.command == "test":
