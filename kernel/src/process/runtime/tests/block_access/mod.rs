@@ -22,6 +22,18 @@ pub(crate) fn verify(memory: &mut Memory, mode: BootMode) {
         drive(&mut manager, memory, &[pid]);
         let value = reap(&mut manager, memory, pid, 0);
         assert!(value == 1 || value == 2);
+        let (pid, _) = launch(&mut manager, memory, &mut stats, 11, value);
+        drive(&mut manager, memory, &[pid]);
+        let cancelled = reap(&mut manager, memory, pid, 11);
+        assert_eq!(cancelled, if value == 1 { 16 } else { 0 });
+        let mut serial = Serial::take().unwrap();
+        writeln!(
+            serial,
+            "RUSTIC PUBLICATION verified=1 phase={} cancelled={cancelled} too_late=1 committed=1",
+            if value == 1 { "write" } else { "replay" }
+        )
+        .unwrap();
+        serial.flush();
         if value == 1 { "write" } else { "read" }
     } else {
         faults::verify(&mut manager, memory, &mut stats, control);

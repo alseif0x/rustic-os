@@ -148,6 +148,8 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
                     sizes.update({"terminal.json":65536,"files.bin":89088})
                 if mode.startswith("block-"):
                     sizes.update({"block.json": 65536, "blocks.bin": 2048})
+                if mode == "block-user":
+                    sizes["publication.bin"] = 175 * 512
                 for name, maximum in sizes.items():
                     state["artifacts"].append(collect(container, "/work/out/" + mode + "/" + name,
                                                       directory / name, maximum))

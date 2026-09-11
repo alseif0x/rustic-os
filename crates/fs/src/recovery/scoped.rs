@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Durable workspace namespace; authorization and hashing belong to the service.
 use super::{Record, Retry};
-use crate::{Disk, Error, MAX_FILE, Receipt, Volume};
+use crate::{Disk, Error, MAX_FILE, Publication, Receipt, Volume};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Replacement {
@@ -122,6 +122,20 @@ impl Volume {
         request: Replacement,
         bytes: &[u8],
     ) -> Result<Receipt, Error> {
+        self.prepare_scoped(disk, subject, instance, request, bytes)?
+            .run()
+    }
+
+    /// Volatile preparation or an already committed replay. No queued/running
+    /// acceptance or durable cancellation is introduced by this mechanics API.
+    pub fn prepare_scoped<'a, D: Disk>(
+        &'a mut self,
+        disk: &'a mut D,
+        subject: u64,
+        instance: u64,
+        request: Replacement,
+        bytes: &[u8],
+    ) -> Result<Publication<'a, D, Receipt>, Error> {
         self.ready()?;
         if bytes.len() > MAX_FILE {
             return Err(Error::Size);
@@ -134,7 +148,8 @@ impl Volume {
                 {
                     return Err(Error::IdempotencyConflict);
                 }
-                return Ok(old.receipt);
+                let receipt = old.receipt;
+                return Ok(Publication::replayed(self, disk, receipt));
             }
             Err(Error::OutcomeUnknown) => (),
             Err(error) => return Err(error),
@@ -171,7 +186,6 @@ impl Volume {
         record.bytes[..bytes.len()].copy_from_slice(bytes);
         let mut next = self.metadata.clone();
         next.recovery.as_mut().unwrap().records[slot] = Some(record);
-        self.replace_recorded(disk, request.id, request.version, bytes, next)?;
-        Ok(receipt)
+        self.prepare_recorded(disk, request.id, request.version, bytes, next, |_| receipt)
     }
 }

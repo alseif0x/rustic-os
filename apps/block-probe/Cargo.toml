@@ -12,6 +12,7 @@ workspace = true
 [features]
 native = []
 [dependencies]
+rustic-fs = { path = "../../crates/fs" }
 rustic-sdk = { path = "../../crates/sdk" }
 [[bin]]
 name = "block-probe"

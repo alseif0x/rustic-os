@@ -83,6 +83,7 @@ version = "0.1.0"
 name = "rustic-block-probe"
 version = "0.1.0"
 dependencies = [
+ "rustic-fs",
  "rustic-sdk",
 ]
 

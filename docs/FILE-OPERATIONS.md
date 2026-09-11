@@ -6,6 +6,8 @@ The native file service implements a bounded synchronous profile of **files.repl
 
 This profile returns completed operations only: succeeded, committed, cancel_requested=false. Volatile transfer acknowledgments are not durable queued/running acceptance. General asynchronous lifecycle, operations.cancel, events, discovery, system.status and MCP/provider adapters remain separate work in #12/#13/#22/#43. The complete eight-operation catalog is not advertised as implemented.
 
+The filesystem now provides [publication steps and local cancellation boundaries](FILE-PUBLICATION.md), shared by this synchronous path. They establish storage mechanics for the next service increment; the current IPC binding still runs a replacement to completion before serving another request.
+
 ## Workflow and authority
 
 1. Resolve the file and selected workspace with Client::references, then read the observed version and retry epoch with Client::read_range. References identify objects; they grant no authority.

@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import tempfile
+from . import publication_evidence
 
 SIZE = 4 * 1024 ** 3
 SECTORS = (0, 8, 9, SIZE // 512 - 1)
@@ -33,11 +34,14 @@ def run(image, timeout, run_once):
     mode = json.loads((directory / "image.json").read_text())["mode"]
     phases = []
     serials, logs = [], []
+    publications = []
     with tempfile.TemporaryDirectory(prefix="rustic-block-") as temporary:
         disk = Path(temporary) / "disposable.raw"
         with disk.open("xb") as output:
             output.truncate(SIZE)  # Sparse logical size; never open a caller-supplied disk.
         selected = inspect_disk(disk, False)
+        if mode == "block-user":
+            publication_evidence.provision(disk)
         arguments = []
         if mode != "block-missing":
             readonly = ",readonly=on" if mode == "block-readonly" else ""
@@ -53,6 +57,10 @@ def run(image, timeout, run_once):
             if result["outcome"] != "success":
                 break
             selected = inspect_disk(disk, mode in ("block-persist", "block-user"))
+            if mode == "block-user":
+                publications.append(publication_evidence.inspect(disk, directory))
+                if publications[-1] != publications[0]:
+                    raise RuntimeError("replay boot changed the committed publication volume")
         allocation = disk.stat().st_blocks * 512
     serial = "\n".join(serials)
     (directory / "serial.log").write_text(serial)
@@ -60,6 +68,8 @@ def run(image, timeout, run_once):
     evidence = {"logical_bytes": SIZE, "allocated_bytes": allocation,
                 "selected_sectors": SECTORS, "selected_sha256": hashlib.sha256(selected).hexdigest(),
                 "separate_vm_boots": len(phases), "host_verified": all(p["outcome"] == "success" for p in phases)}
+    if mode == "block-user":
+        evidence["publications"] = publications
     (directory / "blocks.bin").write_bytes(selected)
     (directory / "block.json").write_text(json.dumps(evidence, indent=2) + "\n")
     result = {**phases[-1], "phases": phases, "block": evidence,

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+mod publication;
 use crate::{Disk, Error, Kind, Node, OBJECTS, checksum::crc, storage::header};
 #[derive(Clone)]
 pub(super) struct Metadata {
@@ -36,40 +37,6 @@ impl Metadata {
             chunk.copy_from_slice(&node.encode());
         }
         bytes
-    }
-    pub(super) fn write(&self, disk: &mut impl Disk, bank: u8) -> Result<(), Error> {
-        let bytes = self.bytes();
-        let recovery_crc = if let Some(recovery) = &self.recovery {
-            let records = recovery.encode();
-            for (i, chunk) in records.as_chunks::<512>().0.iter().enumerate() {
-                disk.write(160 + u64::from(bank) * 7 + i as u64, chunk)?;
-            }
-            crate::checksum::crc(&records)
-        } else {
-            0
-        };
-        for (i, chunk) in bytes.as_chunks::<512>().0.iter().enumerate() {
-            disk.write(header(bank) + 1 + i as u64, chunk)?;
-        }
-        disk.flush()?;
-        let mut b = [0; 512];
-        b[..8].copy_from_slice(b"RUSTFS1\0");
-        b[8..10].copy_from_slice(
-            &(self
-                .recovery
-                .as_ref()
-                .map_or(1u16, |r| if r.scoped { 3 } else { 2 }))
-            .to_le_bytes(),
-        );
-        b[32..36].copy_from_slice(&recovery_crc.to_le_bytes());
-        b[10..12].copy_from_slice(&512u16.to_le_bytes());
-        b[12..20].copy_from_slice(&self.sequence.to_le_bytes());
-        b[20..24].copy_from_slice(&self.next.to_le_bytes());
-        b[24..28].copy_from_slice(&crc(&bytes).to_le_bytes());
-        let hash = crc(&b);
-        b[28..32].copy_from_slice(&hash.to_le_bytes());
-        disk.write(header(bank), &b)?;
-        disk.flush()
     }
     pub(super) fn read(disk: &mut impl Disk, bank: u8) -> Result<Self, Error> {
         let mut b = [0; 512];

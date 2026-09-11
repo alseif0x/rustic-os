@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    Disk, Error, Kind, MAX_FILE, Node, Volume, checksum::crc, format::Metadata,
+    Disk, Error, Kind, MAX_FILE, Node, Publication, Volume, checksum::crc, format::Metadata,
     namespace::valid_name, storage,
 };
 impl Volume {
@@ -55,7 +55,18 @@ impl Volume {
         version: u64,
         bytes: &[u8],
     ) -> Result<Node, Error> {
-        self.replace_recorded(disk, id, version, bytes, self.metadata.clone())
+        self.prepare_replace(disk, id, version, bytes)?.run()
+    }
+    /// Prepare a volatile write without issuing I/O. The returned owner permits
+    /// cancellation between commands, before the publication header is submitted.
+    pub fn prepare_replace<'a, D: Disk>(
+        &'a mut self,
+        disk: &'a mut D,
+        id: u32,
+        version: u64,
+        bytes: &[u8],
+    ) -> Result<Publication<'a, D, Node>, Error> {
+        self.prepare_recorded(disk, id, version, bytes, self.metadata.clone(), |node| node)
     }
     pub(crate) fn replace_recorded(
         &mut self,
@@ -63,8 +74,20 @@ impl Volume {
         id: u32,
         version: u64,
         bytes: &[u8],
-        mut next: Metadata,
+        next: Metadata,
     ) -> Result<Node, Error> {
+        self.prepare_recorded(disk, id, version, bytes, next, |node| node)?
+            .run()
+    }
+    pub(crate) fn prepare_recorded<'a, D: Disk, T: Copy>(
+        &'a mut self,
+        disk: &'a mut D,
+        id: u32,
+        version: u64,
+        bytes: &[u8],
+        mut next: Metadata,
+        output: impl FnOnce(Node) -> T,
+    ) -> Result<Publication<'a, D, T>, Error> {
         let node = self.writable(id)?;
         if node.kind != Kind::File {
             return Err(Error::IsDirectory);
@@ -86,27 +109,15 @@ impl Volume {
             .checked_add(1)
             .ok_or(Error::Exhausted)?;
         let result = *changed;
-        for i in 0..2 {
-            let mut sector = [0; 512];
-            let start = i * 512;
-            let count = bytes.len().saturating_sub(start).min(512);
-            if count > 0 {
-                sector[..count].copy_from_slice(&bytes[start..start + count]);
-            }
-            if disk
-                .write(storage::data(slot, result.bank) + i as u64, &sector)
-                .is_err()
-            {
-                self.poisoned = true;
-                return Err(Error::Uncertain);
-            }
-        }
-        if disk.flush().is_err() {
-            self.poisoned = true;
-            return Err(Error::Uncertain);
-        }
-        self.commit(disk, next)?;
-        Ok(result)
+        next.sequence = result.version;
+        Ok(Publication::new(
+            self,
+            disk,
+            next,
+            storage::data(slot, result.bank),
+            bytes,
+            output(result),
+        ))
     }
     pub fn remove(&mut self, disk: &mut impl Disk, id: u32) -> Result<(), Error> {
         let node = self.writable(id)?;

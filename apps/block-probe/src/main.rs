@@ -4,6 +4,7 @@
 mod boundaries;
 mod lifecycle;
 mod persistence;
+mod publication;
 mod raw;
 use rustic_sdk::{block::Device, process};
 rustic_sdk::entry!(run);
@@ -16,6 +17,7 @@ fn run(handle: u64, role: u64, expected: u64) -> u64 {
         2 => boundaries::foreign(handle),
         3 => boundaries::scoped(&device),
         4..=10 => lifecycle::run(handle, role, expected),
+        11 => publication::run(&device, expected),
         _ => panic!("unknown fixture role"),
     };
     process::report(0xb100_0000 | (role << 16) | result).unwrap();

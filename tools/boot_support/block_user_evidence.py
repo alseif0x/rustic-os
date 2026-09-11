@@ -8,7 +8,7 @@ def verified(mode, serial, records):
             return False
         for value in values:
             faults = value["phase"] == "faults"
-            expected = {"verified": 1, "ring": 3, "applications": 14 if faults else 1,
+            expected = {"verified": 1, "ring": 3, "applications": 14 if faults else 2,
                         "rejected": 53 if faults else 0, "lifecycle": 6 if faults else 0,
                         "max_bytes": 512, "queue_slots": 2, "handle_slots": 4, "dma_frames": 3}
             if any(int(value.get(key, -1)) != number for key, number in expected.items()):
@@ -17,6 +17,16 @@ def verified(mode, serial, records):
                 return False
             if int(value["control_preemptions"]) <= 0 or int(value["peak_frames"]) <= 3:
                 return False
+        publications = records(serial, "RUSTIC PUBLICATION ")
+        if mode == "block-user":
+            if [value["phase"] for value in publications] != ["write", "replay"]:
+                return False
+            for value, cancelled in zip(publications, [16, 0]):
+                expected = {"verified": 1, "cancelled": cancelled, "too_late": 1, "committed": 1}
+                if any(int(value.get(key, -1)) != number for key, number in expected.items()):
+                    return False
+        elif publications:
+            return False
         return True
     except (KeyError, ValueError):
         return False
