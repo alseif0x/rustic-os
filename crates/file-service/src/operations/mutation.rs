@@ -19,7 +19,7 @@ impl Server {
         let request = self
             .clients
             .transfers
-            .logical(slot)
+            .logical(slot, false)
             .ok_or(Error::NoTransfer)?;
         if request.resource.object() != p.id {
             return Err(Error::NoTransfer);

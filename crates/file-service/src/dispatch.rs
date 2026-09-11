@@ -23,9 +23,21 @@ impl Server {
         request: Packet,
         now: u64,
     ) -> Packet {
+        if admission::controlled(request.op) {
+            return self.admission_with(
+                &mut crate::disk::Synchronous(disk),
+                crate::Caller {
+                    slot,
+                    peer,
+                    context: request.context,
+                },
+                request,
+                |_, _| now,
+            );
+        }
         if request.op == REPLACE_COMMIT {
             return self.commit_with(
-                &mut crate::operations::publication::Synchronous(disk),
+                &mut crate::disk::Synchronous(disk),
                 slot,
                 peer,
                 request,
@@ -38,6 +50,10 @@ impl Server {
             crate::validation::request(&request)?;
             let grant = self.grant_at(slot).ok_or(Error::Denied)?;
             grant.check(peer, request.context, now)?;
+            if (admission::OPEN..=admission::CANCEL).contains(&request.op) {
+                response = self.admission_request(slot, grant, request)?;
+                return Ok(());
+            }
             if (REPLACE_OPEN..=OPERATION_PART).contains(&request.op) {
                 response = self.operation_request(slot, grant, request)?;
                 return Ok(());
@@ -135,7 +151,14 @@ impl Server {
                     self.clients.transfers.begin(slot, &request)?;
                 }
                 CHUNK => self.clients.transfers.chunk(slot, &request)?,
-                ABORT => self.clients.transfers.clear(slot),
+                ABORT => {
+                    if self.clients.transfers.logical(slot, true).is_some()
+                        || self.clients.transfers.logical(slot, false).is_some()
+                    {
+                        return Err(Error::NoTransfer);
+                    }
+                    self.clients.transfers.clear(slot);
+                }
                 COMMIT => {
                     let transfer = self.clients.transfers.take(slot, &request)?;
                     grant.check(peer, transfer.context, now)?;

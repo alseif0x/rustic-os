@@ -8,10 +8,19 @@ impl Grant {
         workspace: u32,
         object: u32,
     ) -> Result<(), Error> {
+        self.operation_scope(volume, workspace, object, INSPECT_RIGHT)
+    }
+    pub(crate) fn operation_scope(
+        &self,
+        volume: &rustic_fs::Volume,
+        workspace: u32,
+        object: u32,
+        right: u8,
+    ) -> Result<(), Error> {
         // The retained workspace is a storage fact. Never use a caller-claimed
         // workspace as proof that a historical object belonged to this grant.
         if self.subject == 0
-            || self.rights & INSPECT_RIGHT == 0
+            || self.rights & right == 0
             || !(self.scope == 0
                 || self.scope == object
                 || self.scope == workspace

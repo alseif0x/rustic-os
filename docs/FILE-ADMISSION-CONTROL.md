@@ -2,7 +2,7 @@
 
 # Owner control across durable admission
 
-The service library now drives durable admission, file execution and terminal cancellation through the same pollable storage owner. This connects the [format-4 storage facts](FILE-ADMISSION.md) to current service authority for #12/#13. The typed controller runs in a native ring-3 acceptance application with real block I/O. The production file-server IPC still serves `completed_operations`; accepted/result framing and a delegated `operations.cancel` endpoint remain future work.
+The service library now drives durable admission, file execution and terminal cancellation through the same pollable storage owner. This connects the [format-4 storage facts](FILE-ADMISSION.md) to current service authority for #12/#13. The typed controller runs in a native ring-3 acceptance application with real block I/O. The subsequent [public admission API](FILE-ADMISSION-API.md) connects the same controller to production file-server IPC and SDK/terminal clients. It exposes explicitly scheduled admission/execution/cancellation; the general service-v1 asynchronous `operations.cancel` profile remains pending.
 
 ## Storage mechanism
 
@@ -36,7 +36,7 @@ Every controlled storage poll rechecks the live caller, context and expiry, incl
 
 Terminal cleanup is a private service policy after owner revocation, expiry or detach has prevented a newly admitted operation or its explicit execution. It continues polling owner control even if the original client disappears, but must finish the cancellation write. It does not require preserving that client's now-revoked grant and cannot publish a file effect. A historical retry cannot invoke this cleanup path. A crash before cancellation becomes durable may leave `Admitted`; no automatic restart follows.
 
-This cleanup is not delegated cancel authority. A future public cancellation method still needs a separate right, target validation and accepted/result IPC contract. Inspection or file-write rights must not silently become that permission. No new right bit, opcode, SDK method, catalog operation or public asynchronous profile is introduced here.
+This cleanup remains private owner policy. The subsequent [public admission API](FILE-ADMISSION-API.md) adds a separate cancellation right, target validation, bounded status framing and SDK/terminal access. Inspection or file-write rights do not imply cancellation. The general asynchronous service-v1 profile remains pending.
 
 ## Validation
 
@@ -53,7 +53,7 @@ Host service tests revoke at all 14 pending admission positions and all 17 pendi
 
 The existing two-VM `block-user` acceptance still uses four sequential applications and the same stack, event, process and device quotas. Its terminal volume now runs the service controller: revoke after admission-header submission, persist cancellation, then revoke another operation after file-header submission and settle its committed effect. The native adapter submits actual copied block requests and deliberately withholds completion observation across control callbacks. The pending volume admits work, then demonstrates inspection-only retry and rejected execution with zero writes. The second VM remounts both volumes with fresh grants; the independent host oracle requires the same files, versions, records and complete volume hashes. Evidence requires `service_control=1` and `fresh_authority=1` in addition to the original storage and reclamation checks.
 
-These new native cases invoke the service policy library directly; their owner callback is a deterministic fixture, not new administrator IPC. Existing `recovery-test` separately retains its four real private-owner-IPC races and completed-profile regression. Connecting the new controller to accepted/result IPC, public cancellation, response-loss recovery and selected native EIO scenarios is still required before advertising an asynchronous service profile.
+These new native cases invoke the service policy library directly; their owner callback is a deterministic fixture, not new administrator IPC. Existing `recovery-test` separately retains its four real private-owner-IPC races and completed-profile regression. The subsequent [public admission API](FILE-ADMISSION-API.md) connects this controller to explicit native execution/cancellation, lost-response recovery and selected native EIO scenarios. It does not yet provide an automatically scheduled asynchronous service profile.
 
 Development evidence includes a second-VM ring-3 stack fault at `0x7ffef1e8` in the pending-admission fixture. Separating its mount/setup frame from replay verification removed the cumulative buffer overlap. The corrected two-VM run passed in 39.780 and 8.026 seconds with the existing 64 KiB stack and 4,096-event limit. The first failed replay is retained as a failure, not counted as restart acceptance. Configured host validation passed 162 Rust tests, 146 runner tests and 34 contract tests, including formatting, Clippy and native builds.
 

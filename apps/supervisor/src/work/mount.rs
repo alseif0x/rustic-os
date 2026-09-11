@@ -78,7 +78,7 @@ impl Mount {
             }
             4 => {
                 if let Some(generation) =
-                    self.grant(state, [32, 0, state.shell, self.shell[0], 0, 7, 0, 1])?
+                    self.grant(state, [32, 0, state.shell, self.shell[0], 0, 15, 0, 1])?
                 {
                     return Ok(Some([
                         0,

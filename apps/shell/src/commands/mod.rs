@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+mod admissions;
 mod authority;
 mod files;
 mod management;
@@ -64,7 +65,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         "help" => {
             exact(a, 1)?;
             output::text(
-                "help | pwd | cd PATH | ls [PATH] | mkdir PATH | touch PATH\r\nwrite PATH TEXT | cat PATH | stat PATH | rm PATH | echo TEXT | status\r\nrun spin|fault|exit | run read FILE | run probe FILE OTHER | run watch FILE [TICKS]\r\nps | kill PID | reap PID | permissions [PID] | revoke PID\r\nservices | mem | restart files | exit\r\nretry-key PATH KEY | replace PATH VERSION TOKEN TEXT | receipt ID TOKEN | rotate-receipts\r\nsession FILE OTHER [TICKS] | helper PID FILE OTHER | act PID read|stage|commit|flood|drain|stale\r\nmove-check CLIENT HELPER (moves its file endpoint)\r\nactor-status PID | revocation PID | stall files TICKS (0 = indefinite diagnostic)\r\njob-status [ID] | restart files [async] | hold-io SKIP TICKS | io-status\r\nref WORKSPACE PATH | read-ref WORKSPACE RESOURCE VERSION|- OFFSET LENGTH\r\nenable-operations | replace-ref WORKSPACE RESOURCE VERSION EPOCH KEY TEXT\r\nreplace-fill-ref WORKSPACE RESOURCE VERSION EPOCH KEY BYTE COUNT\r\noperation OPERATION_ID | operation WORKSPACE EPOCH KEY\r\nact PID api-read|read-open|read-next|fill (deterministic read diagnostics)\r\nCtrl-C interrupts a wait, not an already submitted effect.\r\nPaths: /system (read-only), /data, /config, /workspaces.\r\nLimits: 32 objects, 1024 bytes/file, 2 utility slots. No AI/network required.\r\n",
+                "help | pwd | cd PATH | ls [PATH] | mkdir PATH | touch PATH\r\nwrite PATH TEXT | cat PATH | stat PATH | rm PATH | echo TEXT | status\r\nrun spin|fault|exit | run read FILE | run probe FILE OTHER | run watch FILE [TICKS]\r\nps | kill PID | reap PID | permissions [PID] | revoke PID\r\nservices | mem | restart files | exit\r\nretry-key PATH KEY | replace PATH VERSION TOKEN TEXT | receipt ID TOKEN | rotate-receipts\r\nsession FILE OTHER [TICKS] | helper PID FILE OTHER | act PID read|stage|commit|flood|drain|stale\r\nmove-check CLIENT HELPER (moves its file endpoint)\r\nactor-status PID | revocation PID | stall files TICKS (0 = indefinite diagnostic)\r\njob-status [ID] | restart files [async] | hold-io SKIP TICKS | io-status\r\nref WORKSPACE PATH | read-ref WORKSPACE RESOURCE VERSION|- OFFSET LENGTH\r\nenable-operations | replace-ref WORKSPACE RESOURCE VERSION EPOCH KEY TEXT\r\nreplace-fill-ref WORKSPACE RESOURCE VERSION EPOCH KEY BYTE COUNT\r\noperation OPERATION_ID | operation WORKSPACE EPOCH KEY\r\nenable-admissions | admit-ref WORKSPACE RESOURCE VERSION EPOCH KEY TEXT\r\nadmission ADMISSION_ID | admission WORKSPACE EPOCH KEY\r\nexecute-admission ADMISSION_ID | cancel-admission ADMISSION_ID\r\nact PID api-read|read-open|read-next|fill (deterministic read diagnostics)\r\nCtrl-C interrupts a wait, not an already submitted effect.\r\nPaths: /system (read-only), /data, /config, /workspaces.\r\nLimits: 32 objects, 1024 bytes/file, 2 utility slots. No AI/network required.\r\n",
             );
         }
         "echo" => {
@@ -93,6 +94,8 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
             authority::execute(s, a)?
         }
         "retry-key" | "receipt" | "replace" | "rotate-receipts" => recovery::execute(s, a)?,
+        "enable-admissions" | "admit-ref" | "admission" | "execute-admission"
+        | "cancel-admission" => admissions::execute(s, a)?,
         "enable-operations" | "replace-ref" | "replace-fill-ref" | "operation" => {
             operations::execute(s, a)?
         }

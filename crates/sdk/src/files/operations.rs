@@ -7,26 +7,6 @@ use rustic_abi::files::{
 };
 use sha2::{Digest, Sha256};
 impl<P: crate::rpc::Progress> Client<P> {
-    fn operation_exchange(&mut self, mut p: Packet) -> Result<Packet, Error> {
-        self.require_binding()?;
-        p.context = self.context;
-        let durable = p.op == REPLACE_COMMIT;
-        let message = self.rpc.exchange(&p.encode()).map_err(|e| match e {
-            _ if durable => Error::Uncertain,
-            crate::Error::Interrupted => Error::Interrupted,
-            crate::Error::Ipc(crate::abi::ipc::Error::Closed) => Error::Closed,
-            _ => Error::Protocol,
-        })?;
-        Packet::decode(message.payload())
-            .and_then(|r| r.checked_reply(p.op, p.context))
-            .map_err(|e| {
-                if durable && e == Error::Protocol {
-                    Error::Uncertain
-                } else {
-                    e
-                }
-            })
-    }
     fn collect_operation(&mut self, first: Packet, lineage: [u8; 16]) -> Result<Operation, Error> {
         let id = OperationId::new(lineage, first.version).map_err(|_| Error::Protocol)?;
         let mut bytes = [0; RECEIPT_BYTES];
@@ -73,35 +53,9 @@ impl<P: crate::rpc::Progress> Client<P> {
         }
         Ok(result)
     }
-    /// Staging is volatile and has no file effect or durable operation acknowledgement.
+    /// Volatile staging for the synchronous completed-operation profile.
     pub fn stage_replace(&mut self, request: Replacement, bytes: &[u8]) -> Result<(), Error> {
-        let first = request.packet(bytes.len(), self.context)?;
-        let mut opened = false;
-        let stage = (|| {
-            let ack = self.operation_exchange(first)?;
-            if ack.id != 0 || ack.arg != 0 || ack.version != 0 || ack.count != 0 {
-                return Err(Error::Protocol);
-            }
-            opened = true;
-            for (index, chunk) in bytes.chunks(DATA).enumerate() {
-                let mut p = Packet::new(REPLACE_CHUNK);
-                p.id = request.resource.object();
-                p.arg = (index * DATA) as u32;
-                p.count = chunk.len() as u8;
-                p.data[..chunk.len()].copy_from_slice(chunk);
-                let ack = self.operation_exchange(p)?;
-                if ack.id != 0 || ack.arg != 0 || ack.version != 0 || ack.count != 0 {
-                    return Err(Error::Protocol);
-                }
-            }
-            Ok(())
-        })();
-        if opened && stage.is_err() {
-            let mut p = Packet::new(REPLACE_ABORT);
-            p.id = request.resource.object();
-            let _ = self.operation_exchange(p);
-        }
-        stage
+        self.stage_profile(request, bytes, false)
     }
     /// Retain workspace/epoch/key before calling. A missing final receipt is
     /// uncertain even if the first fragment arrived; recover via operation_get.

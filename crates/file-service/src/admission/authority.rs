@@ -6,9 +6,17 @@ use rustic_fs::{Admission, AdmissionId, AdmissionStatus, Replacement};
 
 impl Caller {
     pub(super) fn check(self, clients: &Clients, now: u64) -> Result<Grant, Error> {
+        self.check_right(clients, now, INSPECT_RIGHT)
+    }
+    pub(super) fn check_right(
+        self,
+        clients: &Clients,
+        now: u64,
+        right: u8,
+    ) -> Result<Grant, Error> {
         let grant = clients.grant_at(self.slot).ok_or(Error::Revoked)?;
         grant.check(self.peer, self.context, now)?;
-        if grant.subject == 0 || grant.rights & INSPECT_RIGHT == 0 {
+        if grant.subject == 0 || grant.rights & right == 0 {
             return Err(Error::Denied);
         }
         Ok(grant)

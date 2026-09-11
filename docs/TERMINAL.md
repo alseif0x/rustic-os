@@ -63,6 +63,10 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `restart files [async]`, `job-status [ID]` | End utility sessions, drain pending I/O and remount; optionally return a job ID immediately, then collect its fresh binding |
 | `hold-io SKIP TICKS`, `io-status` | Owner-only [real-submission completion-observation diagnostic](FOREGROUND-CONTROL.md); skip 0–16 writes/flushes, hold for 1–500 ticks |
 | `retry-key PATH KEY`, `replace PATH VERSION TOKEN TEXT`, `receipt ID TOKEN` | Prepare an explicit retry token, commit a tracked whole-file replacement, inspect its retained result |
+| `enable-admissions` | Explicit format-4 activation after `enable-operations`; see [the admission API](FILE-ADMISSION-API.md) |
+| `admit-ref WORKSPACE RESOURCE VERSION EPOCH KEY TEXT` | Persist replacement arguments without executing them |
+| `admission ADMISSION_ID` / `admission WORKSPACE EPOCH KEY` | Inspect a retained admission after fresh authorization |
+| `execute-admission ADMISSION_ID` / `cancel-admission ADMISSION_ID` | Explicit execution or cancellation; terminal states remain immutable |
 | `enable-operations` | Explicit one-way upgrade to the [workspace operation format](FILE-OPERATIONS.md) |
 | `replace-ref WORKSPACE RESOURCE VERSION EPOCH KEY TEXT` | Replace at an observed version; return the original operation identity and SHA-256 receipt |
 | `operation OPERATION_ID`, `operation WORKSPACE EPOCH KEY` | Inspect a retained completed result after a lost reply, later edit or restart |

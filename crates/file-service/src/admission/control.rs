@@ -16,7 +16,7 @@ pub(super) struct Settled<T> {
 pub(super) fn drive<D: PollDisk, T: Copy>(
     clients: &mut Clients,
     mut write: Publication<'_, D, T>,
-    caller: Option<Caller>,
+    caller: Option<(Caller, u8)>,
     control: &mut impl FnMut(&mut Clients, bool) -> u64,
 ) -> Result<Settled<T>, Error> {
     let mut denied = None;
@@ -25,8 +25,8 @@ pub(super) fn drive<D: PollDisk, T: Copy>(
         clients.expire(now);
         // Grants can only be revoked/detached/expired through this borrow.
         // Issuance and changes of scope/rights/subject require the whole Server.
-        if let Some(caller) = caller
-            && let Err(error) = caller.check(clients, now)
+        if let Some((caller, right)) = caller
+            && let Err(error) = caller.check_right(clients, now, right)
         {
             denied.get_or_insert(error);
             write.cancel().map_err(reply::error)?;

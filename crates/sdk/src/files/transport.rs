@@ -3,6 +3,27 @@
 use super::Client;
 use rustic_abi::files::*;
 impl<P: crate::rpc::Progress> Client<P> {
+    pub(super) fn operation_exchange(&mut self, mut p: Packet) -> Result<Packet, Error> {
+        self.require_binding()?;
+        p.context = self.context;
+        let durable = p.op == REPLACE_COMMIT || admission::controlled(p.op);
+        let message = self.rpc.exchange(&p.encode()).map_err(|e| match e {
+            _ if durable => Error::Uncertain,
+            crate::Error::Interrupted => Error::Interrupted,
+            crate::Error::Ipc(crate::abi::ipc::Error::Closed) => Error::Closed,
+            _ => Error::Protocol,
+        })?;
+        Packet::decode(message.payload())
+            .and_then(|r| r.checked_reply(p.op, p.context))
+            .map_err(|e| {
+                if durable && e == Error::Protocol {
+                    Error::Uncertain
+                } else {
+                    e
+                }
+            })
+    }
+
     /// One asynchronous request; the client owns the original opcode/context until collection.
     pub fn submit(&mut self, mut p: Packet) -> Result<(), Error> {
         self.require_binding()?;
@@ -18,7 +39,8 @@ impl<P: crate::rpc::Progress> Client<P> {
         let Some(p) = self.pending else {
             return Ok(None);
         };
-        let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT | REPLACE_COMMIT);
+        let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT | REPLACE_COMMIT)
+            || admission::controlled(p.op);
         let error = if durable {
             Error::Uncertain
         } else {
@@ -39,7 +61,8 @@ impl<P: crate::rpc::Progress> Client<P> {
     pub fn request(&mut self, mut p: Packet) -> Result<Packet, Error> {
         self.require_binding()?;
         p.context = self.context;
-        let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT | REPLACE_COMMIT);
+        let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT | REPLACE_COMMIT)
+            || admission::controlled(p.op);
         let malformed = if durable {
             Error::Uncertain
         } else {

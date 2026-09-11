@@ -39,9 +39,22 @@ impl<'a> Owner<'a> {
         peer: u64,
         request: Packet,
     ) -> Packet {
-        let result = server.commit_with(disk, slot, peer, request, |clients, pending| {
-            self.poll(clients, pending)
-        });
+        let result = if rustic_sdk::abi::files::admission::controlled(request.op) {
+            server.admission_with(
+                disk,
+                rustic_file_service::Caller {
+                    slot,
+                    peer,
+                    context: request.context,
+                },
+                request,
+                |clients, pending| self.poll(clients, pending),
+            )
+        } else {
+            server.commit_with(disk, slot, peer, request, |clients, pending| {
+                self.poll(clients, pending)
+            })
+        };
         if let Some((correlation, mut words)) = self.deferred.take() {
             // Neither an ACK nor a lost client reply is a rollback claim. Report
             // live settlement only after the admitted command was drained.

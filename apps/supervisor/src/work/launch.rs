@@ -43,7 +43,10 @@ impl Draft {
                 self.scope as u64,
                 self.rights as u64,
                 self.expires,
-                u64::from(matches!(self.role, s::LOST_REPLY | s::LOST_OPERATION)),
+                u64::from(matches!(
+                    self.role,
+                    s::LOST_REPLY | s::LOST_OPERATION | s::LOST_ADMISSION
+                )),
             ]
         }
     }
@@ -151,6 +154,7 @@ impl State {
                 | s::WATCH
                 | s::LOST_REPLY
                 | s::LOST_OPERATION
+                | s::LOST_ADMISSION
                 | s::SESSION
                 | s::HELPER
         ) || lease > 360000
@@ -164,6 +168,7 @@ impl State {
                 | s::WATCH
                 | s::LOST_REPLY
                 | s::LOST_OPERATION
+                | s::LOST_ADMISSION
                 | s::SESSION
                 | s::HELPER
         );
@@ -174,7 +179,7 @@ impl State {
             if self.policy == 0
                 || scope == 0
                 || rights
-                    != if matches!(role, s::LOST_REPLY | s::LOST_OPERATION) {
+                    != if matches!(role, s::LOST_REPLY | s::LOST_OPERATION | s::LOST_ADMISSION) {
                         7
                     } else if role == s::SESSION {
                         3

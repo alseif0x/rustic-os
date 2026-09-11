@@ -10,10 +10,10 @@ from terminal_support.operation_cases import operation
 
 
 def transcript():
-    return ("RusticOS native terminal 0.1\n" * 38
-            + "error: Uncertain\n" * 12
+    return ("RusticOS native terminal 0.1\n" * 46
+            + "error: Uncertain\n" * 15
             + "RUSTIC IO_OBSERVATION held=1\n" * 6
-            + "IdempotencyConflict\nExpiredEpoch\noperation-v1\npersistent format v3\n")
+            + "IdempotencyConflict\nExpiredEpoch\noperation-v1\npersistent format v3\npersistent format v4\nadmission-v1\n")
 
 
 class RecoveryEvidenceTests(unittest.TestCase):
@@ -34,7 +34,7 @@ class RecoveryEvidenceTests(unittest.TestCase):
     def test_rejects_missing_cases_and_panics(self):
         for marker in ("RusticOS native terminal 0.1", "error: Uncertain",
                        "RUSTIC IO_OBSERVATION held=1", "IdempotencyConflict", "ExpiredEpoch",
-                       "operation-v1", "persistent format v3"):
+                       "operation-v1", "persistent format v3", "persistent format v4", "admission-v1"):
             with self.subTest(missing=marker):
                 self.assertFalse(reached("recovery-test", transcript().replace(marker, "", 1)))
         self.assertFalse(reached("recovery-test", transcript() + "RUSTIC PANIC"))

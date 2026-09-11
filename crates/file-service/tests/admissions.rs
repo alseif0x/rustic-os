@@ -3,6 +3,7 @@ mod support;
 mod admissions {
     mod authority;
     mod control;
+    mod wire;
 }
 use rustic_abi::files::{Error, INSPECT_RIGHT, WRITE_RIGHT};
 use rustic_file_service::{Caller, Grant, Server};

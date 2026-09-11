@@ -106,7 +106,9 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
                 Ok(message) => {
                     let output = match Packet::decode(message.payload()) {
                         Ok(request) => {
-                            if request.op == rustic_sdk::abi::files::REPLACE_COMMIT {
+                            if request.op == rustic_sdk::abi::files::REPLACE_COMMIT
+                                || rustic_sdk::abi::files::admission::controlled(request.op)
+                            {
                                 let mut owner =
                                     control::Owner::new(&admin, &mut administrator, &mut replies);
                                 let output =

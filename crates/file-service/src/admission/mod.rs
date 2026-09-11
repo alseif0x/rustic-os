@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Typed service integration before accepted/result IPC. Admission is not authority.
+//! Durable admissions with explicit public execution. Admission is not authority.
 mod authority;
+mod cancellation;
 mod control;
 mod transition;
+mod wire;
 
 /// Bound by a trusted transport to its live endpoint, authenticated sender and
 /// context. The model/request payload must never supply the peer or slot binding.

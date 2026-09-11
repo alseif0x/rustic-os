@@ -3,17 +3,7 @@
 use crate::{Clients, Server, reply};
 use core::task::Poll;
 use rustic_abi::files::*;
-use rustic_fs::{Disk, PollDisk, PublicationPhase as Phase};
-
-pub(crate) struct Synchronous<'a, D>(pub(crate) &'a mut D);
-impl<D: Disk> PollDisk for Synchronous<'_, D> {
-    fn poll_write(&mut self, sector: u64, bytes: &[u8; 512]) -> Poll<Result<(), rustic_fs::Error>> {
-        Poll::Ready(self.0.write(sector, bytes))
-    }
-    fn poll_flush(&mut self) -> Poll<Result<(), rustic_fs::Error>> {
-        Poll::Ready(self.0.flush())
-    }
-}
+use rustic_fs::{PollDisk, PublicationPhase as Phase};
 
 impl Server {
     /// Drive one completed-profile replacement while trusted control can revoke,
@@ -42,7 +32,7 @@ impl Server {
             let request = self
                 .clients
                 .transfers
-                .logical(slot)
+                .logical(slot, false)
                 .ok_or(Error::NoTransfer)?;
             if request.resource.object() != p.id {
                 return Err(Error::NoTransfer);

@@ -33,6 +33,7 @@ The goal is agent control without mandatory screen interpretation. A graphical i
 | [File service](docs/FILES.md) | Bounded copy-on-write volume, version checks, scopes, recovery model and independent disk verification |
 | [Client/helper authority](docs/AUTHORITY.md) | Checked subsets, shared revocation, moved-handle denial, inherited expiry and owner control during queue pressure or a stopped file service |
 | [Workspace operations](docs/FILE-OPERATIONS.md) | Scoped retry keys, original SHA-256 receipts, lost-response lookup, explicit format migration and native I/O fault recovery |
+| [Explicit durable operations](docs/FILE-ADMISSION-API.md) | Prepare without executing, recover acceptance after a lost reply, inspect, execute or cancel through SDK and terminal |
 | [Isolated test executor](docs/EXECUTOR.md) | Exact Git revisions, offline jobs, resource limits, cancellation and structured evidence |
 
 The acceptance suite combines Rust contract tests, Python runner checks, native VM scenarios and isolated executor scenarios, including user-mode exchanges and disk persistence across separate VM boots. See [terminal acceptance and limits](docs/TERMINAL.md) and [GitHub Actions](https://github.com/alseif0x/rustic-os/actions/workflows/check.yml) for procedures and revision-specific results. These check the reference configuration; they do not establish production security guarantees. The separate [service contract suite](docs/SERVICE-CONTRACTS.md) checks logical schemas and descriptors on the host.
@@ -99,7 +100,7 @@ Type help in the native terminal. Try write hello "Hello from RusticOS", cat hel
 For the complete VM suite:
 
 ```sh
-python3 tools/boot.py test --timeout 30
+python3 tools/boot.py test --timeout 45
 ```
 
 See [boot commands and expected results](docs/BOOT.md) and the [isolated executor](docs/EXECUTOR.md) for reproducible failure tests and revision-based execution.
@@ -130,7 +131,7 @@ Modules follow ownership and trust boundaries. Entry points compose components; 
 | H4 — Desktop and browser | Graphical interaction and a browser engine running inside RusticOS | Planned |
 | H5 — Experimental v0.1 | Verified candidates, activation, recovery and integrated acceptance | Planned |
 
-[Workspace replacements and completed operations](docs/FILE-OPERATIONS.md) now provide scoped retry keys, immutable historical receipts and lookup after a lost response or restart. [Interruptible owner control](docs/FOREGROUND-CONTROL.md) keeps supervision available during submitted I/O, while [stable reads](docs/FILES-READ.md) verify the observed file. **Next:** define and implement truthful cancellation/settlement for the broader operation lifecycle, then connect the remaining service-v1 methods in [#12](https://github.com/alseif0x/rustic-os/issues/12)/[#22](https://github.com/alseif0x/rustic-os/issues/22) and remaining takeover cases in [#13](https://github.com/alseif0x/rustic-os/issues/13). The [measurement harness](docs/MEASUREMENTS.md) evaluates resource cost. This remains a bounded prototype with shared two-record retention and no general delegation or production filesystem guarantees.
+[Workspace replacements and completed operations](docs/FILE-OPERATIONS.md) now provide scoped retry keys, immutable historical receipts and lookup after a lost response or restart. [Interruptible owner control](docs/FOREGROUND-CONTROL.md) keeps supervision available during submitted I/O, while [stable reads](docs/FILES-READ.md) verify the observed file. [Explicit admissions](docs/FILE-ADMISSION-API.md) add durable preparation, status, execution and separate cancellation authority through native IPC. Pending work never resumes automatically after restart. **Next:** connect bounded background execution and in-flight public cancellation, then the remaining service-v1 methods in [#12](https://github.com/alseif0x/rustic-os/issues/12)/[#22](https://github.com/alseif0x/rustic-os/issues/22) and remaining takeover cases in [#13](https://github.com/alseif0x/rustic-os/issues/13). The [measurement harness](docs/MEASUREMENTS.md) evaluates resource cost. This remains a bounded prototype with shared two-record retention and no general delegation or production filesystem guarantees.
 
 The experimental v0.1 target includes a native console, optional agent, locally running browser engine and a verifiable change/recovery cycle. The model, compiler and test environment may be external, with that dependency declared. Broad hardware support and universal application compatibility are long-term research goals, not current promises.
 

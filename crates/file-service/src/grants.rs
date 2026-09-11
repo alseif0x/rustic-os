@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Bounded owner-issued roots and one explicitly provisioned helper level.
 use crate::{CLIENTS, Grant, Server};
-use rustic_abi::files::{Error, INSPECT_RIGHT, READ_RIGHT, WRITE_RIGHT};
+use rustic_abi::files::{CANCEL_RIGHT, Error, INSPECT_RIGHT, READ_RIGHT, WRITE_RIGHT};
 
 impl Server {
     /// Only an authenticated administrator may issue a fresh root.
@@ -43,8 +43,8 @@ impl Server {
             || grant.peer == 0
             || grant.endpoint == 0
             || grant.rights == 0
-            || grant.rights & !(READ_RIGHT | WRITE_RIGHT | INSPECT_RIGHT) != 0
-            || (grant.rights & INSPECT_RIGHT != 0 && grant.subject == 0)
+            || grant.rights & !(READ_RIGHT | WRITE_RIGHT | INSPECT_RIGHT | CANCEL_RIGHT) != 0
+            || (grant.rights & (INSPECT_RIGHT | CANCEL_RIGHT) != 0 && grant.subject == 0)
             || (grant.scope != 0 && self.volume.stat(grant.scope).is_err())
         {
             return Err(Error::Invalid);

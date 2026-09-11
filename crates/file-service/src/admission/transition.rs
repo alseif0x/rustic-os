@@ -24,7 +24,12 @@ impl Server {
             .volume
             .prepare_admission(disk, grant.subject, self.instance, request, bytes)
             .map_err(reply::error)?;
-        let settled = drive(&mut self.clients, write, Some(caller), &mut control)?;
+        let settled = drive(
+            &mut self.clients,
+            write,
+            Some((caller, rustic_abi::files::INSPECT_RIGHT)),
+            &mut control,
+        )?;
         if new && let Some(status) = settled.result {
             if self.instance == 0 {
                 self.instance = status.id.number;
@@ -63,7 +68,12 @@ impl Server {
             .volume
             .prepare_admitted(disk, grant.subject, id)
             .map_err(reply::error)?;
-        let settled = drive(&mut self.clients, write, Some(caller), &mut control)?;
+        let settled = drive(
+            &mut self.clients,
+            write,
+            Some((caller, rustic_abi::files::INSPECT_RIGHT)),
+            &mut control,
+        )?;
         if let Some(error) = settled.denied {
             if settled.result.is_some() {
                 return Err(Error::Uncertain);

@@ -27,6 +27,8 @@ pub const REPLACE_ABORT: u8 = 21;
 pub const OPERATION_RETRY: u8 = 22;
 pub const OPERATION_ID: u8 = 23;
 pub const OPERATION_PART: u8 = 24;
+pub mod admission;
+pub const CANCEL_RIGHT: u8 = 8;
 pub mod operation;
 pub const INSPECT_RIGHT: u8 = 4;
 pub mod read;
@@ -152,7 +154,7 @@ impl Packet {
         if b.len() != SIZE
             || b[0] != VERSION
             || b[3] as usize > DATA
-            || !matches!(b[1],1..=24|32..=34)
+            || !matches!(b[1],1..=24|32..=34|48..=55)
         {
             return Err(Error::Protocol);
         }

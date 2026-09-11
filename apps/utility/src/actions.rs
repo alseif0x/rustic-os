@@ -9,8 +9,15 @@ pub fn run(files: &mut Client, w: [u64; 8]) -> [u64; 8] {
             // SAFETY: Deliberate native isolation probe; UD2 traps and terminates this process.
             unsafe { core::arch::asm!("ud2", options(noreturn)) }
         }
-        s::LOST_OPERATION => super::recovery::discard_reply(files, w[1] as u32, w[2] as u32, true),
-        s::LOST_REPLY => super::recovery::discard_reply(files, w[1] as u32, w[2] as u32, false),
+        s::LOST_ADMISSION => {
+            super::recovery::discard_reply(files, w[1] as u32, w[2] as u32, s::LOST_ADMISSION)
+        }
+        s::LOST_OPERATION => {
+            super::recovery::discard_reply(files, w[1] as u32, w[2] as u32, s::LOST_OPERATION)
+        }
+        s::LOST_REPLY => {
+            super::recovery::discard_reply(files, w[1] as u32, w[2] as u32, s::LOST_REPLY)
+        }
         s::FINISH => [7, 0, 0, 0, 0, 0, 0, 0],
         s::WATCH => {
             let mut bytes = [0; 1024];

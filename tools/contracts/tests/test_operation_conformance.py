@@ -46,7 +46,7 @@ class OperationConformance(unittest.TestCase):
             value = copy.deepcopy(good); mutate(value)
             with self.assertRaises(ContractError): check_entries(self.catalog,value)
     def native_evidence(self):
-        value = {"verified":True,"boots":38,"kernel_sha256":"a"*64,"cases":[{"case":"old"+str(i),"verified":True} for i in range(9)]}
+        value = {"verified":True,"boots":46,"kernel_sha256":"a"*64,"cases":[{"case":"old"+str(i),"verified":True} for i in range(13)]}
         value["cases"].append({"case":"scoped_operations_lost_reply_namespaces_restart_reboot","verified":True,"exchanges":entries(self.catalog)})
         value["cases"] += [{"case":"scoped_operation_"+name,"verified":True,"committed":name=="final_flush"} for name in ("data","receipt","metadata","header","final_flush")]
         value["cases"] += [{"case":"controlled_operation_"+name,"verified":True,"skip":skip,"committed":skip>=15,

@@ -130,6 +130,8 @@ def verify(image, timeout=60, output=None):
             from .operation_cases import verify as verify_operations
             operation_cases, selected = verify_operations(session, owned_disk, temporary, image, mount)
             cases.extend(operation_cases)
+            from .admission_cases import verify as verify_admissions
+            cases.extend(verify_admissions(session, owned_disk, temporary, image, mount))
         (output / "files.bin").write_bytes(selected)
         evidence = {"verified":True,"boots":len(serials),"cases":cases,"kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"]}
         (output / "recovery.json").write_text(json.dumps(evidence,indent=2)+"\n")

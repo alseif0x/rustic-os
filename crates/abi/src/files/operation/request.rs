@@ -37,7 +37,7 @@ impl Replacement {
         Ok(p)
     }
     pub fn decode(p: &Packet) -> Result<Self, Error> {
-        if p.op != REPLACE_OPEN
+        if !matches!(p.op, REPLACE_OPEN | admission::OPEN)
             || p.status != 0
             || p.count != 36
             || p.arg > 1024

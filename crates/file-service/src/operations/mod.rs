@@ -2,7 +2,7 @@
 //! Logical completed operations; storage evidence, policy and wire framing stay separate.
 mod authority;
 mod mutation;
-pub(crate) mod publication;
+mod publication;
 mod query;
 use crate::{Grant, Server};
 use rustic_abi::files::*;

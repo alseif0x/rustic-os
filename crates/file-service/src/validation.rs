@@ -12,11 +12,15 @@ pub(super) fn request(p: &Packet) -> Result<(), Error> {
         STAT | REMOVE | COMMIT | ABORT => p.count == 0 && p.arg == 0 && p.version == 0,
         LIST => p.count == 0 && p.version == 0,
         READ | BEGIN => p.count == 0,
-        REPLACE_OPEN => p.count == 36,
-        REPLACE_CHUNK => p.count != 0 && p.version == 0,
-        REPLACE_COMMIT | REPLACE_ABORT => p.count == 0 && p.arg == 0 && p.version == 0,
-        OPERATION_RETRY => p.count == 24 && p.arg == 0,
-        OPERATION_ID => p.count == 16 && p.id == 0 && p.arg == 0,
+        REPLACE_OPEN | admission::OPEN => p.count == 36,
+        REPLACE_CHUNK | admission::CHUNK => p.count != 0 && p.version == 0,
+        REPLACE_COMMIT | REPLACE_ABORT | admission::ACCEPT | admission::ABORT => {
+            p.count == 0 && p.arg == 0 && p.version == 0
+        }
+        OPERATION_RETRY | admission::RETRY => p.count == 24 && p.arg == 0,
+        OPERATION_ID | admission::GET | admission::EXECUTE | admission::CANCEL => {
+            p.count == 16 && p.id == 0 && p.arg == 0
+        }
         OPERATION_PART => p.count == 16 && p.id == 0 && matches!(p.arg, 40 | 80),
         REFERENCES => p.count == 0 && p.version == 0,
         READ_OPEN | READ_CHUNK => p.count == 30,

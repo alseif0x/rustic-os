@@ -24,6 +24,7 @@ pub const JOB_STATUS: u64 = 19;
 pub const HOLD_IO: u64 = 20;
 pub const IO_STATUS: u64 = 21;
 pub const ENABLE_OPERATIONS: u64 = 22;
+pub const ENABLE_ADMISSIONS: u64 = 23;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Deterministic native actor commands; the owner supplies no arbitrary program.
@@ -49,3 +50,4 @@ pub const FINISH: u64 = 5;
 pub const WATCH: u64 = 6;
 pub const LOST_REPLY: u64 = 7;
 pub const LOST_OPERATION: u64 = 10;
+pub const LOST_ADMISSION: u64 = 11;

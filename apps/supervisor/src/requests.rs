@@ -11,7 +11,8 @@ impl State {
             | s::RESTART
             | s::ROTATE_RECEIPTS
             | s::IO_STATUS
-            | s::ENABLE_OPERATIONS => 1,
+            | s::ENABLE_OPERATIONS
+            | s::ENABLE_ADMISSIONS => 1,
             s::PROCESS
             | s::KILL
             | s::REAP
@@ -43,6 +44,9 @@ impl State {
             s::ENABLE_OPERATIONS => {
                 self.start_admin(s::ENABLE_OPERATIONS, [41, 0, 0, 0, 0, 0, 0, 0])
             }
+            s::ENABLE_ADMISSIONS => {
+                self.start_admin(s::ENABLE_ADMISSIONS, [42, 0, 0, 0, 0, 0, 0, 0])
+            }
             s::ROTATE_RECEIPTS => self.start_admin(s::ROTATE_RECEIPTS, [36, 0, 0, 0, 0, 0, 0, 0]),
             s::SERVICES => Ok([
                 0,
@@ -72,7 +76,7 @@ impl State {
             s::REAP => self.reap(w[1]),
             s::PERMISSIONS => {
                 if w[1] == 0 {
-                    return Ok([0, 0, 7, 0, 0, 0, 0, 0]);
+                    return Ok([0, 0, 15, 0, 0, 0, 0, 0]);
                 }
                 let c = self
                     .children

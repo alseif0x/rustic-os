@@ -3,6 +3,7 @@ use rustic_abi::files::{Error, Packet};
 use rustic_fs::MAX_FILE;
 pub(super) struct Transfer {
     pub(super) client: usize,
+    admission: bool,
     pub(super) logical: Option<rustic_abi::files::operation::Replacement>,
     pub(super) retry: Option<rustic_abi::files::recovery::Retry>,
     pub(super) context: u32,
@@ -51,7 +52,11 @@ impl Transfers {
             .ok_or(Error::Busy)?;
         self.slots[slot] = Some(Transfer {
             client,
-            logical: if request.op == rustic_abi::files::REPLACE_OPEN {
+            admission: request.op == rustic_abi::files::admission::OPEN,
+            logical: if matches!(
+                request.op,
+                rustic_abi::files::REPLACE_OPEN | rustic_abi::files::admission::OPEN
+            ) {
                 Some(rustic_abi::files::operation::Replacement::decode(request)?)
             } else {
                 None
@@ -75,7 +80,13 @@ impl Transfers {
     pub(super) fn chunk(&mut self, client: usize, request: &Packet) -> Result<(), Error> {
         let index = self.index(client, request.id, request.context)?;
         let slot = self.slots[index].as_mut().unwrap();
-        if slot.logical.is_some() != (request.op == rustic_abi::files::REPLACE_CHUNK) {
+        if slot.admission != (request.op == rustic_abi::files::admission::CHUNK)
+            || slot.logical.is_some()
+                != matches!(
+                    request.op,
+                    rustic_abi::files::REPLACE_CHUNK | rustic_abi::files::admission::CHUNK
+                )
+        {
             return Err(Error::Protocol);
         }
         if request.arg as usize != slot.received
@@ -95,8 +106,13 @@ impl Transfers {
         {
             return Err(Error::Offset);
         }
-        if self.slots[index].as_ref().unwrap().logical.is_some()
-            != (request.op == rustic_abi::files::REPLACE_COMMIT)
+        let transfer = self.slots[index].as_ref().unwrap();
+        if transfer.admission != (request.op == rustic_abi::files::admission::ACCEPT)
+            || transfer.logical.is_some()
+                != matches!(
+                    request.op,
+                    rustic_abi::files::REPLACE_COMMIT | rustic_abi::files::admission::ACCEPT
+                )
         {
             return Err(Error::Protocol);
         }
@@ -105,11 +121,12 @@ impl Transfers {
     pub(super) fn logical(
         &self,
         client: usize,
+        admission: bool,
     ) -> Option<rustic_abi::files::operation::Replacement> {
         self.slots
             .iter()
             .flatten()
-            .find(|s| s.client == client)
+            .find(|s| s.client == client && s.admission == admission)
             .and_then(|s| s.logical)
     }
     pub(super) fn tracked(&self, client: usize) -> bool {

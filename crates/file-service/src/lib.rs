@@ -7,6 +7,7 @@ mod authority;
 pub use admission::Caller;
 mod clients;
 pub use clients::Clients;
+mod disk;
 mod dispatch;
 mod grants;
 mod operations;
