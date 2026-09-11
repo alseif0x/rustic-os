@@ -48,7 +48,7 @@ A2A addresses collaboration among independent agents and their tasks; it does no
 
 [Shared service contracts v1](../SERVICE-CONTRACTS.md) replaces the earlier provisional argument names and example. The canonical catalog retains capabilities.list, capabilities.describe, files.read, files.replace, operations.get, operations.cancel, events.read and system.status. It specifies bounded binary data, typed errors, current-authority/version checks, receipts, cancellation, retry epochs and lookup when the first response is lost. Generated descriptors use these same schemas.
 
-The host suite validates message shapes and correlated examples; it does not implement a backend or prove guest effects. #43 compares adapters over a stateful backend. #44 implements [native user-mode block access](../BLOCK-ACCESS.md); #12 adds files, #13 authority and #22 the complete guest mission. The native product path need not wait for the host comparison to begin storage work.
+The host suite validates message shapes and correlated examples; it does not implement a backend or prove guest effects. #43 compares adapters over a stateful backend. #44 implements [native user-mode block access](../BLOCK-ACCESS.md); #12 supplies the bounded file foundation, #13 authority and #22 the complete guest mission. #47 owns responsive bounded execution/public cancellation. Native discovery may start against implemented contracts with their shared conformance vectors; completing every external-adapter comparison is not a prerequisite. The full mission still requires its guest authority/lifecycle/event evidence.
 
 ## Expansion by product area
 

@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "observed_at": "2026-09-11",
+  "kind": "host_static_binary_inspection",
+  "inspector": "GNU readelf 2.42 on Ubuntu 24.04/WSL2",
+  "guest_execution": false,
+  "browser_executed": false,
+  "candidate": "Servo v0.5.0 Linux x86_64 servoshell",
+  "source_commit": "1d44e5dd6a8b64c02f9dbf7fcbdf4ebdd0740019",
+  "source_url": "https://github.com/servo/servo/releases/tag/v0.5.0",
+  "archive_url": "https://github.com/servo/servo/releases/download/v0.5.0/servo-x86_64-linux-gnu.tar.gz",
+  "archive_bytes": 49966475,
+  "archive_sha256": "6a3d536b07bed16d4833012162cde5285740614d5ff2855dfc36e60576779170",
+  "elf_member": "servo/servoshell",
+  "elf_bytes": 134254352,
+  "elf_sha256": "faf26238342f3db1da7550135ac18aa8c1080007d58c0ddf6ac85563573f9710",
+  "elf_class": "ELF64",
+  "machine": "x86_64",
+  "type": "ET_DYN",
+  "interpreter": "/lib64/ld-linux-x86-64.so.2",
+  "program_headers": 12,
+  "load_segments": 4,
+  "thread_local_storage_segment": true,
+  "needed_libraries": [
+    "libudev.so.1", "libgstplay-1.0.so.0", "libgstvideo-1.0.so.0",
+    "libgstbase-1.0.so.0", "libgstreamer-1.0.so.0", "libgobject-2.0.so.0",
+    "libglib-2.0.so.0", "libgstwebrtc-1.0.so.0", "libgstsdp-1.0.so.0",
+    "libgstaudio-1.0.so.0", "libgstapp-1.0.so.0", "libgstgl-1.0.so.0",
+    "libgio-2.0.so.0", "libstdc++.so.6", "libz.so.1", "libfontconfig.so.1",
+    "libgcc_s.so.1", "libm.so.6", "libc.so.6", "ld-linux-x86-64.so.2"
+  ],
+  "rustic_baseline": "79ae9091bb19dbe2a3b3c8d830ad00f36bdde548",
+  "result": "stock_linux_binary_incompatible_with_current_native_loader",
+  "limits": [
+    "Static inspection only; no engine feasibility or W1-W5 pass claimed.",
+    "Binary size is not resident memory or a minimum for a custom embedded build.",
+    "No Linux ABI or browser engine selected."
+  ]
+}

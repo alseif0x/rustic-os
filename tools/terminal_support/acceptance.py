@@ -8,6 +8,8 @@ from boot_support.image import package
 from .machine import machine, disk
 from .connection import Connection
 from .cases import exercise
+from .storage_cases import exercise as storage_exercise
+from .failure import preserve_failure
 from .authority_cases import exercise as authority_exercise
 from .takeover_cases import exercise as takeover_exercise
 from .management_cases import exercise as management_exercise
@@ -26,7 +28,7 @@ def verify(image, timeout=60, output=None):
     try:
         with tempfile.TemporaryDirectory(prefix="rustic-terminal-test-") as temporary:
             temporary = Path(temporary)
-            with disk(temporary / "data.raw", True) as data:
+            with disk(temporary / "data.raw", True) as data, preserve_failure(data, output, "terminal", metadata):
                 for phase, boot in enumerate((image, mount), 1):
                     sock = temporary / f"uart-{phase}.sock"
                     transcript, log = output / f"serial-{phase}.log", output / f"qemu-{phase}.log"
@@ -38,6 +40,7 @@ def verify(image, timeout=60, output=None):
                             uart.until()
                             if phase == 1:
                                 cases = exercise(uart)
+                                storage = storage_exercise(uart, data)
                                 authority = authority_exercise(uart, data)
                                 takeover = takeover_exercise(uart, data)
                                 management = management_exercise(uart,data)
@@ -58,7 +61,7 @@ def verify(image, timeout=60, output=None):
                 allocation = data.stat().st_blocks * 512
         (output / "files.bin").write_bytes(selected)
         evidence = {"verified":True,"boots":2,"commands_phase_one":cases,"oracle":oracle,"allocated_bytes":allocation,
-                    "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"authority":authority,"takeover":takeover,"management":management,"read_contract":read_contract}
+                    "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"authority":authority,"takeover":takeover,"management":management,"read_contract":read_contract,"storage":storage}
         (output / "terminal.json").write_text(json.dumps(evidence,indent=2)+"\n")
         result = {"outcome":"success","returncode":33,"timed_out":False,"elapsed_seconds":round(time.monotonic()-started,3),
                   "build_id":metadata["build_id"],"image_sha256":metadata["image_sha256"],"terminal":evidence}

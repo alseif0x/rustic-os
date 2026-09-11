@@ -48,6 +48,8 @@ Start with the [project overview](../README.md) for current capabilities and the
 - [Shared service contracts](SERVICE-CONTRACTS.md): eight specified operations, executable schema/examples and generated descriptors; [ADR-0003](architecture/ADR-0003-service-contracts.md) explains the decision and [16 scenarios](architecture/service-contract-cases.md) assign future stateful/guest conformance.
 - [Agent integration proposal](architecture/agent-integration.md): service APIs, tools, MCP and proposed experiments.
 - [Systems roadmap and research agenda](architecture/systems-roadmap.md): stage gates, architectural gaps and bounded experiments for human/agent workflows.
+- [H1 file acceptance](FILE-FOUNDATION-ACCEPTANCE.md): original storage criteria, native/host evidence and the separate H2 lifecycle scope.
+- [Early browser feasibility](architecture/browser-feasibility.md): candidate investigation, runtime gaps and bounded experiment gates.
 - [Operation-boundary experiment](architecture/operation-model.md): finite host model of edit/revocation races and retry after a crash; not guest implementation evidence.
 - [ADR template](architecture/ADR-template.md): record a new architecture decision.
 - [Living implementation plan](https://github.com/alseif0x/rustic-os/issues/1): dependencies, milestones and completion evidence. Historical issue discussions may be in Spanish.

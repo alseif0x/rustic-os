@@ -99,12 +99,4 @@ def exercise(uart):
     child = pid(uart, "run read hello")
     exited(uart, child, 1, 0)
     uart.command(f"reap {child}", "code=0")
-    # Four roots plus the policy/hello records leave 26 free object slots.
-    for index in range(26):
-        uart.command(f"touch quota-{index}")
-    uart.command("touch overflow", "Full")
-    uart.command("cat hello", "Hello from native Rust")
-    for index in range(26):
-        uart.command(f"rm quota-{index}")
-    uart.command("cat hello/..", "NotDirectory")
     return uart.commands
