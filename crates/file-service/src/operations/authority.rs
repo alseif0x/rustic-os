@@ -2,7 +2,7 @@
 use crate::{Grant, Server, reply};
 use rustic_abi::files::{Error, INSPECT_RIGHT, operation::Replacement};
 impl Grant {
-    pub(super) fn operation_inspect(
+    pub(crate) fn operation_inspect(
         &self,
         volume: &rustic_fs::Volume,
         workspace: u32,

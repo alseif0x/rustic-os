@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Native durable storage acceptance, without exposing a service endpoint.
+mod control;
+mod disk;
 mod pending;
 mod terminal;
 use crate::volume_disk::Disk;

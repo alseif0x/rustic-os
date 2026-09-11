@@ -15,6 +15,7 @@ pub struct Publication<'a, D, T: Copy> {
     next: Option<Metadata>,
     data: [u8; MAX_FILE],
     first_sector: u64,
+    data_steps: usize,
     step: usize,
     phase: PublicationPhase,
     result: T,
@@ -42,12 +43,27 @@ impl<'a, D, T: Copy> Publication<'a, D, T> {
             next: Some(next),
             data,
             first_sector,
+            data_steps: 3,
             step: 0,
             phase: PublicationPhase::Preparing,
             result,
             pending: false,
             stopping: false,
         }
+    }
+
+    /// Metadata-only transitions share the same encoder, fence and settlement
+    /// rules as file publication, without writing a speculative data extent.
+    pub(crate) fn metadata(
+        volume: &'a mut Volume,
+        disk: &'a mut D,
+        mut next: Metadata,
+        result: T,
+    ) -> Result<Self, Error> {
+        next.sequence = volume.sequence().checked_add(1).ok_or(Error::Exhausted)?;
+        let mut write = Self::new(volume, disk, next, 0, &[], result);
+        write.data_steps = 0;
+        Ok(write)
     }
 
     pub(crate) fn replayed(volume: &'a mut Volume, disk: &'a mut D, result: T) -> Self {
@@ -57,6 +73,7 @@ impl<'a, D, T: Copy> Publication<'a, D, T> {
             next: None,
             data: [0; MAX_FILE],
             first_sector: 0,
+            data_steps: 0,
             step: 0,
             phase: PublicationPhase::Committed,
             result,
@@ -91,19 +108,24 @@ impl<'a, D, T: Copy> Publication<'a, D, T> {
             _ => (),
         }
         let next = self.next.as_ref().unwrap();
-        let total = 3 + next.write_steps();
+        let total = self.data_steps + next.write_steps();
         let before = if self.step >= total - 2 {
             PublicationPhase::Settling
         } else {
             self.phase
         };
-        let command = match self.step {
-            index @ 0..=1 => Command::Write(
-                self.first_sector + index as u64,
-                self.data.as_chunks::<512>().0[index],
-            ),
-            2 => Command::Flush,
-            index => next.command(1 - self.volume.bank, index - 3).unwrap(),
+        let command = if self.step >= self.data_steps {
+            next.command(1 - self.volume.bank, self.step - self.data_steps)
+                .unwrap()
+        } else {
+            match self.step {
+                index @ 0..=1 => Command::Write(
+                    self.first_sector + index as u64,
+                    self.data.as_chunks::<512>().0[index],
+                ),
+                2 => Command::Flush,
+                _ => unreachable!(),
+            }
         };
         // Fence adapter unwind before crossing the I/O boundary. The header is
         // already too late while its completion is pending, not just after success.

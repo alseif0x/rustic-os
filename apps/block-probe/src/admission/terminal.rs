@@ -1,52 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
-use super::{content, open, request};
+use super::{content, control, open, request};
 use crate::volume_disk::Disk;
-use rustic_fs::{
-    AdmissionState as State, Error, PublicationCancel as Cancel, PublicationPhase as Phase, Volume,
-};
+use rustic_file_service::Server;
+use rustic_fs::{AdmissionState as State, Error, PublicationPhase as Phase, Volume};
 
 #[inline(never)]
 pub(super) fn verify(disk: &mut Disk<'_>, phase: u64) {
-    let mut v = open(disk, phase);
+    let mut s = Server::new(open(disk, phase));
     if phase == 1 {
-        seed(&mut v, disk);
+        control::seed(&mut s, disk);
     }
-    check(&mut v, disk);
-}
-
-// Separate setup and replay buffers on the native 64 KiB stack. The second VM
-// performs the actual remount; replay must not retain a second volume here.
-#[inline(never)]
-fn seed(v: &mut Volume, disk: &mut Disk<'_>) {
-    let a = v
-        .admit_replace(disk, 9, 0, request(v, 51), b"cancelled bytes")
-        .unwrap();
-    {
-        let mut write = v.prepare_admitted(disk, 9, a.id).unwrap();
-        for _ in 0..15 {
-            write.advance().unwrap();
-        }
-        assert_eq!(write.cancel(), Ok(Cancel::Cancelled));
+    let caller = control::grant(&mut s, false);
+    for key in [51, 52] {
+        let old = s
+            .volume
+            .admission_by_retry(9, 4, request(&s.volume, key).retry)
+            .unwrap()
+            .status;
+        assert_eq!(s.admission_status(caller, old.id, 1).unwrap(), old);
     }
-    assert_eq!(
-        v.admission_by_id(9, a.id).unwrap().status.state,
-        State::Admitted
-    );
-    assert_eq!(
-        v.cancel_admission(disk, 9, a.id).unwrap().state,
-        State::Cancelled
-    );
-    content(v, disk, b"before");
-    let b = v
-        .admit_replace(disk, 9, a.id.number, request(v, 52), b"after")
-        .unwrap();
-    let mut write = v.prepare_admitted(disk, 9, b.id).unwrap();
-    for _ in 0..16 {
-        write.advance().unwrap();
-    }
-    assert_eq!(write.cancel(), Ok(Cancel::TooLate));
-    assert_eq!(write.advance(), Ok(Phase::Committed));
-    assert!(write.result().unwrap().committed > b.id.number);
+    check(&mut s.volume, disk);
 }
 
 #[inline(never)]

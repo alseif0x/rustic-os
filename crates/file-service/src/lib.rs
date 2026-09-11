@@ -2,7 +2,9 @@
 //! File policy and transfer state shared by native server and portable adversarial tests.
 #![no_std]
 #![forbid(unsafe_code)]
+mod admission;
 mod authority;
+pub use admission::Caller;
 mod clients;
 pub use clients::Clients;
 mod dispatch;

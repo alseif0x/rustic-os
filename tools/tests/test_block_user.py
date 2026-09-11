@@ -20,7 +20,7 @@ def marker(phase):
         line += (f"\nRUSTIC PUBLICATION verified=1 phase={'write' if phase == 'write' else 'replay'} "
                  f"cancelled={16 if phase == 'write' else 0} too_late=1 committed=1")
         line += (f"\nRUSTIC ADMISSION verified=1 phase={'write' if phase == 'write' else 'replay'} "
-                 "admitted=1 cancelled=1 committed=1 replay_writes=0")
+                 "admitted=1 cancelled=1 committed=1 replay_writes=0 service_control=1 fresh_authority=1")
     return line
 
 
@@ -36,7 +36,10 @@ class BlockUserEvidence(unittest.TestCase):
                     good.replace("cancelled=16", "cancelled=15"), good.replace("too_late=1", "too_late=0"),
                     good.replace("committed=1", "committed=0"), good.replace("RUSTIC PUBLICATION ", "MISSING "),
                     good.replace("admitted=1", "admitted=0"), good.replace("replay_writes=0", "replay_writes=1"),
-                    good.replace("RUSTIC ADMISSION ", "MISSING ")]:
+                    good.replace("RUSTIC ADMISSION ", "MISSING "),
+                    good.replace("service_control=1", "service_control=0"),
+                    good.replace("fresh_authority=1", "fresh_authority=0"),
+                    good.replace(" service_control=1", ""), good.replace(" fresh_authority=1", "")]:
             self.assertFalse(verified("block-user", bad, records))
 
     def test_fault_evidence_cannot_omit_denials_or_lifecycle_cases(self):

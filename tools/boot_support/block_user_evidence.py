@@ -29,7 +29,8 @@ def verified(mode, serial, records):
             if [value["phase"] for value in admissions] != ["write", "replay"]:
                 return False
             for value in admissions:
-                expected = {"verified": 1, "admitted": 1, "cancelled": 1, "committed": 1, "replay_writes": 0}
+                expected = {"verified": 1, "admitted": 1, "cancelled": 1, "committed": 1, "replay_writes": 0,
+                            "service_control": 1, "fresh_authority": 1}
                 if any(int(value.get(key, -1)) != number for key, number in expected.items()):
                     return False
         elif publications or admissions:

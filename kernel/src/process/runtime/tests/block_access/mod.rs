@@ -38,7 +38,7 @@ pub(crate) fn verify(memory: &mut Memory, mode: BootMode) {
             if value == 1 { "write" } else { "replay" }
         )
         .unwrap();
-        writeln!(serial, "RUSTIC ADMISSION verified=1 phase={} admitted=1 cancelled=1 committed=1 replay_writes=0", if value == 1 { "write" } else { "replay" }).unwrap();
+        writeln!(serial, "RUSTIC ADMISSION verified=1 phase={} admitted=1 cancelled=1 committed=1 replay_writes=0 service_control=1 fresh_authority=1", if value == 1 { "write" } else { "replay" }).unwrap();
         serial.flush();
         if value == 1 { "write" } else { "read" }
     } else {
