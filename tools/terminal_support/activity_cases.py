@@ -102,6 +102,7 @@ def verify(session, owned_disk, temporary, image, mount):
                 raise AssertionError("independent disk contradicts the reported file effect")
             cases.append(dict(case="public_activity_" + name, verified=True, skip=skip, rights=rights,
                               denied=denial, committed=committed, status_during_io=True, reboot_verified=True,
+                              observations=[before, after], durable=final,
                               sha256=observed["selected_sha256"]))
     base, admitted, node = fault_base
     with owned_disk(temporary / "activity-fault.raw", True, evidence_name="activity-fault") as data:
@@ -129,5 +130,6 @@ def verify(session, owned_disk, temporary, image, mount):
         if observed["nodes"][node["id"]]["content"] != b"before":
             raise AssertionError("failed drain changed the file")
         cases.append(dict(case="public_activity_failed_drain", verified=True, uncertain=True,
-                          reboot_verified=True, sha256=observed["selected_sha256"]))
+                          stopped=True, durable=admitted, reboot_verified=True,
+                          sha256=observed["selected_sha256"]))
     return cases

@@ -41,6 +41,27 @@ Both staging slots may already be retained by other clients when storage is borr
 
 Saturating those queues therefore blocks only the client that caused it. It does not extend authority, reorder settlement or turn a volatile stop acknowledgement into durable prevention.
 
+## Service-v1 correspondence
+
+The native live-control profile is not a service-v1 implementation, but its facts must map onto the reviewed `operation` type without lying. The declared correspondence is checked by `python -m tools.contracts activity-check` and, against recorded native evidence, `activity-native --evidence RECOVERY_JSON`:
+
+| Native fact | service-v1 operation |
+| --- | --- |
+| Activity `running` | `running`, effect `none` |
+| Activity `stopping` (stop accepted) | `running`, effect `none`, `cancel_requested` true |
+| Activity `settling` | `reconciling`, effect `unknown` |
+| Retained `Admitted` | `queued`, effect `none` |
+| Retained `Cancelled` | `cancelled`, effect `none` |
+| Retained `Committed` | `succeeded`, effect `committed`, with the receipt from the completed-operation API |
+| `Uncertain` execution result | `reconciling`, effect `unknown`, whatever the record currently says |
+| Refused live request (`Denied`, `Revoked`, `Expired`) | error `access_denied` |
+| Hidden identity or scope (`OutcomeUnknown`) | error `outcome_unknown`, effect `unknown` |
+| No active execution (`Unavailable`) | error `unavailable`, effect `none` |
+
+An accepted stop is a request, so it never maps to `cancelled`; a settling publication never maps to a rollback; and `Unavailable`/`OutcomeUnknown` keep a retained identity hidden by reporting the caller's own knowledge state rather than whether the work exists.
+
+One divergence is recorded rather than hidden: pre-terminal work is identified by its admission (`ad_*`) and a committed result by its completed operation (`op_*`), so the native profile does not yet provide a single stable `operation_id` across the lifecycle. An adapter must relate the two. Closing that gap, live discovery and events belong to #47/#22/#43.
+
 ## Wire and compatibility
 
 ABI version 1 adds opcode 56 (`ACTIVITY`) and 57 (`REQUEST_CANCEL`). Requests use the existing admission-ID framing. Responses are one 64-byte packet: `id=0`, `version=admission number`, `count=24`, payload `lineage[16]` and `instance:u64`; the remaining 16 bytes are zero. `arg` low bits are 1/2/3 for running/stopping/settling, bit 8 is cancellation requested and bit 9 is pending I/O. All other bits/fields are checked. These packets cannot decode as durable admission status. A missing/malformed stop response is `Uncertain`; the SDK does not automatically replay it.
@@ -61,6 +82,9 @@ Run the configured checks in [DEVELOPMENT.md](DEVELOPMENT.md), including:
 cargo xtask check
 python3 -m unittest discover -s tools/tests -v
 python3 tools/boot.py run --mode recovery-test --timeout 60
+.cache/contracts-venv/bin/python -m tools.contracts activity-check
+.cache/contracts-venv/bin/python -m tools.contracts activity-native \
+  --evidence artifacts/boot/recovery-test/recovery.json
 ```
 
 The expanded native recovery inventory is 30 groups/60 VM boots, including six live-control groups and one saturated-execution group. Results are accepted only with the run's actual kernel/build identifiers, transcripts and independent disk observations. The implementing agent reviews ownership, visibility, dependency direction and the native/host distinction; this is not an independent security audit. Publication and CI evidence are recorded in #47.

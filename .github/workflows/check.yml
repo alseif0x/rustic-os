@@ -36,6 +36,7 @@ jobs:
           .cache/contracts-venv/bin/python -m tools.contracts check --output artifacts/service-contracts.json
           .cache/contracts-venv/bin/python -m tools.contracts read-check --output artifacts/read-host-conformance.json
           .cache/contracts-venv/bin/python -m tools.contracts operations-check --output artifacts/operations-host-conformance.json
+          .cache/contracts-venv/bin/python -m tools.contracts activity-check --output artifacts/activity-host-correspondence.json
           .cache/contracts-venv/bin/python -m unittest discover -s tools/contracts/tests -v 2>&1 | tee artifacts/service-contract-tests.log
           .cache/contracts-venv/bin/python -m tools.contracts export --output artifacts/service-descriptors.json
       - name: Preserve evidence
@@ -113,6 +114,7 @@ jobs:
           .cache/contracts-venv/bin/python -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: -r tools/contracts/requirements.txt
           .cache/contracts-venv/bin/python -m tools.contracts read-native --evidence artifacts/boot/terminal-test/terminal.json --output artifacts/boot/terminal-test/read-conformance.json
           .cache/contracts-venv/bin/python -m tools.contracts operations-native --evidence artifacts/boot/recovery-test/recovery.json --output artifacts/boot/recovery-test/operation-conformance.json
+          .cache/contracts-venv/bin/python -m tools.contracts activity-native --evidence artifacts/boot/recovery-test/recovery.json --output artifacts/boot/recovery-test/activity-correspondence.json
       - name: Preserve boot evidence and images
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

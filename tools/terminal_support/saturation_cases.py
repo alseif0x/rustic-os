@@ -79,4 +79,6 @@ def verify(session, owned_disk, temporary, image, mount):
             raise AssertionError("independent disk contradicts the reported file effect")
     return [dict(case="public_activity_saturated", verified=True, staging_full=True,
                  undrained_client=True, owner_progress=True, stopped=True,
-                 committed=False, reboot_verified=True, sha256=observed["selected_sha256"])]
+                 committed=False, reboot_verified=True,
+                 observations=[running, requested, stopping], durable=final,
+                 sha256=observed["selected_sha256"])]
