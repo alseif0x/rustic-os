@@ -13,8 +13,16 @@ pub fn run(files: &mut Client, w: [u64; 8]) -> [u64; 8] {
         lineage[..8].copy_from_slice(&w[1].to_le_bytes());
         lineage[8..].copy_from_slice(&w[2].to_le_bytes());
         let id = a::AdmissionId::new(lineage, w[3])?;
-        if w[4] == a::EXECUTE as u64 {
-            let result = files.admission_execute(id)?;
+        if w[5] == actor::flags::DISCARD_REPLY {
+            // Readiness is not a decoded result; the owner reconciles separately.
+            return super::live::discard_admission_reply(files, id, w[4] as u8).map(|()| [0; 8]);
+        }
+        if w[4] == a::EXECUTE as u64 || w[4] == a::GET as u64 {
+            let result = if w[4] == a::GET as u64 {
+                files.admission_get(id)?
+            } else {
+                files.admission_execute(id)?
+            };
             return Ok([
                 0,
                 match result.state {
@@ -29,10 +37,6 @@ pub fn run(files: &mut Client, w: [u64; 8]) -> [u64; 8] {
                 0,
                 0,
             ]);
-        }
-        if w[5] == actor::flags::DISCARD_REPLY {
-            // The service must settle its accepted stop without this client.
-            return super::live::discard_admission_reply(files, id, w[4] as u8).map(|()| [0; 8]);
         }
         let result = if w[4] == a::SCHEDULE as u64 {
             files.admission_schedule(id)?

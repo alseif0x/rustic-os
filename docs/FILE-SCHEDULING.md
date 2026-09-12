@@ -151,7 +151,9 @@ duplicate groups, invalid identities/flags, premature cancellation, mismatched
 receipts and claimed automatic replay. Raw serial logs are retained; parsing strips
 only the exact complete diagnostic frame that can interleave a shell response.
 
-The old late-stop/device-failure cases remain regression coverage of the shared
-controller. They do not establish the complete scheduled response-loss/restart
-matrix or all mixed queue/transport pressure combinations. Those and the logical
-lifecycle profile remain explicit #47 acceptance before closure.
+The subsequent [scheduled failure increment](FILE-SCHEDULING-FAILURES.md) adds nine
+native groups for late stops, unread cancellation/result replies, actual service
+restart, selected pre/post-publication EIO and combined queue/staging/reply pressure.
+The current combined inventory is 44 groups/88 boots; the counts above describe
+the original scheduling delivery. The logical lifecycle/profile, separate native
+human-edit case and complete scheduled denial matrix remain #47 acceptance.

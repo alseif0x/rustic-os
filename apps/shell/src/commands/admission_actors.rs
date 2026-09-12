@@ -27,6 +27,8 @@ pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Erro
             "execute" => (a::EXECUTE, 0),
             "schedule" => (a::SCHEDULE, 0),
             "lost-schedule" => (a::SCHEDULE, s::actor::flags::DISCARD_REPLY),
+            "get" => (a::GET, 0),
+            "lost-result" => (a::GET, s::actor::flags::DISCARD_REPLY),
             "activity" => (a::ACTIVITY, 0),
             "request-cancel" => (a::REQUEST_CANCEL, 0),
             "lost-stop" => (a::REQUEST_CANCEL, s::actor::flags::DISCARD_REPLY),

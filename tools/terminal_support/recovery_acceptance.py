@@ -57,6 +57,8 @@ def verify(image, timeout=60, output=None):
     try:
         with tempfile.TemporaryDirectory(prefix="rustic-recovery-test-") as temporary:
             temporary = Path(temporary)
+            from .scheduled_failures import verify as verify_scheduled_failures
+            cases.extend(verify_scheduled_failures(session, owned_disk, temporary, image, mount))
             from .scheduling_cases import verify as verify_scheduling
             cases.extend(verify_scheduling(session, owned_disk, temporary, image, mount))
             with owned_disk(temporary / "data.raw", True, evidence_name="reboot") as data:

@@ -39,14 +39,14 @@ impl State {
     }
     pub(super) fn admission_actor(&mut self, w: [u64; 8]) -> Result<[u64; 8], u64> {
         use rustic_sdk::abi::files::admission as a;
-        // Scheduling/stop may be submitted without reading the reply; the discarded
+        // Scheduling/stop/result may be submitted without reading the reply; the discarded
         // acknowledgement is a fault fixture, never an additional authority.
         let discard = w[6];
         if w[7] != 0
             || discard > s::actor::flags::DISCARD_REPLY
             || (discard != 0
-                && !matches!(w[5], x if x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64))
-            || !matches!(w[5], x if x == a::EXECUTE as u64 || x == a::ACTIVITY as u64 || x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64)
+                && !matches!(w[5], x if x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64))
+            || !matches!(w[5], x if x == a::EXECUTE as u64 || x == a::ACTIVITY as u64 || x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64)
         {
             return Err(1);
         }

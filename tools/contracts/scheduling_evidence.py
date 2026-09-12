@@ -16,7 +16,8 @@ OBSERVATIONS = (
 
 
 def check_scheduling(catalog, cases):
-    found = [c for c in cases if isinstance(c, dict) and str(c.get("case", "")).startswith("scheduled_")]
+    found = [c for c in cases if isinstance(c, dict) and str(c.get("case", "")).startswith("scheduled_")
+             and not str(c["case"]).startswith("scheduled_failure_")]
     require(len(found) == len(NAMES) and {c["case"] for c in found} == set(NAMES),
             "missing, duplicate or unknown scheduling case")
     for name, states, expected in zip(NAMES, STATES, OBSERVATIONS):
