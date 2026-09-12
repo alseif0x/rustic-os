@@ -57,7 +57,9 @@ class OperationConformance(unittest.TestCase):
                                "uncertain":True,"reboot_verified":True,"sha256":"b"*64})
         value["cases"].append({"case":"public_activity_saturated","verified":True,"staging_full":True,
                                "undrained_client":True,"owner_progress":True,"stopped":True,
-                               "committed":False,"reboot_verified":True,"sha256":"b"*64})
+                               "committed":False,"reboot_verified":True,"sha256":"b"*64,
+                               "discovery":{"files.read":"available","files.replace":"available",
+                                            "operations.get":"available"}})
         value["cases"].append({"case":"public_activity_lost_stop","verified":True,"discarded_reply":True,
                                "stopped":True,"stale_reply_rejected":True,"committed":False,
                                "reboot_verified":True,"sha256":"b"*64})
@@ -96,7 +98,8 @@ class OperationConformance(unittest.TestCase):
                               ("stopped", False), ("committed", True)]
             elif good["cases"][index]["case"].endswith("saturated"):
                 mutations += [("staging_full", False), ("undrained_client", False),
-                              ("owner_progress", False), ("stopped", False), ("committed", True)]
+                              ("owner_progress", False), ("stopped", False), ("committed", True),
+                              ("discovery", {"files.read": "available"})]
             else:
                 case = good["cases"][index]
                 mutations += [("status_during_io", False), ("skip", 99), ("rights", 15),

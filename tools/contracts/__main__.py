@@ -32,17 +32,21 @@ def check(catalog):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("check", "export", "read-check", "read-native", "operations-check", "operations-native", "activity-check", "activity-native"))
+    parser.add_argument("command", choices=("check", "export", "read-check", "read-native", "operations-check", "operations-native", "activity-check", "activity-native", "capabilities-check", "capabilities-native"))
     parser.add_argument("--output", type=Path)
     parser.add_argument("--evidence", type=Path, help="terminal.json from the native read fixture")
     args = parser.parse_args()
-    if (args.command in ("read-native", "operations-native", "activity-native")) != (args.evidence is not None):
+    if (args.command in ("read-native", "operations-native", "activity-native", "capabilities-native")) != (args.evidence is not None):
         parser.error("--evidence is required only for native evidence commands")
     catalog = Catalog()
     if args.command == "check":
         result = check(catalog)
     elif args.command == "export":
         result = catalog.descriptors()
+    elif args.command in ("capabilities-check", "capabilities-native"):
+        from .capabilities_conformance import host_check, native_check
+        from .read_conformance import load_native
+        result = host_check(catalog) if args.command == "capabilities-check" else native_check(catalog, load_native(args.evidence))
     elif args.command in ("activity-check", "activity-native"):
         from .activity_conformance import host_check, native_check
         from .read_conformance import load_native

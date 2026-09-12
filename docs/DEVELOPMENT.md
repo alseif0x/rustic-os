@@ -135,6 +135,8 @@ python3 tools/boot.py run --mode recovery-test --timeout 60
 .cache/contracts-venv/bin/python -m tools.contracts operations-native \
   --evidence artifacts/boot/recovery-test/recovery.json --output artifacts/operations-native.json
 .cache/contracts-venv/bin/python -m tools.contracts activity-check --output artifacts/activity-host.json
+.cache/contracts-venv/bin/python -m tools.contracts capabilities-check --output artifacts/capabilities-host.json
+.cache/contracts-venv/bin/python -m tools.contracts capabilities-native \n  --evidence artifacts/boot/terminal-test/terminal.json --output artifacts/capabilities-native.json
 .cache/contracts-venv/bin/python -m tools.contracts activity-native \
   --evidence artifacts/boot/recovery-test/recovery.json --output artifacts/activity-native.json
 ```

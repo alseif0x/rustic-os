@@ -36,6 +36,12 @@ def check_activity(cases):
                         ("staging_full", "undrained_client", "owner_progress", "stopped"))
                     and case.get("committed") is False,
                     "saturated execution lacks owner progress or durable prevention")
+            # Discovery on that scoped volume must report the methods it implements.
+            discovery = case.get("discovery") or {}
+            require(discovery.get("files.replace") == "available"
+                    and discovery.get("operations.get") == "available"
+                    and discovery.get("files.read") == "available",
+                    "discovery denied methods this volume implements")
             continue
         skip, rights, denied, committed = expected[name]
         require(all(type(case.get(field)) is int and case[field] == value

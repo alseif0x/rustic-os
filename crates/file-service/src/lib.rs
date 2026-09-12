@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 mod admission;
 mod authority;
+mod capabilities;
 pub use admission::{ActiveExecution, Caller};
 mod clients;
 pub use clients::Clients;

@@ -31,6 +31,7 @@ pub(super) fn request(p: &Packet) -> Result<(), Error> {
         TRACK_BEGIN => p.count == 32,
         RECEIPT => p.count == 32 && p.arg == 0 && p.version == 0,
         CHUNK => p.count != 0 && p.version == 0,
+        CAPABILITIES => p.count == 0 && p.id == 0 && p.arg == 0 && p.version == 0,
         _ => false,
     };
     if valid { Ok(()) } else { Err(Error::Protocol) }

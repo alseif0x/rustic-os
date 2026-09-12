@@ -4,6 +4,7 @@ from .cases import pid, counters
 from .authority_cases import actor, actor_result, cleanup
 from .admission_cases import status, check
 from .activity_cases import activity, held
+from .discovery_cases import capabilities, check as check_discovery
 from .operation_cases import references
 from .recovery_cases import stat
 from .oracle import snapshot
@@ -17,6 +18,8 @@ def verify(session, owned_disk, temporary, image, mount):
             ws, resource = references(uart, ".", "hello")
             uart.command("enable-operations", "persistent format v3")
             uart.command("enable-admissions", "persistent format v4")
+            # Discovery follows the volume it has actually mounted.
+            discovery = check_discovery(capabilities(uart), True)
             admitted = status(uart.command(f'admit-ref {ws} {resource} v_{node["version"]:016x} e_0000000000000001 k_000000000000004e "after"'))
             baseline = counters(uart)
             executor = pid(uart, "admission-session hello other 7")
@@ -81,4 +84,5 @@ def verify(session, owned_disk, temporary, image, mount):
                  undrained_client=True, owner_progress=True, stopped=True,
                  committed=False, reboot_verified=True,
                  observations=[running, requested, stopping], durable=final,
+                 discovery=discovery,
                  sha256=observed["selected_sha256"])]

@@ -50,6 +50,15 @@ impl Server {
             crate::validation::request(&request)?;
             let grant = self.grant_at(slot).ok_or(Error::Denied)?;
             grant.check(peer, request.context, now)?;
+            if request.op == CAPABILITIES {
+                // Discovery reports implementation status only. It needs a live
+                // grant but no particular right, and reveals no object or content.
+                response = self
+                    .capabilities()
+                    .packet(request.context)
+                    .map_err(|_| Error::Protocol)?;
+                return Ok(());
+            }
             if admission::live(request.op) {
                 let right = if request.op == admission::REQUEST_CANCEL {
                     CANCEL_RIGHT

@@ -2,6 +2,7 @@
 //! Native file client. No path authority is inferred from strings or manifests.
 mod admissions;
 mod client;
+mod discovery;
 mod operations;
 mod range;
 mod recovery;
@@ -14,4 +15,4 @@ mod paths;
 pub use client::Client;
 pub use metadata::Metadata;
 pub use rustic_abi::files::{Error, Packet};
-pub use rustic_abi::files::{admission, operation, read, reference};
+pub use rustic_abi::files::{admission, capabilities, operation, read, reference};
