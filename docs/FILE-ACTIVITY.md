@@ -50,7 +50,7 @@ The native live-control profile is not a service-v1 implementation, but its fact
 | Activity `running` | `running`, effect `none` |
 | Activity `stopping` (stop accepted) | `running`, effect `none`, `cancel_requested` true |
 | Activity `settling` | `reconciling`, effect `unknown` |
-| Retained `Admitted` | `queued`, effect `none` |
+| Retained `Admitted` | Prepared native work; no scheduled service-v1 state is claimed |
 | Retained `Cancelled` | `cancelled`, effect `none` |
 | Retained `Committed` | `succeeded`, effect `committed`, with the receipt from the completed-operation API |
 | `Uncertain` execution result | `reconciling`, effect `unknown`, whatever the record currently says |
@@ -60,7 +60,9 @@ The native live-control profile is not a service-v1 implementation, but its fact
 
 An accepted stop is a request, so it never maps to `cancelled`; a settling publication never maps to a rollback; and `Unavailable`/`OutcomeUnknown` keep a retained identity hidden by reporting the caller's own knowledge state rather than whether the work exists.
 
-One divergence is recorded rather than hidden: pre-terminal work is identified by its admission (`ad_*`) and a committed result by its completed operation (`op_*`), so the native profile does not yet provide a single stable `operation_id` across the lifecycle. An adapter must relate the two. Closing that gap, live discovery and events belong to #47/#22/#43.
+Preparation does not establish scheduling: the native record retains arguments but does not arrange execution. The checker refuses to turn that fact into `queued`. An uncertain attempt may still map to `reconciling` while its durable admission remains prepared. Successful cases must include their own completed-operation receipt with matching operation and originating instance; a receipt from another test is insufficient. Native identity syntax, integer/flag types, monotonic live phases, unique verified case identities and refusal recovery advice are checked before accepting the correspondence.
+
+One divergence is recorded rather than hidden: pre-terminal work is identified by its admission (`ad_*`) and a committed result by its completed operation (`op_*`), so the native profile does not yet provide a single stable `operation_id` across the lifecycle. An adapter must relate the two. Closing that gap, live discovery and events belong to #47/#22/#43. The [continuation review](H2-CONTINUATION-REVIEW.md) separates implemented tests from the remaining lifecycle work.
 
 ## Wire and compatibility
 

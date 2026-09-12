@@ -45,7 +45,8 @@ impl Capabilities {
     }
 
     pub fn decode(p: &Packet) -> Result<Self, Error> {
-        if p.status != 0
+        if p.op != super::CAPABILITIES
+            || p.status != 0
             || p.id != 0
             || p.count != METHODS as u8
             || p.version != u64::from(crate::services::VERSION)

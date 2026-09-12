@@ -67,8 +67,12 @@ grants it.
 reported entry must be a valid reviewed `capability`, the catalog identity and
 order must be intact, the bounds must match the enforced profile, the claim for
 `files.replace`/`operations.get` must match the volume support the same shell
-observed, the manual and deterministic answers must have been compared, and a
-method that the run never exercised may not be advertised as implemented.
+observed, and the manual and deterministic answers must have been compared. The
+checker validates the complete native read exchanges and image identity instead
+of treating a nonempty evidence object as proof. Operation format support is a
+separate unused-key probe, not proof that a replacement executed; scoped
+replacement execution is covered by the recovery mission. Unexpected probe
+errors fail validation rather than being interpreted as support.
 
 This is not an implementation of `capabilities.list`: that output also requires
 a service instance for the answering incarnation, which the guest does not yet
@@ -90,9 +94,15 @@ python3 tools/terminal_test.py
 ```
 
 The terminal suite queries discovery on a volume without scoped operations and
-cross-checks the claim against `retry-key`, then repeats it after reboot and
+cross-checks the claim against a scoped `operation` lookup, then repeats it after reboot and
 requires an identical answer. The recovery suite's saturated-execution group
 queries the same call on a format-4 volume, where `files.replace` and
 `operations.get` must be reported available. Host tests cover the volume
 transition, a client with an unrelated right, revoked clients and malformed
 requests and replies.
+
+Adding an instance and reviewed digests is necessary but does not by itself
+complete the logical discovery methods. Their pagination, visibility, method
+profiles and schema-bound descriptors still need native implementation and
+conformance. The bootstrap support vector above remains a separate API; see the
+[continuation review](H2-CONTINUATION-REVIEW.md).

@@ -71,12 +71,23 @@ def exercise(uart):
     workspace = references(uart, ".", "hello")[0]
     # An unused key always fails; only the reason distinguishes the formats.
     lookup = uart.command(f"operation {workspace} e_0000000000000001 k_0000000000000001", "error:")
-    supported = "Unsupported" not in lookup
+    supported = operation_support(lookup)
     report = check(capabilities(uart), supported)
     return {"verified": True, "operations_enabled": supported,
             "deterministic_client_agrees": parity(uart, report),
             "availability": {method: report[method] for method in METHODS},
             "bounds": report["bounds"]}
+
+
+def operation_support(text):
+    """Only the specified unused-key refusals discriminate mounted formats."""
+    errors = [line for line in text.replace("\r\n", "\n").splitlines()
+              if line.startswith("error:")]
+    if errors == ["error: Unsupported"]:
+        return False
+    if errors in (["error: OutcomeUnknown"], ["error: ExpiredEpoch"]):
+        return True
+    raise AssertionError("lookup did not establish mounted operation support")
 
 
 def after_reboot(uart, before):

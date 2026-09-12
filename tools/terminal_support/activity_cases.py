@@ -5,7 +5,7 @@ import time
 from .cases import pid, counters
 from .authority_cases import actor_result, cleanup
 from .admission_cases import status, check
-from .operation_cases import references
+from .operation_cases import references, operation
 from .recovery_cases import stat
 from .oracle import snapshot
 
@@ -87,6 +87,8 @@ def verify(session, owned_disk, temporary, image, mount):
                 check(data, final, b"after", node["id"])
                 if final["state"] != ("committed" if committed else "cancelled"):
                     raise AssertionError("durable outcome differs from live control")
+                completion = (operation(uart.command(f"operation op_{final['lineage']}_{final['terminal']:016x}"))
+                              if committed else None)
                 uart.command("cat hello", "after" if committed else "before")
                 uart.command(f"admission-activity {admitted['id']}", "Unavailable")
                 cleanup(uart, executor, controller)
@@ -102,7 +104,7 @@ def verify(session, owned_disk, temporary, image, mount):
                 raise AssertionError("independent disk contradicts the reported file effect")
             cases.append(dict(case="public_activity_" + name, verified=True, skip=skip, rights=rights,
                               denied=denial, committed=committed, status_during_io=True, reboot_verified=True,
-                              observations=[before, after], durable=final,
+                              observations=[before, after], durable=final, completion=completion,
                               sha256=observed["selected_sha256"]))
     base, admitted, node = fault_base
     with owned_disk(temporary / "activity-fault.raw", True, evidence_name="activity-fault") as data:

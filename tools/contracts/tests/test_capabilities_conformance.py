@@ -6,6 +6,8 @@ from tools.contracts.capabilities_conformance import (BOUNDS, METHODS, check_dis
                                                       items, native_check)
 from tools.contracts.catalog import Catalog
 from tools.contracts.validation import ContractError
+from tools.contracts.read_conformance import HostReadBackend
+from tools.contracts.read_vectors import load_cases, request_for
 
 
 def availability(operations=False):
@@ -19,7 +21,14 @@ def availability(operations=False):
 
 
 def evidence(operations=False):
-    return {"verified": True, "kernel_sha256": "a" * 64, "read_contract": {"verified": True},
+    backend = HostReadBackend(Catalog())
+    exchanges = []
+    for case in load_cases():
+        request = request_for(case, workspace=backend.workspace,
+                              resource=backend.resources[case["fixture"]])
+        exchanges.append({"id": case["id"], "request": request, "response": backend.read(request)})
+    return {"verified": True, "boots": 2, "kernel_sha256": "a" * 64,
+            "read_contract": {"verified": True, "exchanges": exchanges},
             "discovery": {"verified": True, "operations_enabled": operations,
                           "deterministic_client_agrees": True,
                           "availability": availability(operations), "bounds": dict(BOUNDS)}}
@@ -82,6 +91,14 @@ class CapabilityDiscoveryTests(unittest.TestCase):
             items(self.catalog, reordered)
         with self.assertRaises(ContractError):
             check_discovery(self.catalog, {"verified": True}, {})
+
+    def test_invalid_image_and_incomplete_read_proof_cannot_support_discovery(self):
+        for mutate in (lambda e: e.__setitem__("kernel_sha256", "x" * 64),
+                       lambda e: e.__setitem__("read_contract", {"verified": False}),
+                       lambda e: e["read_contract"]["exchanges"].pop(),
+                       lambda e: e.__setitem__("boots", 0)):
+            bad = evidence(); mutate(bad)
+            with self.assertRaises(ContractError): native_check(self.catalog, bad)
 
 
 if __name__ == "__main__":

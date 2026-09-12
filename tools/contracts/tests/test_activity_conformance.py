@@ -7,7 +7,7 @@ from tools.contracts.activity_conformance import (check_case, denial, host_check
 from tools.contracts.catalog import Catalog
 from tools.contracts.validation import ContractError
 
-LINEAGE = "0" * 32
+LINEAGE = "07" * 16
 IDENTITY = {"id": "ad_" + LINEAGE + "_0000000000000003", "lineage": LINEAGE,
             "instance": "si_" + LINEAGE + "_0000000000000003"}
 
@@ -26,11 +26,20 @@ def case(name, *, phases, state, terminal, committed, denied=0, uncertain=False)
         value["stopped"] = True
     else:
         value["committed"] = committed
+        if committed:
+            # Synthetic receipt for validator tests, never guest evidence.
+            value["completion"] = {
+                "operation_id": f"op_{LINEAGE}_{terminal:016x}", "service_instance": IDENTITY["instance"],
+                "state": "succeeded", "effect": "committed", "cancel_requested": False,
+                "receipt": {"workspace": "workspace_a", "resource": "file_a",
+                            "previous_version": "v_1", "version": "v_2", "size": 0,
+                            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                            "retry": {"epoch": "epoch_a", "key": "key_a"}}}
     return value
 
 
 def inventory():
-    return [case("early", phases=(("running",), ("stopping", 1)), state="cancelled", terminal=4, committed=False),
+    cases = [case("early", phases=(("running",), ("stopping", 1)), state="cancelled", terminal=4, committed=False),
             case("header", phases=(("running",), ("settling",)), state="committed", terminal=5, committed=True),
             case("flush", phases=(("running",), ("settling",)), state="committed", terminal=6, committed=True),
             case("inspect_only", phases=(("running",), ("running",)), state="committed", terminal=7,
@@ -42,6 +51,14 @@ def inventory():
                  state="cancelled", terminal=9, committed=False),
             case("lost_stop", phases=(("running",), ("stopping", 1)),
                  state="cancelled", terminal=10, committed=False)]
+    for value in cases:
+        value.update(reboot_verified=True, sha256="a" * 64)
+    for value, skip, rights in zip(cases[:5], (0, 15, 16, 0, 0), (8, 8, 8, 4, 8)):
+        value.update(skip=skip, rights=rights, status_during_io=True)
+    cases[6].update(staging_full=True, undrained_client=True, owner_progress=True, stopped=True,
+                    discovery={method: "available" for method in ("files.read", "files.replace", "operations.get")})
+    cases[7].update(discarded_reply=True, stopped=True, stale_reply_rejected=True)
+    return cases
 
 
 def evidence(cases=None):
@@ -55,7 +72,7 @@ class ActivityCorrespondenceTests(unittest.TestCase):
 
     def test_host_correspondence_enumerates_accepted_and_rejected_vectors(self):
         result = host_check(self.catalog)
-        self.assertEqual((result["accepted_vectors"], result["rejected_vectors"]), (8, 4))
+        self.assertEqual((result["accepted_vectors"], result["rejected_vectors"]), (6, 5))
         self.assertEqual(result["unimplemented_methods"], ["operations.cancel"])
 
     def test_native_inventory_maps_success_prevention_and_reconciliation(self):
@@ -69,9 +86,11 @@ class ActivityCorrespondenceTests(unittest.TestCase):
         for phase in ("cancelled", "committed", "succeeded"):
             with self.subTest(phase=phase), self.assertRaises(ContractError):
                 live_operation(IDENTITY, observation(phase))
-        running = live_operation({**IDENTITY, "state": "admitted", "terminal": 0}, observation("running", 1))
+        running = live_operation({**IDENTITY, "state": "admitted", "terminal": 0}, observation("running", 0))
         self.assertEqual((running["state"], running["effect"]), ("running", "none"))
-        self.assertTrue(running["cancel_requested"])
+        self.assertFalse(running["cancel_requested"])
+        with self.assertRaises(ContractError):
+            live_operation(IDENTITY, observation("running", 1))
 
     def test_settling_never_claims_a_known_effect_or_a_rollback(self):
         settling = live_operation(IDENTITY, observation("settling"))
@@ -126,6 +145,43 @@ class ActivityCorrespondenceTests(unittest.TestCase):
             native_check(self.catalog, evidence(bad))
         with self.assertRaises(ContractError):
             check_case(self.catalog, {"case": "public_activity_x", "verified": True})
+
+    def test_duplicate_unverified_and_unobserved_cases_cannot_fill_the_inventory(self):
+        for mutate in (lambda e: e["cases"].__setitem__(-1, copy.deepcopy(e["cases"][1])),
+                       lambda e: e["cases"][1].__setitem__("verified", False),
+                       lambda e: e["cases"][1].__setitem__("case", "public_activity_unknown"),
+                       lambda e: e["cases"][1].__setitem__("reboot_verified", False),
+                       lambda e: e["cases"][1].__setitem__("observations", []),
+                       lambda e: e["cases"][1].__setitem__("observations", [observation("stopping", 1, 0)])):
+            bad = evidence(); mutate(bad)
+            with self.assertRaises(ContractError): native_check(self.catalog, bad)
+
+    def test_flags_and_native_identity_are_not_coerced_into_valid_facts(self):
+        for field in ("requested", "pending"):
+            for invalid in (None, "false", -1, 2, True):
+                bad = observation("stopping", 1); bad[field] = invalid
+                with self.subTest(field=field, invalid=invalid), self.assertRaises(ContractError):
+                    live_operation(IDENTITY, bad)
+        for terminal in (True, -1, 3, 2**64):
+            with self.assertRaises(ContractError):
+                record_operation({**IDENTITY, "state": "committed", "terminal": terminal}, False)
+        bad = evidence(); bad["cases"][2]["durable"]["lineage"] = "1" * 32
+        with self.assertRaises(ContractError): native_check(self.catalog, bad)
+
+    def test_success_requires_the_same_cases_valid_completion_receipt(self):
+        for mutate in (lambda c: c.pop("completion"),
+                       lambda c: c["completion"].pop("receipt"),
+                       lambda c: c["completion"].__setitem__("operation_id", "another_operation"),
+                       lambda c: c["completion"].__setitem__("service_instance", "another_service")):
+            bad = evidence(); mutate(bad["cases"][2])
+            with self.assertRaises(ContractError): native_check(self.catalog, bad)
+
+    def test_preparation_is_not_scheduling_and_publication_never_moves_backwards(self):
+        with self.assertRaises(ContractError):
+            record_operation({**IDENTITY, "state": "admitted", "terminal": 0}, False)
+        bad = evidence()
+        bad["cases"][2]["observations"] = [observation("settling"), observation("running")]
+        with self.assertRaises(ContractError): native_check(self.catalog, bad)
 
 
 if __name__ == "__main__":

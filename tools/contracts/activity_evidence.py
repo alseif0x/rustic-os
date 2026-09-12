@@ -3,6 +3,10 @@
 import re
 from .validation import require
 
+ACTIVITY_CASES = frozenset("public_activity_" + name for name in
+                          ("early", "header", "flush", "inspect_only", "foreign_scope",
+                           "failed_drain", "saturated", "lost_stop"))
+
 
 def check_activity(cases):
     expected = {

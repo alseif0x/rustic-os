@@ -9,7 +9,8 @@ instance for discovery and no contract digest, so the full method output and
 `capabilities.describe` remain unimplemented.
 """
 from jsonschema import Draft202012Validator
-from .validation import require
+from .validation import ContractError, require
+from .read_conformance import native_check as check_native_read
 
 METHODS = ("capabilities.list", "capabilities.describe", "files.read", "files.replace",
            "operations.get", "operations.cancel", "events.read", "system.status")
@@ -64,11 +65,11 @@ def check_discovery(catalog, discovery, exercised):
 
 def native_check(catalog, evidence):
     require(isinstance(evidence, dict) and evidence.get("verified") is True, "unverified evidence")
-    require(isinstance(evidence.get("kernel_sha256"), str)
-            and len(evidence["kernel_sha256"]) == 64, "missing guest identity")
+    # Reuse the complete range/identity validator; a truthy object is not proof.
+    check_native_read(catalog, evidence)
     discovery = evidence.get("discovery")
     exercised = {
-        "files.read": bool(evidence.get("read_contract")),
+        "files.read": True,
         "operations.cancel": False,
         "events.read": False,
         "system.status": False,
@@ -97,7 +98,7 @@ def host_check(catalog):
     for report in broken:
         try:
             items(catalog, report)
-        except Exception:
+        except ContractError:
             rejected += 1
     require(rejected == len(broken), "the declared shape accepted an invalid report")
     return {"status": "success", "backend": "declared_capability_items",

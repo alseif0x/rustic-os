@@ -41,6 +41,7 @@ fn discovery_survives_the_wire_and_keeps_the_catalog_identity() {
 fn malformed_reports_and_impossible_bounds_are_rejected() {
     let good = report().packet(9).unwrap();
     for mutate in [
+        |p: &mut Packet| p.op = rustic_abi::files::STAT,
         |p: &mut Packet| p.id = 1,
         |p: &mut Packet| p.status = 1,
         |p: &mut Packet| p.count = METHODS as u8 - 1,
