@@ -114,6 +114,12 @@ against build `dedcc36bb62834c5`, kernel SHA-256
 Command counts vary with bounded polling. Publication CI belongs to the delivery
 record in #47.
 
+The expanded reports require the [executor's 128 KiB recovery summary budget](EXECUTOR.md#native-terminal-acceptance).
+The former 64 KiB limit rejected collection after all 88 isolated boots had passed.
+Normal export and failure capture now share the fixed bound; five additional host
+tests cover accepted boundaries, oversized rejection and cleanup, bringing the runner
+suite to 160 tests. Reports from other modes retain their existing limits.
+
 ## Remaining acceptance
 
 These cuts establish bounded native behavior; they do not implement the logical

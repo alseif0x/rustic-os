@@ -160,6 +160,40 @@ class FailureExporterTests(unittest.TestCase):
         self.assertEqual(report["status"], "partial")
         self.assertTrue(any("bundle budget" in entry["error"] for entry in report["errors"]))
 
+    def test_recovery_summaries_cross_both_export_boundaries_at_the_fixed_ceiling(self):
+        payload = b"{}" + b" " * (128 * 1024 - 2)
+        for name in ("result.json", "recovery.json"):
+            (self.mode / name).write_bytes(payload)
+        output = io.BytesIO()
+
+        export_failure.export(self.root, "recovery-test", output)
+        artifacts = unpack_bundle(output.getvalue(), export_failure.allowed_files("recovery-test"),
+                                  export_failure.MAX_BUNDLE)
+
+        for name in ("result.json", "recovery.json"):
+            self.assertEqual(artifacts[name], payload)
+        report = json.loads(artifacts[export_failure.REPORT])
+        self.assertEqual(report["status"], "captured")
+        self.assertEqual(report["errors"], [])
+        for name in ("result.json", "recovery.json"):
+            with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "artifact size limit"):
+                oversized = bundle([(name, payload + b" ", tarfile.REGTYPE)])
+                unpack_bundle(oversized, export_failure.allowed_files("recovery-test"),
+                              export_failure.MAX_BUNDLE)
+
+    def test_recovery_summary_one_byte_over_budget_is_reported_without_discarding_logs(self):
+        for name in ("result.json", "recovery.json"):
+            with (self.mode / name).open("wb") as stream:
+                stream.truncate(128 * 1024 + 1)
+
+        artifacts, report = self.exported()
+
+        self.assertEqual(set(artifacts), set(self.base))
+        self.assertEqual(report["status"], "partial")
+        self.assertEqual({entry["path"] for entry in report["errors"]},
+                         {"result.json", "recovery.json"})
+        self.assertTrue(all("size limit" in entry["error"] for entry in report["errors"]))
+
 
 class FailureBundleTests(unittest.TestCase):
     def test_regular_allowed_files_are_returned_as_bytes(self):

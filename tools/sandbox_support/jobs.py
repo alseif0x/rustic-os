@@ -13,6 +13,7 @@ import uuid
 from . import runtime
 from .artifacts import collect, sha256
 from .boot_failure import collect as collect_boot_failure
+from .container.export_failure import base_files
 from .prepare import ROOT, STATE
 from .process import command
 from boot_support.scenarios import MODES
@@ -140,10 +141,9 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
                     state["artifacts"].append(collect(container, "/work/target/native/" + name,
                                                       directory / name, maximum))
             else:
-                sizes = {"result.json": 65536, "image.json": 65536, "serial.log": 1048576,
-                         "qemu.log": 1048576, "rustic-os.img": 67108864}
+                sizes = {**base_files(mode), "rustic-os.img": 67108864}
                 if mode == "recovery-test":
-                    sizes.update({"recovery.json":65536,"files.bin":89088})
+                    sizes["files.bin"] = 89088
                 if mode=="terminal-test":
                     sizes.update({"terminal.json":65536,"files.bin":89088})
                 if mode.startswith("block-"):

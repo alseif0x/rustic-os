@@ -33,10 +33,19 @@ def session_files(name):
             f"{name}.serial.log": 1048576, f"{name}.qemu.log": 1048576}
 
 
-def allowed_files(mode):
+def base_files(mode):
+    """Share fixed boot-output budgets with normal and failure collection."""
     if re.fullmatch(r"[a-z]+(?:-[a-z]+)*", mode) is None:
         raise ValueError("invalid boot mode")
-    result = {**BASE, REPORT: 65536}
+    result = dict(BASE)
+    if mode == "recovery-test":
+        # The 44-case/88-boot reports exceed 64 KiB; retain a fixed 128 KiB ceiling.
+        result.update({"result.json": 128 * 1024, "recovery.json": 128 * 1024})
+    return result
+
+
+def allowed_files(mode):
+    result = {**base_files(mode), REPORT: 65536}
     if mode == "recovery-test":
         for name in SESSIONS:
             result.update(session_files(name))
@@ -105,8 +114,8 @@ def export(root, mode, output):
                 directory = os.open(mode, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
             finally:
                 os.close(parent)
-            for name, maximum in BASE.items():
-                capture(name, maximum, optional=name == "result.json")
+            for name, maximum in base_files(mode).items():
+                capture(name, maximum, optional=name in ("result.json", "recovery.json"))
             if mode == "recovery-test":
                 for session in SESSIONS:
                     files = session_files(session)

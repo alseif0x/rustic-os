@@ -20,7 +20,8 @@ def unpack_single(data, expected_name, maximum):
         if member.name not in (expected_name, "./" + expected_name) or not member.isfile():
             raise RuntimeError("invalid artifact path or type")
         if not 0 <= member.size <= maximum:
-            raise RuntimeError("artifact size limit exceeded")
+            raise RuntimeError(f"artifact size limit exceeded: {expected_name} "
+                               f"({member.size} bytes; maximum {maximum})")
         return archive.extractfile(member).read()
 
 
