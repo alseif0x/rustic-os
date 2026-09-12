@@ -9,9 +9,11 @@ use rustic_sdk::files::{
 pub(super) fn inspect(
     files: &mut Client,
     id: AdmissionId,
-    negotiated: bool,
+    profile: u64,
 ) -> Result<[u64; 8], Error> {
-    let operation = if negotiated {
+    let operation = if profile == rustic_sdk::abi::supervisor::actor::flags::SELECTED {
+        files.inspect_selected(id)?
+    } else if profile == rustic_sdk::abi::supervisor::actor::flags::NEGOTIATED {
         files
             .negotiate_lifecycle(rustic_sdk::abi::services::Method::OperationsGet)?
             .inspect(id)?

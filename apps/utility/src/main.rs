@@ -5,6 +5,7 @@ mod actions;
 mod admission;
 mod discovery;
 mod live;
+mod mission;
 mod operations;
 mod pressure;
 mod read;

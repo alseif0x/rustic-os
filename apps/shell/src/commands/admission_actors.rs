@@ -27,6 +27,11 @@ pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Erro
             "observe-v2" => (a::OBSERVE, s::actor::flags::OBSERVE_V2),
             "inspect" => (a::OBSERVE, s::actor::flags::LIFECYCLE),
             "inspect-negotiated" => (a::OBSERVE, s::actor::flags::NEGOTIATED),
+            "inspect-selected" => (a::OBSERVE, s::actor::flags::SELECTED),
+            "cancel-selected" => (
+                rustic_sdk::files::lifecycle::CANCEL,
+                s::actor::flags::SELECTED,
+            ),
             "cancel-negotiated" => (
                 rustic_sdk::files::lifecycle::CANCEL,
                 s::actor::flags::NEGOTIATED,

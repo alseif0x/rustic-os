@@ -60,6 +60,7 @@ def verify(report):
     assert type(legacy['format']) is int and legacy['format'] == 4, 'wrong legacy format'
     assert record == dict(admission=number,state='cancelled',terminal=record['terminal'],committed=0), 'v4 does not persist a cause'
     denial(restart['revoked'], 18)
+    assert restart['selection_reset'] == ['inspect-selected', 'cancel-selected'], 'rebind retained selected support'
     assert type(restart['retired_client']) is int and restart['retired_client'] > 0
     assert restart['before'][0]['responder'] != restart['after'][0]['responder'], 'stale responder'
     operation = restart['operation']['operation']

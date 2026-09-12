@@ -8,8 +8,13 @@ pub(super) fn execute(s: &mut Session, args: &Args<'_>) -> Result<(), Error> {
     exact(args, 2)?;
     let id = argument(args, 1)?.parse()?;
     let command = argument(args, 0)?;
-    if matches!(command, "request-operation-cancel" | "cancel-negotiated") {
-        let ack = if command == "cancel-negotiated" {
+    if matches!(
+        command,
+        "request-operation-cancel" | "cancel-negotiated" | "cancel-selected"
+    ) {
+        let ack = if command == "cancel-selected" {
+            s.files.cancel_selected(id)?
+        } else if command == "cancel-negotiated" {
             s.files
                 .negotiate_lifecycle(Method::OperationsCancel)?
                 .cancel(id)?
@@ -27,7 +32,9 @@ pub(super) fn execute(s: &mut Session, args: &Args<'_>) -> Result<(), Error> {
         ));
         return Ok(());
     }
-    let operation = if command == "inspect-negotiated" {
+    let operation = if command == "inspect-selected" {
+        s.files.inspect_selected(id)?
+    } else if command == "inspect-negotiated" {
         s.files
             .negotiate_lifecycle(Method::OperationsGet)?
             .inspect(id)?

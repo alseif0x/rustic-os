@@ -48,6 +48,10 @@ pub mod actor {
     pub const CAPABILITIES: u64 = 14;
     pub const PROFILE_GET: u64 = 15;
     pub const PROFILE_CANCEL: u64 = 16;
+    pub const SELECT_GET: u64 = 17;
+    pub const SELECT_CANCEL: u64 = 18;
+    pub const MISSION_PREPARE: u64 = 19;
+    pub const MISSION_VERIFY: u64 = 20;
     /// Modifiers for ADMISSION. These are flags, not action values.
     pub mod flags {
         /// Submit a live stop and exit without decoding its reply. A discarded
@@ -59,6 +63,8 @@ pub mod actor {
         pub const LIFECYCLE: u64 = 3;
         /// Select the reviewed lifecycle profile before inspection/cancellation.
         pub const NEGOTIATED: u64 = 4;
+        /// Use a profile already selected on this same client, without discovery.
+        pub const SELECTED: u64 = 5;
     }
 }
 pub const SPIN: u64 = 1;

@@ -25,6 +25,7 @@ def fixture():
                             inspect_denied=denial.copy(),cancel_denied=denial.copy(),
                             disk=dict(admission=9,state='cancelled',terminal=10,committed=0)),
                 restart=dict(before=profiles(3,True,True),after=profiles(4),operation=after,
+                             selection_reset=['inspect-selected', 'cancel-selected'],
                              after_operation=dict(operation=after['operation'].copy()),retired_client=7,
                              revoked=dict(denial,status=18),disk_sha256='a'*64),
                 reboot=dict(profiles=profiles(3),operation=dict(operation=after['operation'].copy()),disk_sha256='a'*64))
@@ -61,6 +62,7 @@ class NegotiationReport(unittest.TestCase):
                    lambda r:r['legacy']['profiles'][0].pop('client'),
                    lambda r:r['restart']['after'][0].update(responder=3),
                    lambda r:r['restart']['revoked'].update(other=1),
+                   lambda r:r['restart'].update(selection_reset=[]),
                    lambda r:r['reboot']['operation']['operation'].update(service_instance='si_'+'07'*16+'_0000000000000008'),
                    lambda r:r['legacy']['accepted'].update(operation={}),
                    lambda r:r['legacy']['disk'].update(prevention='requested'),

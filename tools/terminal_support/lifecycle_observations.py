@@ -6,8 +6,8 @@ STATES = dict(prepared=1, queued=2, running=3, reconciling=4,
               succeeded=5, cancelled=6, failed=7, prevented=8)
 
 
-def inspect(uart, identity, state, inspector=None, stop=None, failure=None, completion=None, negotiated=False):
-    command = 'inspect-negotiated' if negotiated else 'inspect-operation'
+def inspect(uart, identity, state, inspector=None, stop=None, failure=None, completion=None, negotiated=False, selected=False):
+    command = 'inspect-selected' if selected else 'inspect-negotiated' if negotiated else 'inspect-operation'
     text = uart.command(f"{command} {identity['id']}")
     lines = [line.strip() for line in text.splitlines() if line.startswith('operation-v2 ')]
     if len(lines) != 1:
@@ -31,7 +31,7 @@ def inspect(uart, identity, state, inspector=None, stop=None, failure=None, comp
         value['stop_pending'] = bool(stop)
     result = dict(operation=value)
     if inspector is not None:
-        client = act(uart, inspector, 'inspect-negotiated' if negotiated else 'inspect', identity['id'])
+        client = act(uart, inspector, 'inspect-selected' if selected else 'inspect-negotiated' if negotiated else 'inspect', identity['id'])
         detail = int(completion.rsplit('_', 1)[1], 16) if completion else int(bool(stop))
         if client != dict(status=0, value=STATES[state], other=detail, control_denied=0,
                           version={None: 0, 'version_conflict': 1, 'access_denied': 2}[failure]):
@@ -51,15 +51,15 @@ def retained(uart, view, inspector):
     return inspect(uart, view, state, inspector, failure=failure, completion=completion)
 
 
-def cancel(uart, identity, disposition, actor=None, negotiated=False):
+def cancel(uart, identity, disposition, actor=None, negotiated=False, selected=False):
     if actor is None:
-        command = 'cancel-negotiated' if negotiated else 'request-operation-cancel'
+        command = 'cancel-selected' if selected else 'cancel-negotiated' if negotiated else 'request-operation-cancel'
         text = uart.command(f"{command} {identity['id']}")
         lines = [line.strip() for line in text.splitlines() if line.startswith('operation-cancel-v2 ')]
         if lines != [f"operation-cancel-v2 id={identity['id']} disposition={disposition}"]:
             raise AssertionError('cancel ACK disclosed extra fields or wrong disposition')
         return dict(operation_id=identity['id'], disposition=disposition)
-    client = act(uart, actor, 'cancel-negotiated' if negotiated else 'cancel', identity['id'])
+    client = act(uart, actor, 'cancel-selected' if selected else 'cancel-negotiated' if negotiated else 'cancel', identity['id'])
     if client != dict(status=0, value=dict(requested=1, already_requested=2, too_late=3)[disposition],
                       other=0, control_denied=0, version=0):
         raise AssertionError('CANCEL-only ACK disagreed or disclosed inspection fields')

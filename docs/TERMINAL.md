@@ -100,6 +100,13 @@ A lost response or failed submitted mutation is an uncertain result. [Workspace 
 
 ## Verification
 
+`select-lifecycle operations.get` and `select-lifecycle operations.cancel` retain
+both reviewed profiles on the shell's current client. Use `inspect-selected ID`
+or `cancel-selected ID` during execution without another discovery exchange.
+Restarting files clears both selections and requires explicit selection again.
+The [profile guide](FILE-NEGOTIATION.md) describes the same-client deterministic
+mission and its diagnostic commands; selection describes support and grants no rights.
+
 ```sh
 cargo xtask check
 python3 -m unittest discover -s tools/tests -v

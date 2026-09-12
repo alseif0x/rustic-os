@@ -48,7 +48,10 @@ The acceptance suite combines Rust contract tests, Python runner checks, native 
 retained operations, plus cancellation that acknowledges only the request. A
 completed operation keeps its original admission ID and links its separate receipt.
 Legacy unknown causes remain explicit. The terminal and deterministic native
-client share these bindings; negotiated v2 discovery remains the next integration.
+client share these bindings. [Reviewed profile selection](docs/FILE-NEGOTIATION.md)
+lets one client retain inspection and cancellation support while it reads,
+prepares, schedules and controls its own operation. Selection is cleared on
+reconnection, and every operation still checks current permissions.
 
 The [measurement harness](docs/MEASUREMENTS.md) adds repeated native resource/control workloads, a held-out unchanged batch and a real delayed-service regression. Its budgets are derived from a compatible baseline; failed samples and different hosts cannot be pooled.
 

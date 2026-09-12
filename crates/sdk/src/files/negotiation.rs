@@ -33,17 +33,22 @@ impl<P: crate::rpc::Progress> Client<P> {
         &mut self,
         method: Method,
     ) -> Result<LifecycleBinding<'_, P>, Error> {
+        let descriptor = self.lifecycle_descriptor(method)?;
+        Ok(LifecycleBinding {
+            responder: self.rpc.responder(),
+            client: self,
+            descriptor,
+        })
+    }
+
+    pub(super) fn lifecycle_descriptor(&mut self, method: Method) -> Result<Descriptor, Error> {
         let reply = self.operation_exchange(negotiation::request(method, self.context)?)?;
         let descriptor = Descriptor::decode(&reply, method)?;
         let responder = self.rpc.responder();
         if responder == 0 {
             return Err(Error::Protocol);
         }
-        Ok(LifecycleBinding {
-            client: self,
-            descriptor,
-            responder,
-        })
+        Ok(descriptor)
     }
 }
 

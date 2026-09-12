@@ -10,6 +10,15 @@ pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Erro
         "operations.cancel" => Method::OperationsCancel,
         _ => return Err(Error::Usage),
     };
+    if argument(args, 0)? == "select-lifecycle" {
+        let d = session.files.select_lifecycle(method)?;
+        output::format(format_args!(
+            "lifecycle-selected method={} availability={}\r\n",
+            method.name(),
+            d.availability.name()
+        ));
+        return Ok(());
+    }
     let selected = session.files.negotiate_lifecycle(method)?;
     let d = selected.descriptor();
     output::format(format_args!(

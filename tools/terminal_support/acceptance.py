@@ -21,6 +21,7 @@ from .prevention_report import verify as verify_prevention
 from .lifecycle_report import verify as verify_lifecycle
 from . import negotiation_cases
 from .negotiation_report import verify as verify_negotiation
+from .selection_report import verify as verify_selection
 
 def verify(image, timeout=60, output=None):
     image = Path(image).resolve()
@@ -53,6 +54,7 @@ def verify(image, timeout=60, output=None):
                                 negotiation = dict(before_upgrade=negotiation_cases.before_upgrade(uart, data))
                                 prevention = prevention_cases.exercise(uart, data)
                                 negotiation['legacy'] = prevention.pop('negotiation')
+                                negotiation['selection'] = prevention.pop('selection')
                                 read_contract = read_exercise(uart, data)
                                 discovery = discovery_exercise(uart)
                                 negotiation['restart'] = negotiation_cases.restart(uart, data, prevention['results'][0])
@@ -78,6 +80,7 @@ def verify(image, timeout=60, output=None):
         verify_prevention(prevention)
         verify_lifecycle(prevention)
         verify_negotiation(negotiation)
+        verify_selection(negotiation['selection'])
         evidence = {"verified":True,"boots":2,"commands_phase_one":cases,"oracle":oracle,"allocated_bytes":allocation,
                     "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"authority":authority,"takeover":takeover,"management":management,"read_contract":read_contract,"storage":storage,"discovery":discovery,"prevention":prevention,"negotiation":negotiation}
         (output / "terminal.json").write_text(json.dumps(evidence,indent=2)+"\n")

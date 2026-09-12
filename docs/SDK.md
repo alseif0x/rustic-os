@@ -144,3 +144,11 @@ check the exact reviewed contract on the current IPC connection before calling
 `inspect` or `cancel`. The returned selection borrows that client and cannot
 survive its rebind. Current responder identity is separate from historical
 operation origin, and support never grants authority.
+
+For a workflow that prepares and controls work on one client, call
+`select_lifecycle` separately for get and cancel before scheduling, then use
+`inspect_selected` and `cancel_selected`. Both bounded selections belong to the
+client; ordinary read/admit/schedule calls can run between them. Rebind clears
+them, failed refresh clears them, and selected calls do not renegotiate or retry.
+The service still checks current authority for every call. See the
+[single-client example and native acceptance](FILE-NEGOTIATION.md).

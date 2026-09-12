@@ -68,6 +68,9 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
     match argument(a, 0)? {
         "help" => {
             output::text(
+                "select-lifecycle operations.get|operations.cancel\r\ninspect-selected ADMISSION_ID | cancel-selected ADMISSION_ID\r\nact PID select-get|select-cancel|mission-prepare|mission-verify\r\nact-admission PID inspect-selected|cancel-selected ADMISSION_ID\r\n",
+            );
+            output::text(
                 "lifecycle-profile operations.get|operations.cancel\r\ninspect-negotiated ADMISSION_ID | cancel-negotiated ADMISSION_ID\r\nact PID profile-get|profile-cancel | act-admission PID inspect-negotiated|cancel-negotiated ADMISSION_ID\r\n",
             );
             output::text(
@@ -121,7 +124,8 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         | "observe-admission-v2" => admissions::execute(s, a)?,
         "admission-session" | "act-admission" => admission_actors::execute(s, a)?,
         "capabilities" => discovery::execute(s, a)?,
-        "lifecycle-profile" => negotiation::execute(s, a)?,
+        "lifecycle-profile" | "select-lifecycle" => negotiation::execute(s, a)?,
+        "inspect-selected" | "cancel-selected" => lifecycle::execute(s, a)?,
         "inspect-negotiated" | "cancel-negotiated" => lifecycle::execute(s, a)?,
         "inspect-operation" | "request-operation-cancel" => lifecycle::execute(s, a)?,
         "enable-operations" | "replace-ref" | "replace-fill-ref" | "operation" => {

@@ -34,6 +34,10 @@ impl State {
                 | s::actor::CAPABILITIES
                 | s::actor::PROFILE_GET
                 | s::actor::PROFILE_CANCEL
+                | s::actor::SELECT_GET
+                | s::actor::SELECT_CANCEL
+                | s::actor::MISSION_PREPARE
+                | s::actor::MISSION_VERIFY
         ) {
             return Err(1);
         }
@@ -51,7 +55,7 @@ impl State {
             }
             s::actor::flags::OBSERVE_V2 => w[5] == a::OBSERVE as u64,
             s::actor::flags::LIFECYCLE => w[5] == a::OBSERVE as u64,
-            s::actor::flags::NEGOTIATED => {
+            s::actor::flags::NEGOTIATED | s::actor::flags::SELECTED => {
                 w[5] == a::OBSERVE as u64 || w[5] == lifecycle::CANCEL as u64
             }
             _ => false,

@@ -10,6 +10,7 @@ from .scheduling_cases import settled
 from . import prevention_observations as observations
 from . import lifecycle_cases
 from . import negotiation_cases
+from . import selection_cases
 
 
 def inspect(data, results, reasons):
@@ -64,6 +65,7 @@ def exercise(uart, data):
         raise AssertionError('migration relabeled public legacy prevention')
     uart.command('rotate-receipts')
     lifecycle = lifecycle_cases.exercise(uart, data, ws, resource)
+    selection = selection_cases.exercise(uart, data, ws, resource)
     version = snapshot(data)[1]['nodes'][file_id]['version']
     authority, authority_view = observations.authority(uart, data, admit(snapshot(data)[1]['epoch'], 0x8003))
     authority_state = inspect(data, [authority], ['authority_lost'])
@@ -89,7 +91,7 @@ def exercise(uart, data):
     if final["files"] != initial["files"] or final["nodes"][file_id]["version"] != edited_version:
         raise AssertionError("prevented work changed file bytes or leaked temporary files")
     terminal_view = observations.paired_retained(uart, results, reasons)
-    return {"verified": True, "format": 5, "legacy_cause": "unknown", "lifecycle": lifecycle, "negotiation": negotiation,
+    return {"verified": True, "format": 5, "legacy_cause": "unknown", "lifecycle": lifecycle, "negotiation": negotiation, "selection": selection,
             "replay_writes": 0, "results": results, "reasons": reasons,
             "observations": dict(legacy=legacy_view, migrated=migrated_view, authority=authority_view,
                                  prepared=prepared_view, terminal=terminal_view),

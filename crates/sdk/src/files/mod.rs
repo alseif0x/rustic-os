@@ -10,6 +10,7 @@ mod operations;
 mod range;
 mod recovery;
 mod references;
+mod selection;
 mod staging;
 mod transport;
 pub use rustic_abi::files::recovery::{Receipt, Retry};

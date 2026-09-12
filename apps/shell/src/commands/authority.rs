@@ -51,6 +51,10 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                         "capabilities" => p::actor::CAPABILITIES,
                         "profile-get" => p::actor::PROFILE_GET,
                         "profile-cancel" => p::actor::PROFILE_CANCEL,
+                        "select-get" => p::actor::SELECT_GET,
+                        "select-cancel" => p::actor::SELECT_CANCEL,
+                        "mission-prepare" => p::actor::MISSION_PREPARE,
+                        "mission-verify" => p::actor::MISSION_VERIFY,
                         _ => return Err(Error::Usage),
                     },
                 )

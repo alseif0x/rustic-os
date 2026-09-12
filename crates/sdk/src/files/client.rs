@@ -6,6 +6,7 @@ pub struct Client<P = crate::rpc::Blocking> {
     pub(super) rpc: Rpc<P>,
     pub context: u32,
     pub(super) pending: Option<Packet>,
+    pub(super) selection: super::selection::Selection,
 }
 impl Client {
     pub fn new(token: u64, peer: u64, context: u32) -> Self {
@@ -18,6 +19,7 @@ impl<P: crate::rpc::Progress> Client<P> {
             rpc: Rpc::with_progress(token, peer, progress),
             context,
             pending: None,
+            selection: super::selection::Selection::default(),
         }
     }
     pub fn progress(&mut self) -> &mut P {
@@ -27,6 +29,7 @@ impl<P: crate::rpc::Progress> Client<P> {
         self.rpc.rebind(token, peer);
         self.context = context;
         self.pending = None;
+        self.selection = super::selection::Selection::default();
     }
     pub fn close(self) -> Result<(), crate::Error> {
         self.rpc.endpoint.close()

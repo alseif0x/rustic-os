@@ -77,12 +77,21 @@ def restart(uart, data, admission):
     before = snapshot(data)[1]
     result = dict(before=profiles(uart, True, client),
                   operation=logical.inspect(uart, admission, 'cancelled', client, negotiated=True))
+    for method in METHODS:
+        uart.command(f'select-lifecycle {method}', f'lifecycle-selected method={method} availability=available')
+    logical.inspect(uart, admission, 'cancelled', selected=True)
+    logical.cancel(uart, admission, 'too_late', selected=True)
     uart.command(f'revoke {client}', 'access=')
     result['revoked'] = actor(uart, client, 'profile-get', 18)
     job = start_restart(uart)
     wait_job(uart, job)
     # The supervisor retires old service clients rather than silently transferring grants.
     uart.command(f'actor-status {client}', 'denied')
+    # Both cached methods on the surviving shell must be refused locally after
+    # its supervisor-driven rebind, even though the new service supports them.
+    for action in ('inspect-selected', 'cancel-selected'):
+        uart.command(f"{action} {admission['id']}", 'error: Unavailable')
+    result['selection_reset'] = ['inspect-selected', 'cancel-selected']
     result['after'] = profiles(uart, True)
     result['retired_client'] = client
     result['after_operation'] = logical.inspect(uart, admission, 'cancelled', negotiated=True)
