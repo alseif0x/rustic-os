@@ -49,12 +49,11 @@ impl AdmissionId {
         ) && !super::live(p.op))
             || p.status != 0
             || p.id != 0
-            || p.arg
-                != if p.op == super::OBSERVE {
-                    super::OBSERVATION_VERSION
-                } else {
-                    0
-                }
+            || if p.op == super::OBSERVE {
+                !matches!(p.arg, super::OBSERVATION_VERSION | super::OBSERVATION_V2)
+            } else {
+                p.arg != 0
+            }
             || p.count != 16
             || p.data[16..] != [0; 24]
         {

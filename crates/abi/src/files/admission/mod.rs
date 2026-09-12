@@ -3,10 +3,12 @@
 mod activity;
 mod identity;
 mod observation;
+mod observation_v2;
 mod status;
 pub use activity::{Activity, ActivityPhase};
 pub use identity::AdmissionId;
 pub use observation::{OBSERVATION_VERSION, Observation};
+pub use observation_v2::{OBSERVATION_V2, ObservationV2, PreventionReason};
 pub use status::{State, Status};
 pub const OPEN: u8 = 48;
 pub const CHUNK: u8 = 49;

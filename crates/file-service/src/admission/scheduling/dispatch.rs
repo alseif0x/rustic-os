@@ -67,9 +67,10 @@ impl ExecutionQueue {
                 .iter()
                 .position(|t| t.is_some_and(|t| t.id == id));
             if p.op == a::OBSERVE {
-                return self
-                    .observe(candidate, active.as_deref())?
-                    .packet(p.context);
+                return super::super::observation::reply(
+                    self.observe(candidate, active.as_deref())?,
+                    p,
+                );
             }
             if p.op == a::SCHEDULE && index.is_none() {
                 if candidate.status.state != AdmissionState::Admitted {

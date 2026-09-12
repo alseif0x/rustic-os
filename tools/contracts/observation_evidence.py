@@ -37,6 +37,12 @@ def check_observations(cases):
                 (0, 'retained', 'committed', 0, 0), (1, 'retained', 'cancelled', 0, 0),
                 (0, 'retained', 'committed', 0, 0), (1, 'retained', 'cancelled', 0, 0))
     views = observations(queue, expected)
+    detailed = queue.get('detailed_observations')
+    require(isinstance(detailed, list) and len(detailed) == 4, 'missing profile-2 completion/legacy observations')
+    for actual, index in zip(detailed, (6,7,8,9)):
+        expected_view = dict(views[index], profile=2,
+                             prevention='none' if views[index]['state']=='committed' else 'unknown')
+        exact(actual, expected_view, 'profile 2 changed completion or invented a legacy cause')
     require(queue.get('observation_read_only') is True, 'observation changed storage')
     clients = queue.get('observation_clients')
     indices = (0, 2, 4, 5, 6, 7)

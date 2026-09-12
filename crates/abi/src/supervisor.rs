@@ -51,6 +51,8 @@ pub mod actor {
         /// Submit a live stop and exit without decoding its reply. A discarded
         /// acknowledgement is not evidence that the stop was refused.
         pub const DISCARD_REPLY: u64 = 1;
+        /// OBSERVE only: explicitly request cause-aware observation profile 2.
+        pub const OBSERVE_V2: u64 = 2;
     }
 }
 pub const SPIN: u64 = 1;

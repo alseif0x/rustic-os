@@ -69,6 +69,36 @@ fn queued_prevention_distinguishes_stop_conflict_and_lost_authority_after_remoun
             );
             assert_eq!(mounted.stat(request.id).unwrap().version, version);
             assert!(queue.is_empty());
+            let mut restarted = Server::new(mounted);
+            let inspector = grant(&mut restarted, 0, 9, 4, INSPECT_RIGHT);
+            let sequence = restarted.volume.sequence();
+            let p = a::ObservationV2::request(id(admitted), inspector.context).unwrap();
+            let observed = a::ObservationV2::decode(
+                &restarted.scheduling_request(&mut queue, inspector, p, 1),
+            )
+            .unwrap();
+            let expected = if !format5 {
+                a::PreventionReason::Unknown
+            } else {
+                match reason {
+                    Reason::Requested => a::PreventionReason::Requested,
+                    Reason::VersionConflict => a::PreventionReason::VersionConflict,
+                    Reason::AuthorityLost => a::PreventionReason::AuthorityLost,
+                    Reason::Unknown => unreachable!(),
+                }
+            };
+            assert!(
+                matches!(observed, a::ObservationV2::Retained {prevention:Some(r),..} if r==expected)
+            );
+            let legacy = id(admitted).packet(a::OBSERVE, inspector.context).unwrap();
+            assert_eq!(
+                a::Observation::decode(
+                    &restarted.scheduling_request(&mut queue, inspector, legacy, 1)
+                )
+                .unwrap(),
+                observed.coarse()
+            );
+            assert_eq!(restarted.volume.sequence(), sequence);
         }
     }
 }

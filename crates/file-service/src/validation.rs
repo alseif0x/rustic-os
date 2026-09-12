@@ -26,7 +26,10 @@ pub(super) fn request(p: &Packet) -> Result<(), Error> {
         | admission::REQUEST_CANCEL => p.count == 16 && p.id == 0 && p.arg == 0,
         admission::SCHEDULE => p.count == 16 && p.id == 0 && p.arg == 0,
         admission::OBSERVE => {
-            if p.arg != admission::OBSERVATION_VERSION {
+            if !matches!(
+                p.arg,
+                admission::OBSERVATION_VERSION | admission::OBSERVATION_V2
+            ) {
                 return Err(Error::UnsupportedVersion);
             }
             p.count == 16 && p.id == 0

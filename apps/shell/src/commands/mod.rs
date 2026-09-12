@@ -67,7 +67,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         "help" => {
             output::text("enable-prevention-reasons (explicit persistent format v5 upgrade)\r\n");
             output::text(
-                "observe-admission ADMISSION_ID | schedule-admission ADMISSION_ID | admission-activity ADMISSION_ID | request-cancel ADMISSION_ID\r\nadmission-session FILE OTHER RIGHTS [private] | act-admission PID execute|schedule|get|observe|activity|request-cancel|lost-stop|lost-schedule|lost-result ADMISSION_ID\r\nScheduling returns before settlement; cancellation replies acknowledge a request, not durable prevention. Private sessions use a supervisor-assigned subject.\r\n",
+                "observe-admission ADMISSION_ID | observe-admission-v2 ADMISSION_ID | schedule-admission ADMISSION_ID | admission-activity ADMISSION_ID | request-cancel ADMISSION_ID\r\nadmission-session FILE OTHER RIGHTS [private] | act-admission PID execute|schedule|get|observe|observe-v2|activity|request-cancel|lost-stop|lost-schedule|lost-result ADMISSION_ID\r\nScheduling returns before settlement; cancellation replies acknowledge a request, not durable prevention. Private sessions use a supervisor-assigned subject.\r\n",
             );
             exact(a, 1)?;
             output::text(
@@ -109,7 +109,8 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         | "admission-activity"
         | "request-cancel"
         | "schedule-admission"
-        | "observe-admission" => admissions::execute(s, a)?,
+        | "observe-admission"
+        | "observe-admission-v2" => admissions::execute(s, a)?,
         "admission-session" | "act-admission" => admission_actors::execute(s, a)?,
         "capabilities" => discovery::execute(s, a)?,
         "enable-operations" | "replace-ref" | "replace-fill-ref" | "operation" => {

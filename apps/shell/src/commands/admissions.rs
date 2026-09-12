@@ -23,6 +23,10 @@ fn print(status: Status) {
 }
 pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
     match argument(a, 0)? {
+        "observe-admission-v2" => {
+            exact(a, 2)?;
+            observation::print_v2(s.files.admission_observe_v2(argument(a, 1)?.parse()?)?);
+        }
         "observe-admission" => {
             exact(a, 2)?;
             observation::print(s.files.admission_observe(argument(a, 1)?.parse()?)?);

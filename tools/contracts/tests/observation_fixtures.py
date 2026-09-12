@@ -22,6 +22,8 @@ def add_observations(case):
                 (6, 3, case['durable'][0]['terminal'], 0), (7, 2, case['durable'][1]['terminal'], 0))]
         case['observation_denied'] = dict(status=17, value=0, other=0, control_denied=0, version=0)
         case['observation_read_only'] = True
+        case['detailed_observations'] = [dict(case['coherent_observations'][i], profile=2,
+            prevention='none' if i in (6,8) else 'unknown') for i in (6,7,8,9)]
     elif case['case'] == 'scheduled_restart':
         case['coherent_observations'] = [retained(0, 'admitted'), retained(1, 'admitted'), retained(1, 'committed')]
     elif case['case'] == 'scheduled_revoked':

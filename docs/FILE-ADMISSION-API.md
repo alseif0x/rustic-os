@@ -77,7 +77,7 @@ admission and completed-operation transfers cannot consume or abort each other.
 | 54 / 55 | Explicit execute / cancel |
 | 56 / 57 | Live activity / volatile stop request; separate [activity framing](FILE-ACTIVITY.md) |
 | 59 | Schedule a durable admitted record; [queued/activity reply](FILE-SCHEDULING.md) |
-| 60 | Read one [coherent observation](FILE-OBSERVATION.md), explicit native profile 1 |
+| 60 | Read one [coherent observation](FILE-OBSERVATION.md), explicit native profile 1 or cause-aware profile 2 |
 
 Open uses the typed replacement argument layout. ID requests carry 16 lineage
 bytes and the admission number in `version`. Retry lookup uses the existing
@@ -105,7 +105,7 @@ automatically. Existing format-3 readers must not mount this volume.
 1. Create a file and run `ref WORKSPACE PATH` and `stat PATH` to obtain actual references/version.
 2. Run `admit-ref WORKSPACE RESOURCE VERSION EPOCH KEY "replacement bytes"`.
 3. Use `admission ADMISSION_ID`, or `admission WORKSPACE EPOCH KEY` after a missing reply.
-4. Run `execute-admission ADMISSION_ID`, `schedule-admission ADMISSION_ID` or `cancel-admission ADMISSION_ID`. Use `observe-admission ADMISSION_ID` for one [coherent live-or-retained view](FILE-OBSERVATION.md); `request-cancel` still requests a live stop.
+4. Run `execute-admission ADMISSION_ID`, `schedule-admission ADMISSION_ID` or `cancel-admission ADMISSION_ID`. Use `observe-admission ADMISSION_ID` for one [coherent live-or-retained view](FILE-OBSERVATION.md), or `observe-admission-v2 ADMISSION_ID` to include a retained prevention cause; `request-cancel` still requests a live stop.
 5. For a committed result, run `operation OPERATION_ID` and verify with `read-ref`.
 
 Copy identifiers returned by the running system. Do not invent a version, epoch,

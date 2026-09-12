@@ -95,6 +95,8 @@ def queue_case(session, owned_disk, temporary, image, mount):
             if [s["state"] for s in finals] != ["committed", "cancelled"]:
                 raise AssertionError("FIFO execution or queued prevention failed")
             completion = receipt(uart, finals[0])
+            detailed = [observe(uart, final, 'retained', final['state'], profile=2,
+                                prevention='none' if final['state']=='committed' else 'unknown') for final in finals]
             for final in finals:
                 coherent.append(observe(uart, final, "retained", final["state"]))
                 clients.append(dict(index=len(coherent)-1, result=paired(uart, executor, coherent[-1])))
@@ -107,6 +109,8 @@ def queue_case(session, owned_disk, temporary, image, mount):
                 raise AssertionError("scheduled queue leaked client or I/O resources")
         before_reboot = snapshot(data)[0]
         with session(mount, data, "scheduled-queue-reboot") as uart:
+            detailed.extend(observe(uart, final, 'retained', final['state'], profile=2,
+                                    prevention='none' if final['state']=='committed' else 'unknown') for final in finals)
             coherent.extend(observe(uart, final, "retained", final["state"]) for final in finals)
             for final in finals:
                 if status(uart.command(f"admission {final['id']}")) != final:
@@ -118,6 +122,7 @@ def queue_case(session, owned_disk, temporary, image, mount):
         if observed["nodes"][node["id"]]["content"] != b"first":
             raise AssertionError("queued effect differs from independent disk bytes")
     return dict(case="scheduled_queue", verified=True, reboot_verified=True,
+                detailed_observations=detailed,
                 coherent_observations=coherent, observation_clients=clients,
                 observation_denied=denied_observation, observation_read_only=True,
                 observations=[ack, running, queued, cancelled], durable=finals, completion=completion,

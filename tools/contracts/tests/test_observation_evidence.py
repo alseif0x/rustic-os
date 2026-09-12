@@ -24,6 +24,14 @@ class ObservationEvidenceTests(unittest.TestCase):
                       lambda c: c[0]['coherent_observations'].__setitem__(2, copy.deepcopy(c[0]['coherent_observations'][6])),
                       lambda c: c[0].__setitem__('observation_read_only', False)))
 
+    def test_detailed_completion_and_legacy_cause_survive_restart_without_invention(self):
+        self.rejects((lambda c: c[0].pop('detailed_observations'),
+                      lambda c: c[0]['detailed_observations'].pop(),
+                      lambda c: c[0]['detailed_observations'][0].update(prevention='requested'),
+                      lambda c: c[0]['detailed_observations'][1].update(prevention='requested'),
+                      lambda c: c[0]['detailed_observations'][2].update(terminal=0),
+                      lambda c: c[0]['detailed_observations'][3].update(profile=1)))
+
     def test_profile_identity_and_unconfirmed_effects_cannot_be_fabricated(self):
         for index in range(10):
             for key, bad in (('profile', 2), ('profile', True), ('id', 'op_wrong'),

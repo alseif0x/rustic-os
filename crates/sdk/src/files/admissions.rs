@@ -9,6 +9,16 @@ use rustic_abi::files::{
 };
 
 impl<P: crate::rpc::Progress> Client<P> {
+    /// Explicit profile 2; legacy causes stay Unknown. Never falls back, resumes
+    /// execution or retries a mutation when the profile is unsupported.
+    pub fn admission_observe_v2(&mut self, id: AdmissionId) -> Result<a::ObservationV2, Error> {
+        let reply = self.operation_exchange(a::ObservationV2::request(id, self.context)?)?;
+        let result = a::ObservationV2::decode(&reply)?;
+        if result.coarse().id() != id {
+            return Err(Error::Protocol);
+        }
+        Ok(result)
+    }
     /// Read either live progress or a retained fact in one exchange. The same ID
     /// remains valid after settlement/restart while retained. Never resumes work.
     pub fn admission_observe(&mut self, id: AdmissionId) -> Result<a::Observation, Error> {

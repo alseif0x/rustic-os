@@ -1,12 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Owner migration and retained causes: native IPC plus an independent disk reader.
 
-The public v1 replies still expose coarse prevention, not these v5 storage causes.
+Public profile 2 exposes causes; profile 1 retains its coarse compatible view.
 """
 from .admission_cases import status
 from .operation_cases import references
 from .oracle import snapshot
 from .scheduling_cases import settled
+from . import prevention_observations as observations
 
 
 def inspect(data, results, reasons):
@@ -40,6 +41,9 @@ def exercise(uart, data):
 
     old = admit(initial["epoch"], 0x8000)
     old = status(uart.command(f"cancel-admission {old['id']}"))
+    legacy_view = observations.paired_retained(uart, [old], ['unknown'])
+    if snapshot(data)[1]['format'] != 4:
+        raise AssertionError('profile 2 silently migrated legacy storage')
     uart.command("enable-prevention-reasons", "persistent format v5")
     legacy = inspect(data, [old], ["unknown"])
     selected = snapshot(data)[0]
@@ -52,9 +56,18 @@ def exercise(uart, data):
         raise AssertionError("migration or replay relabeled a legacy record")
     if snapshot(data)[1]["selected_sha256"] != legacy["selected_sha256"]:
         raise AssertionError("completed migration or terminal replay wrote storage")
+    migrated_view = observations.paired_retained(uart, [old], ['unknown'])
+    if legacy_view != migrated_view:
+        raise AssertionError('migration relabeled public legacy prevention')
+    uart.command('rotate-receipts')
+    authority, authority_view = observations.authority(uart, data, admit(snapshot(data)[1]['epoch'], 0x8003))
+    authority_state = inspect(data, [authority], ['authority_lost'])
+    if authority_state['files'] != initial['files'] or authority_state['nodes'][file_id]['version'] != version:
+        raise AssertionError('authority loss did not prevent the file effect')
     uart.command("rotate-receipts")
     epoch = snapshot(data)[1]["epoch"]
     requested, conflict = (admit(epoch, key) for key in (0x8001, 0x8002))
+    prepared_view = observations.paired_retained(uart, [requested, conflict], ['none', 'none'])
     requested = status(uart.command(f"cancel-admission {requested['id']}"))
     before_edit = snapshot(data)[1]
     if before_edit["nodes"][file_id]["version"] != version or before_edit["files"] != initial["files"]:
@@ -70,8 +83,11 @@ def exercise(uart, data):
     final = inspect(data, results, reasons)
     if final["files"] != initial["files"] or final["nodes"][file_id]["version"] != edited_version:
         raise AssertionError("prevented work changed file bytes or leaked temporary files")
+    terminal_view = observations.paired_retained(uart, results, reasons)
     return {"verified": True, "format": 5, "legacy_cause": "unknown",
             "replay_writes": 0, "results": results, "reasons": reasons,
+            "observations": dict(legacy=legacy_view, migrated=migrated_view, authority=authority_view,
+                                 prepared=prepared_view, terminal=terminal_view),
             "selected_sha256": final["selected_sha256"]}
 
 
@@ -79,6 +95,9 @@ def after_reboot(uart, data, before):
     for expected in before["results"]:
         if status(uart.command(f"admission {expected['id']}")) != expected:
             raise AssertionError("reboot changed a terminal prevention")
+    before['observations']['reboot'] = observations.paired_retained(uart, before['results'], before['reasons'])
+    if before['observations']['reboot'] != before['observations']['terminal']:
+        raise AssertionError('reboot changed a public cause or client result')
     observed = inspect(data, before["results"], before["reasons"])
     if observed["selected_sha256"] != before["selected_sha256"]:
         raise AssertionError("reboot or inspection modified retained causes")

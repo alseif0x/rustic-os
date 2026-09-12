@@ -59,6 +59,35 @@ mod transport {
     }
 
     #[test]
+    fn retained_cause_is_scrubbed_when_authority_expires_in_the_reply_queue() {
+        use rustic_sdk::abi::files::{admission as a, operation::Instance};
+        let original = a::ObservationV2::Retained {
+            status: a::Status {
+                id: a::AdmissionId::new([7; 16], 9).unwrap(),
+                service_instance: Instance::new([7; 16], 8).unwrap(),
+                state: a::State::Cancelled,
+                terminal: 12,
+            },
+            prevention: Some(a::PreventionReason::AuthorityLost),
+        }
+        .packet(3)
+        .unwrap();
+        let mut reply = Some(Message::new(17, &original.encode()).unwrap());
+        replies::restrict(&mut reply, replies::denial(&binding(), 20));
+        let message = reply.unwrap();
+        let p = Packet::decode(message.payload()).unwrap();
+        assert_eq!(message.correlation(), 17);
+        assert_eq!(
+            (p.op, p.context, p.status),
+            (a::OBSERVE, 3, Error::Expired as u8)
+        );
+        assert_eq!(
+            (p.id, p.version, p.arg, p.count, p.data),
+            (0, 0, 0, 0, [0; 40])
+        );
+    }
+
+    #[test]
     fn live_binding_keeps_its_reply_and_expired_binding_drops_malformed_bytes() {
         let original = Message::new(12, &Packet::new(READ).encode()).unwrap();
         let bytes = original.wire().to_vec();

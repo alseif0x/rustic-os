@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Owner-stepped native client; file service independently enforces each action.
+mod observation;
 use rustic_sdk::{
     abi::{
         files::{Error, admission as a},
@@ -18,28 +19,7 @@ pub fn run(files: &mut Client, w: [u64; 8]) -> [u64; 8] {
             return super::live::discard_admission_reply(files, id, w[4] as u8).map(|()| [0; 8]);
         }
         if w[4] == a::OBSERVE as u64 {
-            let values = match files.admission_observe(id)? {
-                a::Observation::Retained(v) => [
-                    match v.state {
-                        a::State::Admitted => 1,
-                        a::State::Cancelled => 2,
-                        a::State::Committed => 3,
-                    },
-                    v.terminal,
-                    0,
-                ],
-                a::Observation::Active(v) => [
-                    0x10 | match v.phase {
-                        a::ActivityPhase::Running => 1,
-                        a::ActivityPhase::Stopping => 2,
-                        a::ActivityPhase::Settling => 3,
-                        a::ActivityPhase::Queued => 4,
-                    },
-                    v.cancel_requested as u64,
-                    v.io_pending as u64,
-                ],
-            };
-            return Ok([0, values[0], values[1], values[2], 0, 0, 0, 0]);
+            return observation::run(files, id, w[5] == actor::flags::OBSERVE_V2);
         }
         if w[4] == a::EXECUTE as u64 || w[4] == a::GET as u64 {
             let result = if w[4] == a::GET as u64 {

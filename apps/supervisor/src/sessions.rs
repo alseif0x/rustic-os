@@ -41,18 +41,24 @@ impl State {
         use rustic_sdk::abi::files::admission as a;
         // Scheduling/stop/result may be submitted without reading the reply; the discarded
         // acknowledgement is a fault fixture, never an additional authority.
-        let discard = w[6];
+        let modifier = w[6];
+        let valid_modifier = match modifier {
+            0 => true,
+            s::actor::flags::DISCARD_REPLY => {
+                matches!(w[5], x if x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64)
+            }
+            s::actor::flags::OBSERVE_V2 => w[5] == a::OBSERVE as u64,
+            _ => false,
+        };
         if w[7] != 0
-            || discard > s::actor::flags::DISCARD_REPLY
-            || (discard != 0
-                && !matches!(w[5], x if x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64))
+            || !valid_modifier
             || !matches!(w[5], x if x == a::EXECUTE as u64 || x == a::ACTIVITY as u64 || x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64 || x == a::OBSERVE as u64)
         {
             return Err(1);
         }
         self.actor_words(
             w[1],
-            [s::actor::ADMISSION, w[2], w[3], w[4], w[5], discard, 0, 0],
+            [s::actor::ADMISSION, w[2], w[3], w[4], w[5], modifier, 0, 0],
         )
     }
     fn actor_words(&mut self, pid: u64, words: [u64; 8]) -> Result<[u64; 8], u64> {

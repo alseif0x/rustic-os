@@ -15,6 +15,7 @@ def transcript():
             + "RUSTIC IO_OBSERVATION held=1\n" * 31
             + "admission-activity-v1\n" * 91 + "phase=queued\n"
             + "admission-observation-v1\n" * 13
+            + "admission-observation-v2\n" * 4
             + "IdempotencyConflict\nExpiredEpoch\noperation-v1\npersistent format v3\npersistent format v4\nadmission-v1\n")
 
 
@@ -30,6 +31,8 @@ class RecoveryEvidenceTests(unittest.TestCase):
         self.assertFalse(reached("recovery-test", transcript() + "admission-activity-v1\n"))
         self.assertFalse(reached("recovery-test", transcript().replace("admission-observation-v1\n", "")))
         self.assertFalse(reached("recovery-test", transcript() + "admission-observation-v1\n"))
+        self.assertFalse(reached("recovery-test", transcript().replace("admission-observation-v2\n", "")))
+        self.assertFalse(reached("recovery-test", transcript() + "admission-observation-v2\n"))
 
     def test_operation_parser_rejects_duplicate_or_ambiguous_results(self):
         valid = ("operation-v1 id=op_test service_instance=si_test state=succeeded effect=committed cancel_requested=false\n"

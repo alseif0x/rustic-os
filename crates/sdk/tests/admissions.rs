@@ -45,6 +45,50 @@ fn fixture() -> (Replacement, Status) {
 }
 
 #[test]
+fn detailed_observation_rejects_fallback_corruption_and_wrong_binding_without_retry() {
+    let (_, mut status) = fixture();
+    status.state = State::Cancelled;
+    status.terminal = 12;
+    let view = a::ObservationV2::Retained {
+        status,
+        prevention: Some(a::PreventionReason::VersionConflict),
+    };
+    for fault in 0..8 {
+        transport::reset();
+        transport::respond(move |request| {
+            assert_eq!(request.op, a::OBSERVE);
+            assert_eq!(request.arg, a::OBSERVATION_V2);
+            let mut p = view.packet(request.context).unwrap();
+            match fault {
+                1 => p.version += 1,
+                2 => p = view.coarse().packet(request.context).unwrap(),
+                3 => p.data[32] = 0,
+                4 => {
+                    p = Packet::new(a::OBSERVE);
+                    p.context = request.context;
+                    p.status = E::UnsupportedVersion as u8;
+                }
+                5 => p.context += 1,
+                6 => p.data[39] = 1,
+                _ => (),
+            }
+            p
+        });
+        transport::wrong_peer(fault == 7);
+        let mut client = files::Client::new(1, 7, 11);
+        assert_eq!(
+            client.admission_observe_v2(status.id),
+            match fault {
+                0 => Ok(view),
+                4 => Err(E::UnsupportedVersion),
+                _ => Err(E::Protocol),
+            }
+        );
+        assert_eq!(transport::requests().len(), 1);
+    }
+}
+
+#[test]
 fn observation_uses_one_read_exchange_and_rejects_wrong_identity_or_profile() {
     let (_, status) = fixture();
     for fault in 0..5 {

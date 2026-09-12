@@ -9,7 +9,8 @@ the existing metadata writer. File data is not published by that transition.
 
 This is the persistent foundation for the logical lifecycle. Public admission
 status and [observation profile 1](FILE-OBSERVATION.md) still return the existing
-coarse `Cancelled` state. They do not yet expose the new cause. No service-v1
+coarse `Cancelled` state. [Observation profile 2](FILE-OBSERVATION.md) exposes the
+retained cause through an explicitly selected native query. No service-v1
 method, contract digest or MCP capability is newly advertised by this increment.
 
 ## Meaning and policy
@@ -114,6 +115,7 @@ Both VM phases must pass after that correction; process stack and event quotas
 are unchanged. This verifies the reproduced path, not a formal worst-case stack
 bound for every possible program.
 
-These tests establish stored causes and service policy. A versioned public
-observation profile, logical failed/cancelled mapping, actual `operations.cancel`
-and negotiated catalog support remain the next integration work in #47.
+These tests establish stored causes and service policy. Public observation
+profile 2 adds cause visibility and manual/deterministic client parity. Logical
+failed/cancelled mapping, actual `operations.cancel` and negotiated catalog support
+remain the next integration work in #47.

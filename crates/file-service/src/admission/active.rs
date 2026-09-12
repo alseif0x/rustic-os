@@ -70,7 +70,7 @@ impl ActiveExecution {
                 return Err(Error::OutcomeUnknown);
             }
             if p.op == a::OBSERVE {
-                return a::Observation::Active(self.observation).packet(p.context);
+                return super::observation::reply(a::ObservationV2::Active(self.observation), p);
             }
             if p.op == a::REQUEST_CANCEL {
                 self.stop();

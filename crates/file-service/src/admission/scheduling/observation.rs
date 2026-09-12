@@ -10,7 +10,7 @@ impl ExecutionQueue {
         &self,
         candidate: &Candidate,
         active: Option<&ActiveExecution>,
-    ) -> Result<a::Observation, Error> {
+    ) -> Result<a::ObservationV2, Error> {
         let scope = candidate.scope;
         if let Some(index) = self
             .tickets
@@ -37,17 +37,23 @@ impl ExecutionQueue {
                     io_pending: false,
                 }
             };
-            return Ok(a::Observation::Active(view));
+            return Ok(a::ObservationV2::Active(view));
         }
-        Ok(a::Observation::Retained(a::Status {
-            id: scope.id,
-            service_instance: scope.instance,
-            state: match candidate.status.state {
-                AdmissionState::Admitted => a::State::Admitted,
-                AdmissionState::Cancelled => a::State::Cancelled,
-                AdmissionState::Committed => a::State::Committed,
+        Ok(a::ObservationV2::Retained {
+            status: a::Status {
+                id: scope.id,
+                service_instance: scope.instance,
+                state: match candidate.status.state {
+                    AdmissionState::Admitted => a::State::Admitted,
+                    AdmissionState::Cancelled => a::State::Cancelled,
+                    AdmissionState::Committed => a::State::Committed,
+                },
+                terminal: candidate.status.terminal,
             },
-            terminal: candidate.status.terminal,
-        }))
+            prevention: candidate
+                .status
+                .prevention
+                .map(super::super::observation::reason),
+        })
     }
 }
