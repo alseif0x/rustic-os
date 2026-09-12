@@ -26,6 +26,7 @@ pub const IO_STATUS: u64 = 21;
 pub const ENABLE_OPERATIONS: u64 = 22;
 pub const ENABLE_ADMISSIONS: u64 = 23;
 pub const ACT_ADMISSION: u64 = 24;
+pub const ENABLE_PREVENTION_REASONS: u64 = 25;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Deterministic native actor commands; the owner supplies no arbitrary program.

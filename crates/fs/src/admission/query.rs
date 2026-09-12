@@ -17,6 +17,7 @@ impl Record {
                 },
                 state: a.state,
                 terminal: a.terminal,
+                prevention: a.prevention,
             },
             request: Replacement {
                 workspace,

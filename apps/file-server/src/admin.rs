@@ -61,14 +61,14 @@ pub fn dispatch(
             x if x == STATUS as u64 && w[1..].iter().all(|x| *x == 0) => {
                 r[1] = server.pending() as u64;
             }
-            41 | 42 if w[1..].iter().all(|x| *x == 0) => {
+            41..=43 if w[1..].iter().all(|x| *x == 0) => {
                 if server.pending() != 0 {
                     return Err(Error::Busy);
                 }
-                let result = if w[0] == 42 {
-                    server.volume.enable_admissions(disk)
-                } else {
-                    server.volume.enable_operations(disk)
+                let result = match w[0] {
+                    43 => server.volume.enable_prevention_reasons(disk),
+                    42 => server.volume.enable_admissions(disk),
+                    _ => server.volume.enable_operations(disk),
                 };
                 result.map_err(|e| match e {
                     rustic_fs::Error::Unsupported => Error::Unsupported,

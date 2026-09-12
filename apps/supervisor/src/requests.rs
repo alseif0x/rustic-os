@@ -12,7 +12,8 @@ impl State {
             | s::ROTATE_RECEIPTS
             | s::IO_STATUS
             | s::ENABLE_OPERATIONS
-            | s::ENABLE_ADMISSIONS => 1,
+            | s::ENABLE_ADMISSIONS
+            | s::ENABLE_PREVENTION_REASONS => 1,
             s::PROCESS
             | s::KILL
             | s::REAP
@@ -48,6 +49,9 @@ impl State {
             }
             s::ENABLE_ADMISSIONS => {
                 self.start_admin(s::ENABLE_ADMISSIONS, [42, 0, 0, 0, 0, 0, 0, 0])
+            }
+            s::ENABLE_PREVENTION_REASONS => {
+                self.start_admin(s::ENABLE_PREVENTION_REASONS, [43, 0, 0, 0, 0, 0, 0, 0])
             }
             s::ROTATE_RECEIPTS => self.start_admin(s::ROTATE_RECEIPTS, [36, 0, 0, 0, 0, 0, 0, 0]),
             s::SERVICES => Ok([

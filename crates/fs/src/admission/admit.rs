@@ -80,6 +80,7 @@ impl Volume {
                 number,
                 state: AdmissionState::Admitted,
                 terminal: 0,
+                prevention: None,
             }),
         };
         record.bytes[..bytes.len()].copy_from_slice(bytes);

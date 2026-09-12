@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use super::{AdmissionId, AdmissionState, AdmissionStatus};
+use super::{AdmissionId, AdmissionState, AdmissionStatus, PreventionReason};
 use crate::{Disk, Error, Publication, Volume};
 impl Volume {
     /// Persist a no-effect terminal state only while no publication is in flight.
@@ -23,6 +23,37 @@ impl Volume {
         subject: u64,
         id: AdmissionId,
     ) -> Result<Publication<'a, D, AdmissionStatus>, Error> {
+        let reason = if self.prevention_reasons_enabled()? {
+            PreventionReason::Requested
+        } else {
+            PreventionReason::Unknown
+        };
+        self.prepare_cancelled(disk, subject, id, reason)
+    }
+
+    /// Persist a service-selected cause on an explicitly migrated v5 volume.
+    /// Older volumes return Unsupported; a terminal replay never changes its cause.
+    #[inline(never)]
+    pub fn prepare_prevention<'a, D>(
+        &'a mut self,
+        disk: &'a mut D,
+        subject: u64,
+        id: AdmissionId,
+        reason: PreventionReason,
+    ) -> Result<Publication<'a, D, AdmissionStatus>, Error> {
+        if !self.prevention_reasons_enabled()? {
+            return Err(Error::Unsupported);
+        }
+        self.prepare_cancelled(disk, subject, id, reason)
+    }
+
+    fn prepare_cancelled<'a, D>(
+        &'a mut self,
+        disk: &'a mut D,
+        subject: u64,
+        id: AdmissionId,
+        reason: PreventionReason,
+    ) -> Result<Publication<'a, D, AdmissionStatus>, Error> {
         let slot = self.admission_slot(subject, id)?;
         let old = self.admission_by_id(subject, id)?.status;
         if old.state != AdmissionState::Admitted {
@@ -38,6 +69,7 @@ impl Volume {
             .unwrap();
         a.state = AdmissionState::Cancelled;
         a.terminal = terminal;
+        a.prevention = Some(reason);
         Publication::metadata(
             self,
             disk,
@@ -45,6 +77,7 @@ impl Volume {
             AdmissionStatus {
                 state: AdmissionState::Cancelled,
                 terminal,
+                prevention: Some(reason),
                 ..old
             },
         )

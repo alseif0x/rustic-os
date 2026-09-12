@@ -3,10 +3,12 @@
 mod control;
 mod disk;
 mod pending;
+mod setup;
 mod terminal;
 use crate::volume_disk::Disk;
-use rustic_fs::{Kind, Replacement, Retry, Volume};
+use rustic_fs::{Replacement, Retry, Volume};
 use rustic_sdk::block::Device;
+use setup::open;
 
 pub(super) fn run(device: &Device, phase: u64, terminal: bool) {
     if terminal {
@@ -27,20 +29,6 @@ pub(super) fn run(device: &Device, phase: u64, terminal: bool) {
             },
             phase,
         );
-    }
-}
-
-fn open(disk: &mut Disk<'_>, phase: u64) -> Volume {
-    if phase == 1 {
-        let mut v = Volume::initialize(disk).unwrap();
-        v.enable_operations(disk).unwrap();
-        let file = v.create(disk, 4, b"admission", Kind::File).unwrap();
-        v.replace(disk, file.id, file.version, b"before").unwrap();
-        v.enable_admissions(disk).unwrap();
-        v
-    } else {
-        assert_eq!(phase, 2);
-        Volume::mount(disk).unwrap()
     }
 }
 

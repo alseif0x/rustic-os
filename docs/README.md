@@ -41,6 +41,7 @@ Start with the [project overview](../README.md) for current capabilities and the
 | [Live execution control](FILE-ACTIVITY.md) | Authorized activity and stop requests while an explicit file execution has pending I/O |
 | [Scheduled execution](FILE-SCHEDULING.md) | Bounded background work, separate scheduling acknowledgements and explicit restart |
 | [Coherent observation](FILE-OBSERVATION.md) | One typed live-or-retained query, stable admission identity and shared manual/client semantics |
+| [Retained prevention causes](FILE-PREVENTION.md) | Explicit format-5 migration, immutable stop/conflict/authority causes and reboot evidence |
 | [Native capability discovery](DISCOVERY.md) | Which catalog methods a service implements on its mounted volume, with the bounds it enforces |
 | [Admission control](FILE-ADMISSION-CONTROL.md) | Pollable service admission, fresh execution authority and durable cleanup after owner revocation |
 

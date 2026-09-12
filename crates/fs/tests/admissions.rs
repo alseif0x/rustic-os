@@ -4,6 +4,7 @@ mod admissions {
     mod cuts;
     mod media;
     mod polling;
+    mod reasons;
     mod validation;
 }
 use rustic_fs::{

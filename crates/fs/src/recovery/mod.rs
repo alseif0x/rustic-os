@@ -35,6 +35,7 @@ pub(crate) struct Recovery {
     pub(crate) epoch: u64,
     pub(crate) scoped: bool,
     pub(crate) admissions: bool,
+    pub(crate) reasons: bool,
     pub(crate) records: [Option<Record>; RETAINED],
 }
 impl Recovery {
@@ -47,6 +48,7 @@ impl Recovery {
             epoch: 1,
             scoped: false,
             admissions: false,
+            reasons: false,
             records: [None; RETAINED],
         })
     }

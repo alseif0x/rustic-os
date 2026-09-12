@@ -14,7 +14,7 @@ mod recovery;
 mod references;
 mod storage;
 mod volume;
-pub use admission::{Admission, AdmissionId, AdmissionState, AdmissionStatus};
+pub use admission::{Admission, AdmissionId, AdmissionState, AdmissionStatus, PreventionReason};
 pub use namespace::{Kind, Node};
 pub use publication::{Publication, PublicationCancel, PublicationPhase};
 pub use recovery::{Operation, RETAINED, Receipt, Replacement, Retry};

@@ -3,7 +3,26 @@
 use super::{ActiveExecution, control::drive_stoppable};
 use crate::{Clients, Server, reply};
 use rustic_abi::files::Error;
-use rustic_fs::{AdmissionId, AdmissionState, AdmissionStatus, PollDisk};
+use rustic_fs::{
+    AdmissionId, AdmissionState, AdmissionStatus, PollDisk, PreventionReason, Publication, Volume,
+};
+
+/// Compatibility is explicit here: v4 retains prevention without a cause. It is
+/// never upgraded by a service request. v5 must preserve the policy's exact cause.
+pub(super) fn publication<'a, D>(
+    volume: &'a mut Volume,
+    disk: &'a mut D,
+    subject: u64,
+    id: AdmissionId,
+    reason: PreventionReason,
+) -> Result<Publication<'a, D, AdmissionStatus>, Error> {
+    if volume.prevention_reasons_enabled().map_err(reply::error)? {
+        volume.prepare_prevention(disk, subject, id, reason)
+    } else {
+        volume.prepare_cancellation(disk, subject, id)
+    }
+    .map_err(reply::error)
+}
 
 impl Server {
     /// Only the active controller or an authorized queue ticket may call this.
@@ -14,14 +33,12 @@ impl Server {
         disk: &mut impl PollDisk,
         subject: u64,
         id: AdmissionId,
+        reason: PreventionReason,
         active: &mut ActiveExecution,
         control: &mut impl FnMut(&mut Clients, &mut ActiveExecution) -> u64,
     ) -> Result<AdmissionStatus, Error> {
         active.stop();
-        let write = self
-            .volume
-            .prepare_cancellation(disk, subject, id)
-            .map_err(reply::error)?;
+        let write = publication(&mut self.volume, disk, subject, id, reason)?;
         let retired = drive_stoppable(
             &mut self.clients,
             write,

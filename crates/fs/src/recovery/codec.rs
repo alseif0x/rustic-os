@@ -4,7 +4,9 @@ use crate::{Error, MAX_FILE};
 impl Recovery {
     pub(crate) fn encode(&self) -> [u8; RECOVERY_SECTORS * 512] {
         let mut b = [0; RECOVERY_SECTORS * 512];
-        b[..8].copy_from_slice(if self.admissions {
+        b[..8].copy_from_slice(if self.reasons {
+            b"RUSTREC4"
+        } else if self.admissions {
             b"RUSTREC3"
         } else if self.scoped {
             b"RUSTREC2"
@@ -41,9 +43,12 @@ impl Recovery {
         version: u8,
     ) -> Result<Self, Error> {
         let scoped = version >= 3;
-        let admissions = version == 4;
+        let admissions = version >= 4;
+        let reasons = version == 5;
         if &b[..8]
-            != (if admissions {
+            != (if reasons {
+                b"RUSTREC4"
+            } else if admissions {
                 b"RUSTREC3"
             } else if scoped {
                 b"RUSTREC2"
@@ -57,6 +62,7 @@ impl Recovery {
         let mut value = Self::new(b[8..24].try_into().unwrap()).map_err(|_| Error::Corrupt)?;
         value.scoped = scoped;
         value.admissions = admissions;
+        value.reasons = reasons;
         value.epoch = u64::from_le_bytes(b[24..32].try_into().unwrap());
         if value.epoch == 0 || value.epoch > sequence {
             return Err(Error::Corrupt);
@@ -86,7 +92,7 @@ impl Recovery {
             };
             let subject = u64::from_le_bytes(p[..8].try_into().unwrap());
             let admission =
-                crate::admission::Stored::decode(p, admissions, receipt, namespace, sequence)?;
+                crate::admission::Stored::decode(p, version, receipt, namespace, sequence)?;
             if subject == 0
                 || receipt.retry.epoch != value.epoch
                 || receipt.retry.key == 0

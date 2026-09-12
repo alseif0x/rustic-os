@@ -4,7 +4,7 @@ mod publication;
 use super::{ActiveExecution, Caller};
 use crate::{Clients, Server, reply};
 use rustic_abi::files::Error;
-use rustic_fs::{AdmissionId, AdmissionState, AdmissionStatus, PollDisk};
+use rustic_fs::{AdmissionId, AdmissionState, AdmissionStatus, PollDisk, PreventionReason};
 
 impl Server {
     /// Callback may poll bounded transport/control only, never issue grants or
@@ -35,7 +35,21 @@ impl Server {
             &mut control,
         )?;
         if settled.result.is_none() {
-            self.prevent_admission_active(disk, grant.subject, id, &mut active, &mut control)?;
+            // Guard loss wins when both guard loss and stop are observed before
+            // prevention. This is the decisive cause, not a history of intentions.
+            let reason = if settled.denied.is_some() {
+                PreventionReason::AuthorityLost
+            } else {
+                PreventionReason::Requested
+            };
+            self.prevent_admission_active(
+                disk,
+                grant.subject,
+                id,
+                reason,
+                &mut active,
+                &mut control,
+            )?;
         }
         if let Some(error) = settled.denied {
             return Err(if settled.result.is_some() {

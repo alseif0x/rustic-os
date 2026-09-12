@@ -30,7 +30,7 @@ def inspect(disk, output):
         evidence = Path(output) / f"admission-{name}.bin"
         evidence.write_bytes(region)
         _, state = snapshot(evidence)
-        if state["format"] != 4 or state["files"] != {(4, "admission"): content}:
+        if state["format"] != (5 if name == "terminal" else 4) or state["files"] != {(4, "admission"): content}:
             raise RuntimeError("native admission file differs from host oracle")
         observed = [(r["key"], r.get("state"), r["content"]) for r in state["records"]]
         if observed != states:
@@ -42,6 +42,9 @@ def inspect(disk, output):
                 raise RuntimeError("admission receipt differs from committed file version")
             if name == "pending" and state["nodes"][r["id"]]["version"] != r["previous"]:
                 raise RuntimeError("unexecuted admission changed file version")
+            if name == "terminal" and r.get("prevention") != ("authority_lost" if r["key"] == 51 else None):
+                raise RuntimeError("native prevention cause differs from host oracle")
         results.append({"volume": name, "selected_sha256": state["selected_sha256"], "sequence": state["sequence"],
-                        "states": [r["state"] for r in state["records"]], "host_verified": True})
+                        "states": [r["state"] for r in state["records"]], "host_verified": True,
+                        "format": state["format"], "prevention": [r.get("prevention") for r in state["records"]]})
     return results

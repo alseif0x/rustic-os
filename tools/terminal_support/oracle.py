@@ -15,7 +15,7 @@ def snapshot(data):
     banks = []
     for sector in (8, 13):
         header = bytearray(selected[sector*512:(sector+1)*512])
-        if header[:8] != b"RUSTFS1\0" or header[8] not in (1, 2, 3, 4) or header[9:12] != b"\0\0\x02":
+        if header[:8] != b"RUSTFS1\0" or header[8] not in (1, 2, 3, 4, 5) or header[9:12] != b"\0\0\x02":
             continue
         expected = struct.unpack_from("<I", header, 28)[0]
         header[28:32] = bytes(4)
@@ -48,7 +48,7 @@ def snapshot(data):
         nodes[struct.unpack_from("<I",node,8)[0]] = {"version":struct.unpack_from("<Q",node,16)[0],"content":content[:length]}
     records = []
     if recovery is not None:
-        if recovery[:8] != {2: b"RUSTREC1", 3: b"RUSTREC2", 4: b"RUSTREC3"}[version] or any(recovery[32:512]):
+        if recovery[:8] != {2: b"RUSTREC1", 3: b"RUSTREC2", 4: b"RUSTREC3", 5: b"RUSTREC4"}[version] or any(recovery[32:512]):
             raise AssertionError("invalid recovery state")
         lineage = recovery[8:24].hex()
         envelope = bytearray(selected[512:1024])

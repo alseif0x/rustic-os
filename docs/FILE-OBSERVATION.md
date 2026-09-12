@@ -16,7 +16,7 @@ The result is a typed union, not a mixture of fields from different replies.
 | `Active(Queued)` | This service incarnation has a ticket. A stop flag is only an in-memory request. |
 | `Active(Running/Stopping)` | Execution or prevention is in progress; this is not a terminal file result. |
 | `Active(Settling)` | The publication boundary may have been crossed. The outcome is not yet confirmed, so neither rollback nor success may be inferred. |
-| `Retained(Cancelled)` | Storage confirms prevention. The existing format does not distinguish a requested stop from a lost guard or version conflict. |
+| `Retained(Cancelled)` | Storage confirms prevention. This observation profile does not expose its cause; format 5 can [retain a distinguishable cause](FILE-PREVENTION.md). |
 | `Retained(Committed)` | Storage confirms the terminal transaction. `Status::completion()` identifies its immutable completion receipt. |
 
 Live replies contain phase, `cancel_requested` and `io_pending`. Retained replies
@@ -71,9 +71,10 @@ The SDK checks the profile and original ID and returns only a complete variant.
 
 This native profile is a foundation for logical lifecycle integration. It does
 not advertise general service-v1 `operations.get`/`operations.cancel` support.
-Structured retained failure reasons, logical submission/cancellation semantics,
+[Format 5 retains prevention causes](FILE-PREVENTION.md), but exposing those
+through a versioned observation profile, logical submission/cancellation semantics,
 and catalog/profile negotiation remain open. No contract digest or advertised
-logical implementation status changes in this increment.
+logical implementation status changes with persistent cause retention.
 
 ## Verification
 

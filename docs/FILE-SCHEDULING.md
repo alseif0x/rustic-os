@@ -53,9 +53,10 @@ Before execution, the service checks that binding again and validates the saved
 expected file version. Revocation, expiry, detach or a conflicting edit prevents
 execution and leads to service-owned durable cancellation when storage can settle
 it. This differs from legacy explicit `EXECUTE`, whose version refusal leaves the
-record admitted. The current record does not retain a structured reason separating
-a stale version from lost authority or a requested stop; all persist prevention as
-`Cancelled`. A future logical lifecycle profile must describe that distinction.
+record admitted. [Explicit format-5 migration](FILE-PREVENTION.md) enables retained
+causes separating stale versions, lost authority and requested stops. Format 4
+retains an unknown cause. Public profile-1 replies still expose coarse `Cancelled`;
+a versioned logical lifecycle must expose and map the distinction explicitly.
 
 A queued stop latches `cancel_requested=true` while its phase remains `queued`
 and `io_pending=false`. It becomes durable only when the controller records

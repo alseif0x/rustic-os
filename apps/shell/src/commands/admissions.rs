@@ -27,10 +27,15 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             exact(a, 2)?;
             observation::print(s.files.admission_observe(argument(a, 1)?.parse()?)?);
         }
-        "enable-admissions" => {
+        "enable-admissions" | "enable-prevention-reasons" => {
             exact(a, 1)?;
+            let reasons = argument(a, 0)? == "enable-prevention-reasons";
             let r = s.service([
-                rustic_sdk::abi::supervisor::ENABLE_ADMISSIONS,
+                if reasons {
+                    rustic_sdk::abi::supervisor::ENABLE_PREVENTION_REASONS
+                } else {
+                    rustic_sdk::abi::supervisor::ENABLE_ADMISSIONS
+                },
                 0,
                 0,
                 0,
@@ -40,7 +45,11 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 0,
             ])?;
             rustic_sdk::files::Error::parse(r[1] as u8)?;
-            output::text("Explicit admissions enabled; persistent format v4.\r\n");
+            output::text(if reasons {
+                "Prevention reasons enabled; persistent format v5.\r\n"
+            } else {
+                "Explicit admissions enabled; persistent format v4 or later.\r\n"
+            });
         }
         "admit-ref" => {
             exact(a, 7)?;

@@ -45,7 +45,7 @@ impl Metadata {
             return Err(Error::Empty);
         }
         if &b[..8] != b"RUSTFS1\0"
-            || !matches!(b[8], 1..=4)
+            || !matches!(b[8], 1..=5)
             || b[9..12] != [0, 0, 2]
             || b[36..].iter().any(|b| *b != 0)
             || b[8] == 1 && b[32..36] != [0; 4]

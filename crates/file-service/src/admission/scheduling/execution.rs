@@ -3,7 +3,7 @@
 use super::ExecutionQueue;
 use crate::{ActiveExecution, Clients, Server, reply};
 use rustic_abi::files::Error;
-use rustic_fs::{AdmissionId, AdmissionState, AdmissionStatus, PollDisk};
+use rustic_fs::{AdmissionId, AdmissionState, AdmissionStatus, PollDisk, PreventionReason};
 
 impl Server {
     /// Drives at most one queued record. The callback services bounded owner and
@@ -34,7 +34,7 @@ impl Server {
             }
             let mut prevention = ActiveExecution::new(self, ticket.subject, old)?;
             queue.running = true;
-            if !ticket.stop {
+            let reason = if !ticket.stop {
                 let result = self.execute_admission_active_with(
                     disk,
                     ticket.caller,
@@ -51,20 +51,20 @@ impl Server {
                     // A queued operation may lose its guard before any data is
                     // admitted. Persist prevention rather than silently leave it
                     // scheduled or run it under another client's authority.
+                    Err(Error::Version) => PreventionReason::VersionConflict,
                     Err(
-                        Error::Version
-                        | Error::Denied
-                        | Error::Revoked
-                        | Error::Expired
-                        | Error::OutcomeUnknown,
-                    ) => (),
+                        Error::Denied | Error::Revoked | Error::Expired | Error::OutcomeUnknown,
+                    ) => PreventionReason::AuthorityLost,
                     result => return result,
                 }
-            }
+            } else {
+                PreventionReason::Requested
+            };
             self.prevent_admission_active(
                 disk,
                 ticket.subject,
                 id,
+                reason,
                 &mut prevention,
                 &mut |clients, active| control(clients, active, queue),
             )

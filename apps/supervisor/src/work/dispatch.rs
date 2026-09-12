@@ -113,7 +113,7 @@ fn poll_admin(
         return Ok(None);
     };
     let r = k::decode(m.payload()).map_err(|_| 4u64)?;
-    if matches!(words[0], 36 | 41 | 42) {
+    if matches!(words[0], 36 | 41 | 42 | 43) {
         Ok(Some([0, r[0], r[1], 0, 0, 0, 0, 0]))
     } else if r == [0; 8] {
         Ok(Some([0; 8]))

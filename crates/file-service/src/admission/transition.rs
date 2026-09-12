@@ -74,10 +74,13 @@ impl Server {
         id: AdmissionId,
         control: &mut impl FnMut(&mut Clients, bool) -> u64,
     ) -> Result<(), Error> {
-        let write = self
-            .volume
-            .prepare_cancellation(disk, subject, id)
-            .map_err(reply::error)?;
+        let write = super::prevention::publication(
+            &mut self.volume,
+            disk,
+            subject,
+            id,
+            rustic_fs::PreventionReason::AuthorityLost,
+        )?;
         let status = drive(&mut self.clients, write, None, control)?
             .result
             .ok_or(Error::Uncertain)?;

@@ -14,7 +14,7 @@ fn crc(bytes: &[u8]) -> u32 {
     !c
 }
 
-fn rewrite(base: &MemoryDisk, change: impl Fn(&mut [u8])) -> MemoryDisk {
+pub(super) fn rewrite(base: &MemoryDisk, change: impl Fn(&mut [u8])) -> MemoryDisk {
     let mut disk = base.recover(true);
     let bank = usize::from(
         u64::from_le_bytes(disk.live[13][12..20].try_into().unwrap())

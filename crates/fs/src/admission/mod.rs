@@ -5,9 +5,11 @@ mod cancel;
 mod codec;
 mod execution;
 mod query;
+mod reason;
 mod transition;
 
 use crate::{Receipt, Replacement};
+pub use reason::PreventionReason;
 
 /// Separate namespace from completed-operation IDs. The number is the sequence
 /// of a durably published admission, never an uncommitted future file version.
@@ -30,6 +32,8 @@ pub struct AdmissionStatus {
     pub state: AdmissionState,
     /// Sequence of the terminal metadata transition; zero while admitted.
     pub terminal: u64,
+    /// Present only for durable prevention. Legacy records have an unknown cause.
+    pub prevention: Option<PreventionReason>,
 }
 
 #[derive(Debug)]
@@ -46,4 +50,5 @@ pub(crate) struct Stored {
     pub(crate) number: u64,
     pub(crate) state: AdmissionState,
     pub(crate) terminal: u64,
+    pub(crate) prevention: Option<PreventionReason>,
 }

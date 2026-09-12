@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use super::{AdmissionState, Stored};
+use super::{AdmissionState, PreventionReason, Stored};
 use crate::{Error, Receipt};
 
 impl Stored {
@@ -11,11 +11,12 @@ impl Stored {
             AdmissionState::Cancelled => 2,
             AdmissionState::Committed => 3,
         };
+        p[81] = self.prevention.map_or(0, |reason| reason as u8);
     }
 
     pub(crate) fn decode(
         p: &[u8],
-        enabled: bool,
+        version: u8,
         receipt: Receipt,
         namespace: Option<(u32, u64)>,
         sequence: u64,
@@ -23,7 +24,7 @@ impl Stored {
         if p[64..512].iter().all(|v| *v == 0) {
             return Ok(None);
         }
-        if !enabled || p[81..512].iter().any(|v| *v != 0) {
+        if version < 4 || (version == 4 && p[81] != 0) || p[82..512].iter().any(|v| *v != 0) {
             return Err(Error::Corrupt);
         }
         let number = u64::from_le_bytes(p[64..72].try_into().unwrap());
@@ -33,6 +34,19 @@ impl Stored {
             2 => AdmissionState::Cancelled,
             3 => AdmissionState::Committed,
             _ => return Err(Error::Corrupt),
+        };
+        let prevention = if state == AdmissionState::Cancelled {
+            Some(match p[81] {
+                0 => PreventionReason::Unknown,
+                1 => PreventionReason::Requested,
+                2 => PreventionReason::VersionConflict,
+                3 => PreventionReason::AuthorityLost,
+                _ => return Err(Error::Corrupt),
+            })
+        } else if p[81] == 0 {
+            None
+        } else {
+            return Err(Error::Corrupt);
         };
         if number == 0
             || number > sequence
@@ -61,6 +75,7 @@ impl Stored {
             number,
             state,
             terminal,
+            prevention,
         }))
     }
 }

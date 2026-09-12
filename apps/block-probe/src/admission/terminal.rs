@@ -2,12 +2,15 @@
 use super::{content, control, open, request};
 use crate::volume_disk::Disk;
 use rustic_file_service::Server;
-use rustic_fs::{AdmissionState as State, Error, PublicationPhase as Phase, Volume};
+use rustic_fs::{
+    AdmissionState as State, Error, PreventionReason, PublicationPhase as Phase, Volume,
+};
 
 #[inline(never)]
 pub(super) fn verify(disk: &mut Disk<'_>, phase: u64) {
     let mut s = Server::new(open(disk, phase));
     if phase == 1 {
+        s.volume.enable_prevention_reasons(disk).unwrap();
         control::seed(&mut s, disk);
     }
     let caller = control::grant(&mut s, false);
@@ -24,11 +27,16 @@ pub(super) fn verify(disk: &mut Disk<'_>, phase: u64) {
 
 #[inline(never)]
 fn check(v: &mut Volume, disk: &mut Disk<'_>) {
+    assert!(v.prevention_reasons_enabled().unwrap());
     content(v, disk, b"after");
     let start = disk.writes;
     for (key, state) in [(51, State::Cancelled), (52, State::Committed)] {
         let a = v.admission_by_retry(9, 4, request(v, key).retry).unwrap();
         assert_eq!(a.status.state, state);
+        assert_eq!(
+            a.status.prevention,
+            (key == 51).then_some(PreventionReason::AuthorityLost)
+        );
         let (status, request, receipt) = (a.status, a.request, a.receipt);
         assert!(matches!(
             v.admission_by_id(8, status.id),

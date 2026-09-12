@@ -8,6 +8,30 @@ from terminal_support.oracle_admission import decode, numbers
 
 
 class AdmissionOracle(unittest.TestCase):
+    def test_v5_causes_are_versioned_and_exclusive_to_prevention(self):
+        for reason, name in enumerate(("unknown", "requested", "version_conflict", "authority_lost")):
+            p, record = self.record(2)
+            p[81] = reason
+            decode(p, 5, record, 12)
+            self.assertEqual(record["prevention"], name)
+            if reason:
+                with self.assertRaises(AssertionError):
+                    decode(p, 4, dict(record), 12)
+        for state in (1, 3):
+            p, record = self.record(state)
+            decode(p, 5, record, 12)
+            self.assertIsNone(record["prevention"])
+            p[81] = 1
+            with self.assertRaises(AssertionError):
+                decode(p, 5, record, 12)
+
+    def test_v5_rejects_unknown_codes_and_reserved_bytes(self):
+        for offset, value in ((81, 4), (81, 255), (82, 1), (511, 1)):
+            p, record = self.record(2)
+            p[offset] = value
+            with self.assertRaises(AssertionError):
+                decode(p, 5, record, 12)
+
     def record(self, state):
         p = bytearray(1536)
         terminal = 0 if state == 1 else 12
