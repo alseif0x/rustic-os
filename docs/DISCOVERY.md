@@ -51,6 +51,15 @@ which reads the mounted volume and owns no other state. The shell command and
 SDK call add no policy. No kernel change, dependency or `unsafe` boundary is
 introduced.
 
+## Manual and deterministic clients
+
+The same question is answered identically for a person at the shell and for a
+deterministic client, under different authority. `act PID capabilities` asks
+through an owner-stepped native session whose helper holds read-only rights on
+one file; its packed answer and bounds must equal the shell's, and the same
+client's staged write is still refused. Learning that a method exists never
+grants it.
+
 ## Correspondence and limits
 
 `python -m tools.contracts capabilities-check` validates the declared shape and
@@ -58,8 +67,8 @@ introduced.
 reported entry must be a valid reviewed `capability`, the catalog identity and
 order must be intact, the bounds must match the enforced profile, the claim for
 `files.replace`/`operations.get` must match the volume support the same shell
-observed, and a method that the run never exercised may not be advertised as
-implemented.
+observed, the manual and deterministic answers must have been compared, and a
+method that the run never exercised may not be advertised as implemented.
 
 This is not an implementation of `capabilities.list`: that output also requires
 a service instance for the answering incarnation, which the guest does not yet

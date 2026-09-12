@@ -1,8 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Native discovery must describe the mounted volume, not a build-time promise."""
 import re
+from .authority_cases import actor, cleanup
+from .cases import pid
 from .operation_cases import references
 
+AVAILABILITY = {"available": 1, "degraded": 2, "unavailable": 3}
 METHODS = ("capabilities.list", "capabilities.describe", "files.read", "files.replace",
            "operations.get", "operations.cancel", "events.read", "system.status")
 
@@ -41,6 +44,27 @@ def check(report, operations):
     return report
 
 
+def parity(uart, report):
+    """A deterministic client with different rights must learn the same facts."""
+    uart.command("write discovery-other untouched")
+    client = pid(uart, "session hello discovery-other")
+    helper = pid(uart, f"helper {client} hello discovery-other")
+    values = actor(uart, helper, "capabilities")
+    packed = sum(AVAILABILITY[report[method]] << (index * 8)
+                 for index, method in enumerate(METHODS))
+    if values["value"] != packed:
+        raise AssertionError("manual and deterministic clients disagree on what exists")
+    bounds = report["bounds"]
+    if (values["other"], values["control_denied"], values["version"]) != (
+            bounds["max_inline_bytes"], bounds["max_page_items"], bounds["receipt_capacity"]):
+        raise AssertionError("the deterministic client received different bounds")
+    # Learning that a method exists never grants it: this client still cannot write.
+    actor(uart, helper, "stage", 17)
+    cleanup(uart, client, helper)
+    uart.command("rm discovery-other")
+    return True
+
+
 def exercise(uart):
     # Cross-check the claim against behaviour the same shell can observe. A
     # completed-operation lookup answers Unsupported until the scoped format exists.
@@ -50,6 +74,7 @@ def exercise(uart):
     supported = "Unsupported" not in lookup
     report = check(capabilities(uart), supported)
     return {"verified": True, "operations_enabled": supported,
+            "deterministic_client_agrees": parity(uart, report),
             "availability": {method: report[method] for method in METHODS},
             "bounds": report["bounds"]}
 

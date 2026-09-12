@@ -21,6 +21,7 @@ def availability(operations=False):
 def evidence(operations=False):
     return {"verified": True, "kernel_sha256": "a" * 64, "read_contract": {"verified": True},
             "discovery": {"verified": True, "operations_enabled": operations,
+                          "deterministic_client_agrees": True,
                           "availability": availability(operations), "bounds": dict(BOUNDS)}}
 
 
@@ -68,6 +69,7 @@ class CapabilityDiscoveryTests(unittest.TestCase):
                        lambda e: e["discovery"]["availability"].__setitem__("capabilities.describe", "degraded"),
                        lambda e: e["discovery"]["bounds"].__setitem__("max_inline_bytes", 2048),
                        lambda e: e["discovery"].__setitem__("verified", False),
+                       lambda e: e["discovery"].__setitem__("deterministic_client_agrees", False),
                        lambda e: e.__setitem__("kernel_sha256", "short")):
             bad = copy.deepcopy(evidence())
             mutate(bad)

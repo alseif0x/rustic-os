@@ -56,6 +56,9 @@ def check_discovery(catalog, discovery, exercised):
     require(reported["capabilities.list"] == "degraded"
             and reported["capabilities.describe"] == "unavailable",
             "discovery overstated the registry contract")
+    # A deterministic client with different rights must have learned the same facts.
+    require(discovery.get("deterministic_client_agrees") is True,
+            "manual and deterministic clients were not compared")
     return entries
 
 

@@ -43,6 +43,8 @@ pub mod actor {
     pub const FILL: u64 = 11;
     pub const OPERATION_GET: u64 = 12;
     pub const ADMISSION: u64 = 13;
+    /// Ask the bound service what it implements; the answer grants nothing.
+    pub const CAPABILITIES: u64 = 14;
     /// Modifiers for ADMISSION. These are flags, not action values.
     pub mod flags {
         /// Submit a live stop and exit without decoding its reply. A discarded

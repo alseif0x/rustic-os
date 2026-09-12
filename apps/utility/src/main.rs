@@ -3,6 +3,7 @@
 #![no_main]
 mod actions;
 mod admission;
+mod discovery;
 mod live;
 mod operations;
 mod pressure;
