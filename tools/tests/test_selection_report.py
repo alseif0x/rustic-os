@@ -9,28 +9,39 @@ from terminal_support.selection_report import verify
 
 def fixture():
     cases = []
-    for index, kind in enumerate(('complete', 'cancel', 'revoke')):
+    for index, kind in enumerate(('complete', 'cancel', 'revoke', 'conflict')):
         identity = dict(id='ad_'+'07'*16+f'_{9+index:016x}', instance='si_'+'07'*16+'_0000000000000001', terminal=20)
         completed = kind == 'complete'
-        content = b'Single native client' if completed else b'Hello from native Rust'
-        cause = None if completed else 'requested' if kind == 'cancel' else 'authority_lost'
+        content = b'Single native client' if completed else b'Human edit wins' if kind == 'conflict' else b'Hello from native Rust'
+        cause = None if completed else dict(cancel='requested', revoke='authority_lost', conflict='version_conflict')[kind]
         terminal = projected(identity, 'succeeded' if completed else 'cancelled' if kind == 'cancel' else 'failed',
-                             failure='access_denied' if kind == 'revoke' else None)
+                             failure='access_denied' if kind == 'revoke' else 'version_conflict' if kind == 'conflict' else None)
         if kind == 'revoke':
             terminal.pop('client')
         case = dict(case=kind, client=index+10, rights=15,
                     selection=[dict(status=0, value=1, other=method, control_denied=1, version=2) for method in (5,6)],
                     prepared=dict(status=0, value=9+index, other=1, control_denied=22, version=2),
-                    running=projected(identity, 'running', stop=False), terminal=terminal,
-                    resources=[3,4,4,6], disk=dict(previous=2, version=20 if completed else 2, epoch=1, length=22,
+                    prepared_view=projected(identity, 'prepared'), terminal=terminal,
+                    scheduled=dict(status=0, value=4, other=0, control_denied=0, version=0),
+                    resources=[3,4,4,6], disk=dict(previous=2, version=20 if completed else 15 if kind == 'conflict' else 2, epoch=1, length=22,
                         sha256=hashlib.sha256(content).hexdigest(), record=dict(admission=9+index, state='committed' if completed else 'cancelled', terminal=20, prevention=cause, committed=20 if completed else 0)))
+        if kind != 'conflict':
+            case['running'] = projected(identity, 'running', stop=False)
+        else:
+            case['human'] = dict(version=15, sha256=hashlib.sha256(content).hexdigest())
+        refusal = dict(status=20, value=0, other=0, control_denied=0, version=0)
+        case['guards'] = {name: dict(refusal) for name in ('prepare', 'schedule', 'cancel', 'terminal_prepare', 'terminal_schedule')}
+        case['guards']['unprepared'] = [dict(refusal, status=4) for _ in range(4)]
         if completed:
             case['readback'] = dict(status=0, value=len(content), other=1, control_denied=1, version=20)
+            case['superseded'] = dict(version=21, sha256=hashlib.sha256(content).hexdigest(), rejected=dict(refusal, status=1))
         elif kind == 'cancel':
             case['refresh_busy'] = dict(status=20, value=0, other=0, control_denied=0, version=0)
             case['ack'] = ack(identity, 'requested', True)
-        else:
+        elif kind == 'revoke':
             case['denied'] = [dict(status=18, value=0, other=0, control_denied=0, version=0) for _ in range(2)]
+        if not completed:
+            case['not_succeeded'] = dict(refusal, status=18 if kind == 'revoke' else 4)
         cases.append(case)
     return cases
 
@@ -51,6 +62,9 @@ class SelectionReport(unittest.TestCase):
             lambda c:c[0]['running']['client'].update(value=2),
             lambda c:c[0]['terminal']['operation'].update(effect='none'),
             lambda c:c[0]['readback'].update(control_denied=0),
+            lambda c:c[0]['superseded'].update(version=20),
+            lambda c:c[0]['superseded'].update(sha256='b'*64),
+            lambda c:c[0]['superseded']['rejected'].update(status=0),
             lambda c:c[0]['disk'].update(sha256='a'*64),
             lambda c:c[1]['disk'].update(version=20),
             lambda c:c[1]['disk']['record'].update(committed=20),
@@ -61,6 +75,34 @@ class SelectionReport(unittest.TestCase):
             lambda c:c[2]['denied'][1].update(status=0),
             lambda c:c[2]['terminal']['operation'].update(failure='version_conflict'),
             lambda c:c[0].update(client=True),
+        ]
+        for mutate in mutations:
+            with self.subTest(mutation=mutate):
+                cases = deepcopy(fixture())
+                mutate(cases)
+                with self.assertRaises((AssertionError, KeyError)):
+                    verify(cases)
+
+    def test_human_conflict_identity_version_bytes_and_replay_guards(self):
+        mutations = [
+            lambda c:c[3]['human'].update(version=c[3]['disk']['previous']),
+            lambda c:c[3]['human'].update(version=c[3]['disk']['record']['terminal']),
+            lambda c:c[3]['human'].update(sha256='b'*64),
+            lambda c:c[3]['disk'].update(sha256=hashlib.sha256(b'Single native client').hexdigest()),
+            lambda c:c[3]['prepared'].update(version=15),
+            lambda c:c[3]['terminal']['operation'].update(operation_id=c[0]['terminal']['operation']['operation_id']),
+            lambda c:c[3]['terminal']['operation'].update(service_instance='si_'+'07'*16+'_0000000000000002'),
+            lambda c:c[3]['terminal']['operation'].update(failure='access_denied'),
+            lambda c:c[3]['disk']['record'].update(prevention='requested'),
+            lambda c:c[3]['not_succeeded'].update(status=0),
+            lambda c:c[3].update(running=c[0]['running']),
+            lambda c:c[3]['guards']['unprepared'].pop(),
+            lambda c:c[3]['guards']['unprepared'][0].update(status=0),
+            lambda c:c[3]['guards']['schedule'].update(status=0),
+            lambda c:c[3]['guards']['prepare'].update(value=20),
+            lambda c:c[3]['guards']['cancel'].update(status=True),
+            lambda c:c[3]['guards'].pop('terminal_schedule'),
+            lambda c:c[3]['scheduled'].update(value=1),
         ]
         for mutate in mutations:
             with self.subTest(mutation=mutate):

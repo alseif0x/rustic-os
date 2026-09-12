@@ -4,6 +4,7 @@
 mod actions;
 mod admission;
 mod discovery;
+mod lifecycle;
 mod live;
 mod mission;
 mod operations;

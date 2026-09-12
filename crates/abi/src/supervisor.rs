@@ -52,6 +52,9 @@ pub mod actor {
     pub const SELECT_CANCEL: u64 = 18;
     pub const MISSION_PREPARE: u64 = 19;
     pub const MISSION_VERIFY: u64 = 20;
+    pub const MISSION_SCHEDULE: u64 = 21;
+    pub const MISSION_INSPECT: u64 = 22;
+    pub const MISSION_CANCEL: u64 = 23;
     /// Modifiers for ADMISSION. These are flags, not action values.
     pub mod flags {
         /// Submit a live stop and exit without decoding its reply. A discarded

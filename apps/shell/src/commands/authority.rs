@@ -55,6 +55,9 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                         "select-cancel" => p::actor::SELECT_CANCEL,
                         "mission-prepare" => p::actor::MISSION_PREPARE,
                         "mission-verify" => p::actor::MISSION_VERIFY,
+                        "mission-schedule" => p::actor::MISSION_SCHEDULE,
+                        "mission-inspect" => p::actor::MISSION_INSPECT,
+                        "mission-cancel" => p::actor::MISSION_CANCEL,
                         _ => return Err(Error::Usage),
                     },
                 )

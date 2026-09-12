@@ -131,9 +131,14 @@ The [native lifecycle negotiation](FILE-NEGOTIATION.md) extends the terminal
 mission with mounted support, exact contract digests, separate rights and current
 responder checks across service restart/reboot. Run `negotiation-native` against
 the resulting `artifacts/terminal-test/terminal.json`; the current host suites
-contain 81 contract tests and 177 runner tests. The direct/isolated VM inventories
+contain 81 contract tests and 180 runner tests. The direct/isolated VM inventories
 and evidence budgets are unchanged. Rebuild reviewed sandbox infrastructure
 after this harness change. Counts in earlier increment records are historical.
+
+The selected-client mission also retains its own admission ID, rejects repeated
+mutation steps, preserves a human edit made between admission and scheduling, and
+rejects readback from an identical later write. The terminal/result JSON summaries
+are compact without dropping fields or raising their 64 KiB collector limits.
 
 The [service-v2 lifecycle guide](FILE-LIFECYCLE.md) documents the current typed
 inspection/minimal cancellation bindings and `lifecycle-check`, `lifecycle-export`

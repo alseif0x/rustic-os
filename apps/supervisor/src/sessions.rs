@@ -38,6 +38,9 @@ impl State {
                 | s::actor::SELECT_CANCEL
                 | s::actor::MISSION_PREPARE
                 | s::actor::MISSION_VERIFY
+                | s::actor::MISSION_SCHEDULE
+                | s::actor::MISSION_INSPECT
+                | s::actor::MISSION_CANCEL
         ) {
             return Err(1);
         }

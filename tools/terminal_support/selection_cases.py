@@ -3,20 +3,21 @@
 import hashlib
 from . import lifecycle_observations as logical
 from .admission_cases import status
-from .activity_cases import act, held
+from .activity_cases import held
 from .authority_cases import actor, cleanup, fence
 from .cases import counters, pid
 from .oracle import snapshot
 from .scheduling_cases import settled
 
 CONTENT = b'Single native client'
+HUMAN = b'Human edit wins'
 
 
 def exercise(uart, data, workspace, resource):
     baseline = counters(uart)
     file_id = int(resource.rsplit('_', 1)[1], 16)
     cases = []
-    for kind in ('complete', 'cancel', 'revoke'):
+    for kind in ('complete', 'cancel', 'revoke', 'conflict'):
         uart.command('rotate-receipts')
         before = snapshot(data)[1]
         old_version = before['nodes'][file_id]['version']
@@ -25,6 +26,8 @@ def exercise(uart, data, workspace, resource):
         if active['processes'] != baseline['processes'] + 1 or active['channels'] != baseline['channels'] + 2:
             raise AssertionError('selected mission requires exactly one utility and its two channels')
         item = dict(case=kind, client=client, rights=15, selection=[])
+        item['guards'] = dict(unprepared=[actor(uart, client, action, 4) for action in
+                             ('mission-schedule', 'mission-inspect', 'mission-cancel', 'mission-verify')])
         for action, method in [('select-get', 5), ('select-cancel', 6)]:
             selected = actor(uart, client, action)
             if selected != dict(status=0, value=1, other=method, control_denied=1, version=2):
@@ -41,42 +44,58 @@ def exercise(uart, data, workspace, resource):
         admission = status(uart.command(f'admission {workspace} e_{before["epoch"]:016x} k_0000000000008300'))
         if admission['number'] != prepared['value'] or admission['state'] != 'admitted':
             raise AssertionError('utility admission does not match retained retry identity')
-        logical.inspect(uart, admission, 'prepared', client, selected=True)
-        actor(uart, client, 'mission-prepare', 20)  # no automatic second candidate
-        uart.command('hold-io 0 500', 'diagnostic armed')
-        scheduled = act(uart, client, 'schedule', admission['id'])
+        item['prepared_view'] = logical.inspect(uart, admission, 'prepared', client, selected=True, mission=True)
+        if kind == 'conflict':
+            # Edit after admission and before scheduling. The utility receives
+            # neither the human's new version nor the admission ID from the host.
+            uart.command('write hello "Human edit wins"')
+            edited = snapshot(data)[1]
+            human_version = edited['nodes'][file_id]['version']
+            if human_version <= admission['number'] or edited['nodes'][file_id]['content'] != HUMAN:
+                raise AssertionError('human conflict fixture did not make a real edit')
+            item['human'] = dict(version=human_version, sha256=hashlib.sha256(HUMAN).hexdigest())
+        item['guards']['prepare'] = actor(uart, client, 'mission-prepare', 20)
+        if kind != 'conflict':
+            uart.command('hold-io 0 500', 'diagnostic armed')
+        scheduled = actor(uart, client, 'mission-schedule')
+        item['scheduled'] = scheduled
         if scheduled != dict(status=0, value=4, other=0, control_denied=0, version=0):
             raise AssertionError('same-client scheduling did not acknowledge the queued ticket')
-        held(uart)
-        item['running'] = logical.inspect(uart, admission, 'running', client, stop=False, selected=True)
+        item['guards']['schedule'] = actor(uart, client, 'mission-schedule', 20)
+        if kind != 'conflict':
+            held(uart)
+            item['running'] = logical.inspect(uart, admission, 'running', client, stop=False, selected=True, mission=True)
         if kind == 'cancel':
             # A valid temporary discovery refusal must not disable the profiles
             # already selected on either client's current connection.
             item['refresh_busy'] = actor(uart, client, 'select-get', 20)
             uart.command('select-lifecycle operations.cancel', 'error: Busy')
-            logical.inspect(uart, admission, 'running', client, stop=False, selected=True)
-            item['ack'] = logical.cancel(uart, admission, 'requested', client, selected=True)
-            logical.inspect(uart, admission, 'running', client, stop=True, selected=True)
+            logical.inspect(uart, admission, 'running', client, stop=False, selected=True, mission=True)
+            item['ack'] = logical.cancel(uart, admission, 'requested', client, selected=True, mission=True)
+            logical.inspect(uart, admission, 'running', client, stop=True, selected=True, mission=True)
         elif kind == 'revoke':
             fence(uart, client, 'access=fenced members=1')
-            item['denied'] = [logical.denied(uart, client, action, admission, 18)
-                              for action in ('inspect-selected', 'cancel-selected')]
+            item['denied'] = [logical.denied(uart, client, action, admission, 18, mission=True)
+                              for action in ('mission-inspect', 'mission-cancel')]
         final = settled(uart, admission)
         committed = kind == 'complete'
         completion = f"op_{final['lineage']}_{final['terminal']:016x}" if committed else None
         state = 'succeeded' if committed else 'cancelled' if kind == 'cancel' else 'failed'
-        failure = 'access_denied' if kind == 'revoke' else None
+        failure = 'access_denied' if kind == 'revoke' else 'version_conflict' if kind == 'conflict' else None
         item['terminal'] = logical.inspect(uart, final, state, None if kind == 'revoke' else client,
-                                           failure=failure, completion=completion, selected=True)
-        if kind != 'revoke':
-            logical.cancel(uart, final, 'too_late', client, selected=True)
+                                           failure=failure, completion=completion, selected=True, mission=True)
+        if kind in ('complete', 'conflict'):
+            logical.cancel(uart, final, 'too_late', client, selected=True, mission=True)
+        item['guards']['cancel'] = actor(uart, client, 'mission-cancel', 20)
         if committed:
             item['readback'] = actor(uart, client, 'mission-verify')
             if item['readback'] != dict(status=0, value=len(CONTENT), other=before['epoch'], control_denied=1, version=final['terminal']):
                 raise AssertionError('same client did not verify the committed bytes/hash/version')
+        else:
+            item['not_succeeded'] = actor(uart, client, 'mission-verify', 18 if kind == 'revoke' else 4)
         after = snapshot(data)[1]
         records = [r for r in after['records'] if r.get('admission') == admission['number']]
-        cause = None if committed else 'requested' if kind == 'cancel' else 'authority_lost'
+        cause = None if committed else dict(cancel='requested', revoke='authority_lost', conflict='version_conflict')[kind]
         if len(records) != 1 or records[0]['state'] != ('committed' if committed else 'cancelled') or records[0]['prevention'] != cause or records[0]['terminal'] != final['terminal'] or records[0]['committed'] != (final['terminal'] if committed else 0):
             raise AssertionError('selected mission disagrees with independent disk outcome')
         if records[0]['previous'] != old_version or records[0]['id'] != file_id or records[0]['content'] != CONTENT or records[0]['key'] != 0x8300 or records[0]['epoch'] != before['epoch'] or admission['instance'] != f"si_{after['lineage']}_{records[0]['instance']:016x}":
@@ -85,18 +104,37 @@ def exercise(uart, data, workspace, resource):
         key = next(k for k, v in before['files'].items() if k[1] == 'hello')
         if committed:
             expected_files[key] = CONTENT
-        if after['files'] != expected_files or after['nodes'][file_id]['version'] != (final['terminal'] if committed else old_version):
+        if kind == 'conflict':
+            expected_files[key] = HUMAN
+        expected_version = final['terminal'] if committed else human_version if kind == 'conflict' else old_version
+        if after['files'] != expected_files or after['nodes'][file_id]['version'] != expected_version:
             raise AssertionError('wrong file effect, rollback claim or foreign-workspace mutation')
         item['disk'] = dict(previous=old_version, version=after['nodes'][file_id]['version'],
                             epoch=before['epoch'], length=prepared['control_denied'],
                             sha256=hashlib.sha256(after['nodes'][file_id]['content']).hexdigest(),
                             record={k: records[0][k] for k in ('admission', 'state', 'terminal', 'prevention', 'committed')})
+        # Terminal checks are observations/local refusals, not another execution.
+        item['guards']['terminal_prepare'] = actor(uart, client, 'mission-prepare', 20)
+        item['guards']['terminal_schedule'] = actor(uart, client, 'mission-schedule', 20)
+        if snapshot(data)[1]['selected_sha256'] != after['selected_sha256']:
+            raise AssertionError('terminal mission guard replayed a mutation')
+        if committed:
+            # Same bytes at a newer human version are not this mission's readback.
+            uart.command('write hello "Single native client"')
+            superseded = snapshot(data)[1]
+            newer = superseded['nodes'][file_id]['version']
+            if newer <= final['terminal'] or superseded['files'] != after['files'] or superseded['records'] != after['records']:
+                raise AssertionError('readback supersession changed bytes or historical facts')
+            item['superseded'] = dict(version=newer, sha256=hashlib.sha256(CONTENT).hexdigest(),
+                                      rejected=actor(uart, client, 'mission-verify', 1))
+            if snapshot(data)[1]['selected_sha256'] != superseded['selected_sha256']:
+                raise AssertionError('rejected readback changed storage')
         cleanup(uart, client)
         if counters(uart) != baseline:
             raise AssertionError('selected mission leaked resources')
         item['resources'] = [baseline['processes'], active['processes'], baseline['channels'], active['channels']]
         cases.append(item)
-        if committed:
+        if committed or kind == 'conflict':
             uart.command('write hello "Hello from native Rust"')
     uart.command('rotate-receipts')
     return cases

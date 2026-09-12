@@ -26,11 +26,11 @@ def native_check(terminal):
         item = report['legacy'][name]
         exchange(c, 'operations.cancel', {k:v for k,v in item.items() if k != 'client'})
     for session in report['selection']:
-        for name in ('running', 'terminal'):
+        for name in ('prepared_view', 'terminal') + (() if session['case'] == 'conflict' else ('running',)):
             exchange(c, 'operations.get', session[name]['operation'])
         if session['case'] == 'cancel':
             exchange(c, 'operations.cancel', {k:v for k,v in session['ack'].items() if k != 'client'})
     return dict(status='success', version=2, profile=1, backend='native_negotiated_lifecycle',
                 descriptors=10, inspections=5, cancellations=2, guest_execution=True,
-                selected_sessions=3, selected_inspections=6, selected_cancellations=1,
+                selected_sessions=4, selected_inspections=11, selected_cancellations=1,
                 build_id=terminal['build_id'], kernel_sha256=terminal['kernel_sha256'])

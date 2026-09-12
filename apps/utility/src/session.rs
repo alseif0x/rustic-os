@@ -26,9 +26,13 @@ pub fn run(files: &mut Client, control: &Endpoint, owner: u64, scope: u32, other
             return 4;
         };
         let r = match w[0] {
-            a::SELECT_GET | a::SELECT_CANCEL | a::MISSION_PREPARE | a::MISSION_VERIFY => {
-                mission.execute(w[0], files, scope)
-            }
+            a::SELECT_GET
+            | a::SELECT_CANCEL
+            | a::MISSION_PREPARE
+            | a::MISSION_VERIFY
+            | a::MISSION_SCHEDULE
+            | a::MISSION_INSPECT
+            | a::MISSION_CANCEL => mission.execute(w[0], files, scope),
             a::ADMISSION => super::admission::run(files, w),
             a::API_READ | a::READ_OPEN | a::READ_NEXT | a::FILL => {
                 read.execute(w[0], files, scope, other)

@@ -83,10 +83,12 @@ def verify(image, timeout=60, output=None):
         verify_selection(negotiation['selection'])
         evidence = {"verified":True,"boots":2,"commands_phase_one":cases,"oracle":oracle,"allocated_bytes":allocation,
                     "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"authority":authority,"takeover":takeover,"management":management,"read_contract":read_contract,"storage":storage,"discovery":discovery,"prevention":prevention,"negotiation":negotiation}
-        (output / "terminal.json").write_text(json.dumps(evidence,indent=2)+"\n")
+        # Machine artifacts retain every field without redundant indentation.
+        # The collector still enforces the existing 64 KiB per-file limit.
+        (output / "terminal.json").write_text(json.dumps(evidence,separators=(',', ':'))+"\n")
         result = {"outcome":"success","returncode":33,"timed_out":False,"elapsed_seconds":round(time.monotonic()-started,3),
                   "build_id":metadata["build_id"],"image_sha256":metadata["image_sha256"],"terminal":evidence}
-        (output / "result.json").write_text(json.dumps(result,indent=2)+"\n")
+        (output / "result.json").write_text(json.dumps(result,separators=(',', ':'))+"\n")
         print(f"Native terminal: {cases} completed shell commands, two boots, real UART and independent persistent-file oracle.",flush=True)
         return result
     finally:

@@ -143,9 +143,9 @@ cancel-selected ADMISSION_ID
 act PID select-get
 act PID select-cancel
 act PID mission-prepare
-act-admission PID schedule ADMISSION_ID
-act-admission PID inspect-selected ADMISSION_ID
-act-admission PID cancel-selected ADMISSION_ID
+act PID mission-schedule
+act PID mission-inspect
+act PID mission-cancel
 act PID mission-verify
 ```
 
@@ -159,24 +159,44 @@ historical observations after restart/reboot. Independent disk snapshots check
 the retained outcome and that read-only selection does not modify storage.
 
 The selected-session fixture uses exactly one utility (rights 15, scoped to
-`hello`) for each of three scenarios: completion, live cancellation and revocation
-after selection. That utility selects both methods, reads its own references,
+`hello`) for each of four scenarios: completion, live cancellation, revocation
+after selection and an intervening human edit. That utility selects both methods, reads its own references,
 bytes/hash, version and retry epoch, then durably admits a fixed candidate and
 schedules it. It uses its original client for live inspection and cancellation;
 on success it reads and verifies the new bytes/hash/version. The owner steps the
-fixture and injects I/O holds/revocation, but does not read or prepare on the
-utility's behalf. Independent disk checks compare arguments, original identity,
+fixture and injects I/O holds/revocation/edits, but does not read or prepare on the
+utility's behalf or pass its admission ID back to control it. Independent disk checks compare arguments, original identity,
 terminal cause, file content/version and other files. Resource counts return to
 baseline. The shell also proves both selections are cleared on service restart.
 During active I/O, both clients attempt a fresh selection, receive `Busy` and
 still inspect/cancel through their previously selected profiles.
 
-`mission-prepare` and `mission-verify` are fixed diagnostic actions, not general
-workflow or agent APIs. Each process attempts one candidate with key `0x8300`
-in the observed epoch and retains its retry tuple; a second preparation returns
-`Busy`, including after an uncertain attempt. The fixture rotates retention only
-on disposable test volumes. The eight-method discovery mission, human-conflict
-and lost-response variants of this same selected workflow remain M1 work. Actual
+In the conflict case, a human writes different bytes after the client's durable
+admission and before its scheduling step. The client retains its original expected
+version and admission ID. Its selected inspection reports `failed/version_conflict`
+with no effect; the independent disk oracle requires the human's exact bytes and
+version, the original candidate arguments and historical instance, and one retained
+prevention record. It never rereads the human version to silently replace it.
+
+The mission actions are fixed diagnostics, not general workflow or agent APIs.
+Each process attempts one candidate with key `0x8300` in the observed epoch and
+retains its retry tuple before admission, then saves the acknowledged admission ID.
+Scheduling and cancellation use only that saved ID and selected SDK methods.
+Each mutation step permits one attempt, marking it before calling the SDK;
+repeating preparation, scheduling or cancellation returns `Busy`, including after
+an uncertain attempt. Controls before admission return `Invalid` without consuming
+the later attempt. This conservative fixture policy does not change the lower-level
+SDK's explicit retry/reconciliation semantics. Read-only inspection remains repeatable.
+
+Readback first requires this operation's `Succeeded` result, then verifies the
+content hash and exact committed version. An additional human write of identical
+bytes at a newer version is rejected as this mission's readback. Cancelled,
+conflicted and revoked missions cannot report verified success. Candidate admission,
+lifecycle control and diagnostic rendering live in separate native modules.
+
+The fixture rotates retention only on disposable test volumes. The eight-method
+discovery mission and lost-response variant of this same selected workflow remain
+M1 work; the current conflict cut is after admission, not before it. Actual
 SDK/RPC host tests cover malformed/misbound cancellation replies and no automatic
 retry; the prior native discarded-reply matrix does not establish that additional
 selected-workflow loss variant.
@@ -192,12 +212,17 @@ as in [DEVELOPMENT.md](DEVELOPMENT.md), then:
 The validator first checks the full lifecycle prerequisites, then verifies ten
 native descriptors against the reviewed bundle, five typed inspections and two
 cancellation acknowledgements. It consumes identified guest evidence; it does
-not run a VM. It additionally requires three selected sessions, six selected
+not run a VM. It additionally requires four selected sessions, eleven selected
 inspection results, one selected cancellation acknowledgement and independent
 effect/authority/readback evidence. Host checker mutations reject false rollback,
-stale authority, missing selection and inconsistent client/disk results. CI also
+stale authority, missing selection, altered human bytes, substituted identities,
+replay guards and inconsistent client/disk results. CI also
 runs it on the direct terminal report. Boot inventories,
 evidence-size budgets, storage format, dependencies and unsafe boundaries remain
 unchanged. General registry descriptors, authorization-filtered tool visibility,
 M1 integration and the remaining shared failure vectors remain separate
 acceptance work in #22/#47/#43.
+
+`terminal.json` and its enclosing `result.json` use compact JSON to keep all fields
+within their existing 64 KiB export limits. This changes whitespace only; schema
+validation, checksums, collector bounds and the full historical evidence remain.
