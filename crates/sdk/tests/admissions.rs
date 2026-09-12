@@ -45,6 +45,48 @@ fn fixture() -> (Replacement, Status) {
 }
 
 #[test]
+fn observation_uses_one_read_exchange_and_rejects_wrong_identity_or_profile() {
+    let (_, status) = fixture();
+    for fault in 0..5 {
+        transport::reset();
+        transport::respond(move |request| {
+            assert_eq!(request.op, a::OBSERVE);
+            assert_eq!(request.arg, a::OBSERVATION_VERSION);
+            let mut p = a::Observation::Retained(status)
+                .packet(request.context)
+                .unwrap();
+            match fault {
+                1 => p.version += 1,
+                2 => p.id += 1,
+                3 => p.data[24] = 1,
+                4 => {
+                    p = Packet::new(a::OBSERVE);
+                    p.context = request.context;
+                    p.status = E::UnsupportedVersion as u8;
+                }
+                _ => (),
+            }
+            p
+        });
+        let mut client = files::Client::new(1, 7, 11);
+        let result = client.admission_observe(status.id);
+        assert_eq!(
+            result,
+            match fault {
+                0 => Ok(a::Observation::Retained(status)),
+                4 => Err(E::UnsupportedVersion),
+                _ => Err(E::Protocol),
+            }
+        );
+        assert_eq!(
+            transport::requests().len(),
+            1,
+            "observation must not query twice, resume or retry"
+        );
+    }
+}
+
+#[test]
 fn scheduling_returns_queued_and_never_retries_a_lost_or_misbound_reply() {
     let (_, status) = fixture();
     for fault in 0..5 {

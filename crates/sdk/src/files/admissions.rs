@@ -9,6 +9,16 @@ use rustic_abi::files::{
 };
 
 impl<P: crate::rpc::Progress> Client<P> {
+    /// Read either live progress or a retained fact in one exchange. The same ID
+    /// remains valid after settlement/restart while retained. Never resumes work.
+    pub fn admission_observe(&mut self, id: AdmissionId) -> Result<a::Observation, Error> {
+        let reply = self.operation_exchange(id.packet(a::OBSERVE, self.context)?)?;
+        let result = a::Observation::decode(&reply)?;
+        if result.id() != id {
+            return Err(Error::Protocol);
+        }
+        Ok(result)
+    }
     /// Schedule an already durable admission and return before settlement.
     /// A lost reply is uncertain; inspect activity/durable status before deciding
     /// whether to explicitly resubmit. Restart never resumes a volatile schedule.

@@ -78,6 +78,7 @@ impl Owner<'_> {
                         Ok(p) if denial.is_some() => replies::refuse(&p, denial.unwrap()),
                         Ok(p)
                             if admission::live(p.op)
+                                || p.op == admission::OBSERVE
                                 || excluded.is_none() && p.op == admission::SCHEDULE =>
                         {
                             dispatch(

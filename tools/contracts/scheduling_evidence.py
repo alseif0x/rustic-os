@@ -4,6 +4,7 @@ import hashlib
 import re
 from .validation import require
 from .activity_conformance import identity, live_operation, check_operation
+from .observation_evidence import check_observations
 
 NAMES = ("scheduled_queue", "scheduled_lost_reply", "scheduled_restart", "scheduled_revoked")
 STATES = (("committed", "cancelled"), ("cancelled",), ("admitted", "committed"), ("committed", "cancelled"))
@@ -69,4 +70,5 @@ def check_scheduling(catalog, cases):
                 identity(old)
                 require(old["state"] == "admitted" and old["id"] == final["id"]
                         and old["instance"] == final["instance"], "restart replayed or replaced queued work")
+    check_observations(found)
     return len(found)

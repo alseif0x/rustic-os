@@ -27,12 +27,15 @@ impl AdmissionId {
     pub fn packet(self, op: u8, context: u32) -> Result<Packet, Error> {
         if !matches!(
             op,
-            super::GET | super::EXECUTE | super::CANCEL | super::SCHEDULE
+            super::GET | super::EXECUTE | super::CANCEL | super::SCHEDULE | super::OBSERVE
         ) && !super::live(op)
         {
             return Err(Error::Protocol);
         }
         let mut p = Packet::new(op);
+        if op == super::OBSERVE {
+            p.arg = super::OBSERVATION_VERSION;
+        }
         p.context = context;
         p.version = self.number;
         p.count = 16;
@@ -42,11 +45,16 @@ impl AdmissionId {
     pub fn decode(p: &Packet) -> Result<Self, Error> {
         if (!matches!(
             p.op,
-            super::GET | super::EXECUTE | super::CANCEL | super::SCHEDULE
+            super::GET | super::EXECUTE | super::CANCEL | super::SCHEDULE | super::OBSERVE
         ) && !super::live(p.op))
             || p.status != 0
             || p.id != 0
-            || p.arg != 0
+            || p.arg
+                != if p.op == super::OBSERVE {
+                    super::OBSERVATION_VERSION
+                } else {
+                    0
+                }
             || p.count != 16
             || p.data[16..] != [0; 24]
         {

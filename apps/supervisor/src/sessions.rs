@@ -46,7 +46,7 @@ impl State {
             || discard > s::actor::flags::DISCARD_REPLY
             || (discard != 0
                 && !matches!(w[5], x if x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64))
-            || !matches!(w[5], x if x == a::EXECUTE as u64 || x == a::ACTIVITY as u64 || x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64)
+            || !matches!(w[5], x if x == a::EXECUTE as u64 || x == a::ACTIVITY as u64 || x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64 || x == a::OBSERVE as u64)
         {
             return Err(1);
         }

@@ -3,15 +3,16 @@
 mod dispatch;
 mod execution;
 mod inventory;
+mod observation;
 use super::{Caller, scope::Scope};
 use rustic_abi::files::admission::AdmissionId;
-use rustic_fs::{AdmissionState, RETAINED};
+use rustic_fs::{AdmissionStatus, RETAINED};
 
 #[derive(Clone, Copy)]
 struct Candidate {
     scope: Scope,
     subject: u64,
-    state: AdmissionState,
+    status: AdmissionStatus,
 }
 #[derive(Clone, Copy)]
 struct Ticket {

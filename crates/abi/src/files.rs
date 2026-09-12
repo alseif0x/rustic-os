@@ -159,7 +159,7 @@ impl Packet {
         if b.len() != SIZE
             || b[0] != VERSION
             || b[3] as usize > DATA
-            || !matches!(b[1],1..=24|32..=34|48..=59)
+            || !matches!(b[1],1..=24|32..=34|48..=60)
         {
             return Err(Error::Protocol);
         }

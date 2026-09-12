@@ -15,6 +15,11 @@ impl Server {
         p: Packet,
         now: u64,
     ) -> Packet {
+        if p.op == a::OBSERVE
+            && let Err(error) = self.volume.retained_admission(0)
+        {
+            return failure(p, crate::reply::error(error));
+        }
         match queue.refresh(self) {
             Ok(()) => queue.request(&self.clients, None, caller, p, now),
             Err(error) => failure(p, error),
@@ -34,7 +39,9 @@ impl ExecutionQueue {
     ) -> Packet {
         let result = (|| {
             crate::validation::request(&p)?;
-            if !(a::live(p.op) || p.op == a::SCHEDULE) || caller.context != p.context {
+            if !(a::live(p.op) || matches!(p.op, a::SCHEDULE | a::OBSERVE))
+                || caller.context != p.context
+            {
                 return Err(Error::Protocol);
             }
             let right = match p.op {
@@ -49,7 +56,7 @@ impl ExecutionQueue {
                 .iter()
                 .flatten()
                 .find(|c| c.scope.id == id)
-                .ok_or(if active.is_some() {
+                .ok_or(if active.is_some() || p.op == a::OBSERVE {
                     Error::OutcomeUnknown
                 } else {
                     Error::Unavailable
@@ -59,8 +66,13 @@ impl ExecutionQueue {
                 .tickets
                 .iter()
                 .position(|t| t.is_some_and(|t| t.id == id));
+            if p.op == a::OBSERVE {
+                return self
+                    .observe(candidate, active.as_deref())?
+                    .packet(p.context);
+            }
             if p.op == a::SCHEDULE && index.is_none() {
-                if candidate.state != AdmissionState::Admitted {
+                if candidate.status.state != AdmissionState::Admitted {
                     return Err(Error::Unavailable);
                 }
                 let free = self

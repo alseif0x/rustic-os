@@ -13,7 +13,7 @@ impl ExecutionQueue {
                     *candidate = Some(Candidate {
                         scope: Scope::new(server, subject, &admission)?,
                         subject,
-                        state: admission.status.state,
+                        status: admission.status,
                     });
                 }
                 Ok(None) => (),

@@ -14,6 +14,7 @@ def transcript():
             + "error: Uncertain\n" * 17
             + "RUSTIC IO_OBSERVATION held=1\n" * 31
             + "admission-activity-v1\n" * 91 + "phase=queued\n"
+            + "admission-observation-v1\n" * 13
             + "IdempotencyConflict\nExpiredEpoch\noperation-v1\npersistent format v3\npersistent format v4\nadmission-v1\n")
 
 
@@ -27,6 +28,8 @@ class RecoveryEvidenceTests(unittest.TestCase):
         old = old.replace("admission-activity-v1\n", "", 29)
         self.assertFalse(reached("recovery-test", old))
         self.assertFalse(reached("recovery-test", transcript() + "admission-activity-v1\n"))
+        self.assertFalse(reached("recovery-test", transcript().replace("admission-observation-v1\n", "")))
+        self.assertFalse(reached("recovery-test", transcript() + "admission-observation-v1\n"))
 
     def test_operation_parser_rejects_duplicate_or_ambiguous_results(self):
         valid = ("operation-v1 id=op_test service_instance=si_test state=succeeded effect=committed cancel_requested=false\n"
@@ -43,7 +46,7 @@ class RecoveryEvidenceTests(unittest.TestCase):
         for marker in ("RusticOS native terminal 0.1", "error: Uncertain",
                        "RUSTIC IO_OBSERVATION held=1", "IdempotencyConflict", "ExpiredEpoch",
                        "operation-v1", "persistent format v3", "persistent format v4", "admission-v1",
-                       "admission-activity-v1", "phase=queued"):
+                       "admission-activity-v1", "admission-observation-v1", "phase=queued"):
             with self.subTest(missing=marker):
                 self.assertFalse(reached("recovery-test", transcript().replace(marker, "", 1)))
         self.assertFalse(reached("recovery-test", transcript() + "RUSTIC PANIC"))

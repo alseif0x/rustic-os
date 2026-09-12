@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Actual scheduled IPC: a returning initiator, bounded pending work and recovery."""
 import time
+from .observations import observe, paired
 from .activity_cases import activity, held, act
 from .admission_cases import status, check
 from .authority_cases import actor_result, cleanup, fence
@@ -60,10 +61,19 @@ def queue_case(session, owned_disk, temporary, image, mount):
             baseline = counters(uart)
             executor = pid(uart, "admission-session hello other 7")
             canceller = pid(uart, "admission-session hello other 8")
+            before_observation = snapshot(data)[0]
+            coherent = [observe(uart, a, "retained", "admitted") for a in (first, second)]
+            clients = [dict(index=0, result=paired(uart, executor, coherent[0]))]
+            if snapshot(data)[0] != before_observation:
+                raise AssertionError("read-only observation changed storage")
             uart.command("hold-io 0 400", "diagnostic armed")
             ack = observation(uart, f"schedule-admission {first['id']}", "queued", 0)
             held(uart)
             running = observation(uart, f"admission-activity {first['id']}", "running", 1)
+            coherent.append(observe(uart, first, "active", "running", 1))
+            clients.append(dict(index=2, result=paired(uart, executor, coherent[-1])))
+            coherent.append(observe(uart, second, "retained", "admitted"))
+            denied_observation = act(uart, canceller, "observe", first["id"], 17)
             peer_ack = act(uart, executor, "schedule", second["id"])
             if (peer_ack["value"], peer_ack["other"], peer_ack["control_denied"]) != (4, 0, 0):
                 raise AssertionError("deterministic client did not acknowledge queued work")
@@ -71,16 +81,23 @@ def queue_case(session, owned_disk, temporary, image, mount):
             if duplicate != peer_ack:
                 raise AssertionError("duplicate scheduling changed the queue acknowledgement")
             queued = observation(uart, f"admission-activity {second['id']}", "queued", 0)
+            coherent.append(observe(uart, second, "active", "queued"))
+            clients.append(dict(index=4, result=paired(uart, executor, coherent[-1])))
             stopped = act(uart, canceller, "request-cancel", second["id"])
             if (stopped["value"], stopped["other"], stopped["control_denied"]) != (4, 1, 0):
                 raise AssertionError("cancel-only authority did not stop queued work")
             cancelled = observation(uart, f"admission-activity {second['id']}", "queued", 0, 1)
+            coherent.append(observe(uart, second, "active", "queued", requested=1))
+            clients.append(dict(index=5, result=paired(uart, executor, coherent[-1])))
             uart.command("echo scheduling-owner-progress", "scheduling-owner-progress")
             uart.command("io-status", "held=1")
             finals = [settled(uart, first), settled(uart, second)]
             if [s["state"] for s in finals] != ["committed", "cancelled"]:
                 raise AssertionError("FIFO execution or queued prevention failed")
             completion = receipt(uart, finals[0])
+            for final in finals:
+                coherent.append(observe(uart, final, "retained", final["state"]))
+                clients.append(dict(index=len(coherent)-1, result=paired(uart, executor, coherent[-1])))
             check(data, finals[0], b"first", node["id"])
             check(data, finals[1], b"second", node["id"])
             uart.command("cat hello", "first")
@@ -88,15 +105,21 @@ def queue_case(session, owned_disk, temporary, image, mount):
             cleanup(uart, executor, canceller)
             if counters(uart) != baseline:
                 raise AssertionError("scheduled queue leaked client or I/O resources")
+        before_reboot = snapshot(data)[0]
         with session(mount, data, "scheduled-queue-reboot") as uart:
+            coherent.extend(observe(uart, final, "retained", final["state"]) for final in finals)
             for final in finals:
                 if status(uart.command(f"admission {final['id']}")) != final:
                     raise AssertionError("reboot changed a scheduled result")
             uart.command("cat hello", "first"); uart.command("cat other", "untouched")
-        _, observed = snapshot(data)
+        after_reboot, observed = snapshot(data)
+        if after_reboot != before_reboot:
+            raise AssertionError("reboot observation rewrote or replayed retained work")
         if observed["nodes"][node["id"]]["content"] != b"first":
             raise AssertionError("queued effect differs from independent disk bytes")
     return dict(case="scheduled_queue", verified=True, reboot_verified=True,
+                coherent_observations=coherent, observation_clients=clients,
+                observation_denied=denied_observation, observation_read_only=True,
                 observations=[ack, running, queued, cancelled], durable=finals, completion=completion,
                 retained_full=True, duplicate_same=True, cancel_only=True, owner_progress=True,
                 peer_ack=peer_ack, sha256=observed["selected_sha256"])
@@ -146,6 +169,7 @@ def restart_case(session, owned_disk, temporary, image, mount):
             uart.command("io-status", "held=1")
         with session(mount, data, "scheduled-restart-reboot") as uart:
             recovered = [status(uart.command(f"admission {a['id']}")) for a in (first, second)]
+            coherent = [observe(uart, a, "retained", "admitted") for a in recovered]
             if recovered != [first, second]:
                 raise AssertionError("restart replayed a scheduled request")
             uart.command("cat hello", "before")
@@ -155,12 +179,14 @@ def restart_case(session, owned_disk, temporary, image, mount):
             if final["state"] != "committed" or status(uart.command(f"admission {first['id']}")) != first:
                 raise AssertionError("fresh scheduling resumed unrelated retained work")
             completion = receipt(uart, final)
+            coherent.append(observe(uart, final, "retained", "committed"))
             check(data, final, b"second", node["id"])
             uart.command("cat hello", "second"); uart.command("cat other", "untouched")
         _, observed = snapshot(data)
         if observed["nodes"][node["id"]]["content"] != b"second":
             raise AssertionError("explicit resumption differs from independent disk bytes")
     return dict(case="scheduled_restart", verified=True, reboot_verified=True,
+                coherent_observations=coherent,
                 no_replay=True, fresh_explicit=True, recovered=recovered,
                 observations=[ack, running, pending, fresh], durable=[first, final],
                 completion=completion, sha256=observed["selected_sha256"])
@@ -181,6 +207,7 @@ def revoked_case(session, owned_disk, temporary, image, mount):
                 raise AssertionError("revocation fixture never queued its request")
             queued = observation(uart, f"admission-activity {second['id']}", "queued", 0)
             fence(uart, executor, "access=fenced members=1 discarded_staging=0 effects=settled")
+            observation_revoked = act(uart, executor, "observe", second["id"], 18)
             finals = [settled(uart, first), settled(uart, second)]
             if [s["state"] for s in finals] != ["committed", "cancelled"]:
                 raise AssertionError("revoked queue authority executed or stopped unrelated work")
@@ -199,6 +226,7 @@ def revoked_case(session, owned_disk, temporary, image, mount):
         if observed["nodes"][node["id"]]["content"] != b"first":
             raise AssertionError("revoked queued work changed the independent file oracle")
     return dict(case="scheduled_revoked", verified=True, reboot_verified=True,
+                observation_revoked=observation_revoked,
                 revoked_before_execution=True, peer_ack=peer_ack,
                 observations=[ack, running, queued], durable=finals,
                 completion=completion, sha256=observed["selected_sha256"])

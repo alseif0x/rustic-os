@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Manual client of the SDK's explicitly scheduled durable admissions.
+mod observation;
 use super::*;
 use rustic_sdk::files::{
     admission::{State, Status},
@@ -22,6 +23,10 @@ fn print(status: Status) {
 }
 pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
     match argument(a, 0)? {
+        "observe-admission" => {
+            exact(a, 2)?;
+            observation::print(s.files.admission_observe(argument(a, 1)?.parse()?)?);
+        }
         "enable-admissions" => {
             exact(a, 1)?;
             let r = s.service([

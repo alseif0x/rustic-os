@@ -57,7 +57,7 @@ impl ActiveExecution {
     pub fn request(&mut self, clients: &Clients, caller: Caller, p: Packet, now: u64) -> Packet {
         let result = (|| {
             crate::validation::request(&p)?;
-            if !a::live(p.op) || caller.context != p.context {
+            if !(a::live(p.op) || p.op == a::OBSERVE) || caller.context != p.context {
                 return Err(Error::Protocol);
             }
             let right = if p.op == a::REQUEST_CANCEL {
@@ -68,6 +68,9 @@ impl ActiveExecution {
             self.scope.check(clients, caller, right, now)?;
             if a::AdmissionId::decode(&p)? != self.observation.id {
                 return Err(Error::OutcomeUnknown);
+            }
+            if p.op == a::OBSERVE {
+                return a::Observation::Active(self.observation).packet(p.context);
             }
             if p.op == a::REQUEST_CANCEL {
                 self.stop();

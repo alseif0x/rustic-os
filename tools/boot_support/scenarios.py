@@ -26,6 +26,7 @@ def reached(mode, serial):
                 and "admission-v1" in serial
                 and serial.count("RUSTIC IO_OBSERVATION held=1") == 31
                 and serial.count("admission-activity-v1") == 91
+                and serial.count("admission-observation-v1") == 13
                 and "phase=queued" in serial
                 and "IdempotencyConflict" in serial
                 and "ExpiredEpoch" in serial

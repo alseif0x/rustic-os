@@ -24,8 +24,9 @@ This extends [explicit admission](FILE-ADMISSION-API.md) and
 snapshot. A newly accepted ticket replies `queued`, with no pending I/O. It can
 start or finish before a slow client reads that reply. The reply is an observation
 at request handling time, never proof of completion. There is no later unsolicited
-terminal reply to the scheduling RPC. Query activity while work is live, then
-durable admission and the completed operation to establish its effect.
+terminal reply to the scheduling RPC. Use [coherent observation](FILE-OBSERVATION.md)
+through `admission_observe` / `observe-admission` to read one live-or-retained view
+with the same ID. A committed record supplies the separate completion receipt ID.
 
 A repeated schedule while its ticket exists returns that ticket's current view.
 It neither creates a second publication nor transfers ownership to the retrier.

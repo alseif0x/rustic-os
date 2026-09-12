@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Synthetic contract challenges only; these objects are not native evidence."""
 import hashlib
+from .observation_fixtures import add_observations
 
 
 def scheduling_cases():
@@ -34,5 +35,6 @@ def scheduling_cases():
                              retry=dict(epoch="epoch_a", key="key_a")))
         if name == "scheduled_restart":
             case["recovered"] = [{**status, "state": "admitted", "terminal": 0} for status in durable]
+        add_observations(case)
         cases.append(case)
     return cases

@@ -39,6 +39,8 @@ Start with the [project overview](../README.md) for current capabilities and the
 | [Durable admission storage](FILE-ADMISSION.md) | Persistent pre-effect identity, cancellation records, explicit format-4 migration and restart evidence |
 | [Public admission API](FILE-ADMISSION-API.md) | Explicit durable preparation, status, execution and independent cancellation through SDK/terminal |
 | [Live execution control](FILE-ACTIVITY.md) | Authorized activity and stop requests while an explicit file execution has pending I/O |
+| [Scheduled execution](FILE-SCHEDULING.md) | Bounded background work, separate scheduling acknowledgements and explicit restart |
+| [Coherent observation](FILE-OBSERVATION.md) | One typed live-or-retained query, stable admission identity and shared manual/client semantics |
 | [Native capability discovery](DISCOVERY.md) | Which catalog methods a service implements on its mounted volume, with the bounds it enforces |
 | [Admission control](FILE-ADMISSION-CONTROL.md) | Pollable service admission, fresh execution authority and durable cleanup after owner revocation |
 
