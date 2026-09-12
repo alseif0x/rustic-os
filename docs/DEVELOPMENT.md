@@ -127,6 +127,14 @@ The [measurement guide](MEASUREMENTS.md) defines the separate #20 protocol, metr
 
 ## Completed workspace operations
 
+The [service-v2 lifecycle guide](FILE-LIFECYCLE.md) documents the current typed
+inspection/minimal cancellation bindings and `lifecycle-check`, `lifecycle-export`
+and `lifecycle-native` commands. The current suites have 80 contract tests and
+174 runner tests; the counts in earlier increment descriptions below are historical.
+Its native evidence extends the existing terminal mission, with no extra recovery
+groups, VM modes or resource/export limits. CI validates the new terminal report.
+Rebuild reviewed sandbox infrastructure after this harness change.
+
 The [operation guide](FILE-OPERATIONS.md) defines the bounded files.replace/operations.get profile, explicit format migration, current authority and historical lookup. With the pinned validator environment installed:
 
 ```sh

@@ -119,8 +119,12 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
                 Ok(message) => {
                     let output = match Packet::decode(message.payload()) {
                         Ok(request) => {
-                            if matches!(request.op, admission::SCHEDULE | admission::OBSERVE)
-                                || !queue.is_empty() && admission::live(request.op)
+                            if matches!(
+                                request.op,
+                                admission::SCHEDULE
+                                    | admission::OBSERVE
+                                    | rustic_sdk::abi::files::lifecycle::CANCEL
+                            ) || !queue.is_empty() && admission::live(request.op)
                             {
                                 server.scheduling_request(
                                     &mut queue,

@@ -38,21 +38,22 @@ impl State {
         self.actor_words(pid, [action, 0, 0, 0, 0, 0, 0, 0])
     }
     pub(super) fn admission_actor(&mut self, w: [u64; 8]) -> Result<[u64; 8], u64> {
-        use rustic_sdk::abi::files::admission as a;
+        use rustic_sdk::abi::files::{admission as a, lifecycle};
         // Scheduling/stop/result may be submitted without reading the reply; the discarded
         // acknowledgement is a fault fixture, never an additional authority.
         let modifier = w[6];
         let valid_modifier = match modifier {
             0 => true,
             s::actor::flags::DISCARD_REPLY => {
-                matches!(w[5], x if x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64)
+                matches!(w[5], x if x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64 || x == lifecycle::CANCEL as u64)
             }
             s::actor::flags::OBSERVE_V2 => w[5] == a::OBSERVE as u64,
+            s::actor::flags::LIFECYCLE => w[5] == a::OBSERVE as u64,
             _ => false,
         };
         if w[7] != 0
             || !valid_modifier
-            || !matches!(w[5], x if x == a::EXECUTE as u64 || x == a::ACTIVITY as u64 || x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64 || x == a::OBSERVE as u64)
+            || !matches!(w[5], x if x == a::EXECUTE as u64 || x == a::ACTIVITY as u64 || x == a::REQUEST_CANCEL as u64 || x == a::SCHEDULE as u64 || x == a::GET as u64 || x == a::OBSERVE as u64 || x == lifecycle::CANCEL as u64)
         {
             return Err(1);
         }

@@ -2,6 +2,7 @@
 //! Queue admission and observation under live, separately scoped rights.
 use super::{ExecutionQueue, Ticket};
 use crate::{ActiveExecution, Caller, Clients, Server};
+use rustic_abi::files::lifecycle::{self, CancelAck};
 use rustic_abi::files::{CANCEL_RIGHT, Error, INSPECT_RIGHT, Packet, WRITE_RIGHT, admission as a};
 use rustic_fs::AdmissionState;
 
@@ -39,29 +40,38 @@ impl ExecutionQueue {
     ) -> Packet {
         let result = (|| {
             crate::validation::request(&p)?;
-            if !(a::live(p.op) || matches!(p.op, a::SCHEDULE | a::OBSERVE))
+            if !(a::live(p.op) || matches!(p.op, a::SCHEDULE | a::OBSERVE | lifecycle::CANCEL))
                 || caller.context != p.context
             {
                 return Err(Error::Protocol);
             }
             let right = match p.op {
                 a::SCHEDULE => INSPECT_RIGHT | WRITE_RIGHT,
-                a::REQUEST_CANCEL => CANCEL_RIGHT,
+                a::REQUEST_CANCEL | lifecycle::CANCEL => CANCEL_RIGHT,
                 _ => INSPECT_RIGHT,
             };
             caller.check_right(clients, now, right)?;
-            let id = a::AdmissionId::decode(&p)?;
+            let id = if p.op == lifecycle::CANCEL {
+                CancelAck::decode_request(&p)?
+            } else {
+                a::AdmissionId::decode(&p)?
+            };
             let candidate = self
                 .candidates
                 .iter()
                 .flatten()
                 .find(|c| c.scope.id == id)
-                .ok_or(if active.is_some() || p.op == a::OBSERVE {
-                    Error::OutcomeUnknown
-                } else {
-                    Error::Unavailable
-                })?;
+                .ok_or(
+                    if active.is_some() || matches!(p.op, a::OBSERVE | lifecycle::CANCEL) {
+                        Error::OutcomeUnknown
+                    } else {
+                        Error::Unavailable
+                    },
+                )?;
             candidate.scope.check(clients, caller, right, now)?;
+            if p.op == lifecycle::CANCEL {
+                return self.cancel(*candidate, active, caller)?.packet(p.context);
+            }
             let index = self
                 .tickets
                 .iter()

@@ -2,6 +2,7 @@
 //! Restricted authority view while publication exclusively owns volume and disk.
 use super::{Caller, scope::Scope};
 use crate::{Clients, Server};
+use rustic_abi::files::lifecycle::{self, CancelAck, Disposition};
 use rustic_abi::files::{CANCEL_RIGHT, Error, INSPECT_RIGHT, Packet, admission as a};
 use rustic_fs::{Admission, PublicationPhase};
 
@@ -57,20 +58,39 @@ impl ActiveExecution {
     pub fn request(&mut self, clients: &Clients, caller: Caller, p: Packet, now: u64) -> Packet {
         let result = (|| {
             crate::validation::request(&p)?;
-            if !(a::live(p.op) || p.op == a::OBSERVE) || caller.context != p.context {
+            if !(a::live(p.op) || matches!(p.op, a::OBSERVE | lifecycle::CANCEL))
+                || caller.context != p.context
+            {
                 return Err(Error::Protocol);
             }
-            let right = if p.op == a::REQUEST_CANCEL {
+            let right = if matches!(p.op, a::REQUEST_CANCEL | lifecycle::CANCEL) {
                 CANCEL_RIGHT
             } else {
                 INSPECT_RIGHT
             };
             self.scope.check(clients, caller, right, now)?;
-            if a::AdmissionId::decode(&p)? != self.observation.id {
+            let id = if p.op == lifecycle::CANCEL {
+                CancelAck::decode_request(&p)?
+            } else {
+                a::AdmissionId::decode(&p)?
+            };
+            if id != self.observation.id {
                 return Err(Error::OutcomeUnknown);
             }
             if p.op == a::OBSERVE {
                 return super::observation::reply(a::ObservationV2::Active(self.observation), p);
+            }
+            if p.op == lifecycle::CANCEL {
+                let disposition = if self.stopping() {
+                    Disposition::AlreadyRequested
+                } else {
+                    Disposition::Requested
+                };
+                self.stop();
+                if self.observation.phase == a::ActivityPhase::Running {
+                    self.observation.phase = a::ActivityPhase::Stopping;
+                }
+                return CancelAck { id, disposition }.packet(p.context);
             }
             if p.op == a::REQUEST_CANCEL {
                 self.stop();

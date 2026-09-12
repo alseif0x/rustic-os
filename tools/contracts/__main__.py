@@ -32,14 +32,19 @@ def check(catalog):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("check", "export", "read-check", "read-native", "operations-check", "operations-native", "activity-check", "activity-native", "capabilities-check", "capabilities-native"))
+    parser.add_argument("command", choices=("check", "export", "read-check", "read-native", "operations-check", "operations-native", "activity-check", "activity-native", "capabilities-check", "capabilities-native", "lifecycle-check", "lifecycle-native", "lifecycle-export"))
     parser.add_argument("--output", type=Path)
     parser.add_argument("--evidence", type=Path, help="terminal.json from the native read fixture")
     args = parser.parse_args()
-    if (args.command in ("read-native", "operations-native", "activity-native", "capabilities-native")) != (args.evidence is not None):
+    if (args.command in ("read-native", "operations-native", "activity-native", "capabilities-native", "lifecycle-native")) != (args.evidence is not None):
         parser.error("--evidence is required only for native evidence commands")
     catalog = Catalog()
-    if args.command == "check":
+    if args.command.startswith('lifecycle-'):
+        from .lifecycle_conformance import catalog as lifecycle_catalog, host_check, native_check
+        from .read_conformance import load_native
+        catalog = lifecycle_catalog()
+        result = (catalog.descriptors() if args.command == 'lifecycle-export' else host_check(catalog) if args.command == 'lifecycle-check' else native_check(catalog, load_native(args.evidence)))
+    elif args.command == "check":
         result = check(catalog)
     elif args.command == "export":
         result = catalog.descriptors()

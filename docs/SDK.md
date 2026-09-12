@@ -131,3 +131,9 @@ let recovered = files.operation_get(Lookup::Retry {
 The snippet assumes previously resolved references, a successful bounded read and an explicitly upgraded volume. Each receipt uses a fixed 104-byte collector and three independently authorized frames. Identity, lengths, reserved fields, expected arguments and replacement digest must agree. Any failure after commit may have been admitted is Uncertain; observational failures remain lookup errors. The two retained slots and epoch are volume-wide, shared with legacy receipts. General queued/running and cancellation APIs are not added.
 
 The [explicit admission binding](FILE-ADMISSION-API.md) adds durable preparation, status, execution and cancellation. Its admission identity is distinct from a completion receipt; preparation never schedules work. The subsequent [scheduling API](FILE-SCHEDULING.md) adds `Client::admission_schedule(id)`, returning a volatile queued/active snapshot while execution continues. Use live status/stop calls and later durable lookup; the SDK does not replay a missing scheduling response.
+
+The [service-v2 lifecycle binding](FILE-LIFECYCLE.md) adds
+`Client::operation_inspect(id)` and `Client::operation_cancel(id)`. Inspection
+uses one cause-aware query and preserves the admission identity on completion.
+Cancellation uses one separately authorized exchange and returns only that ID
+and a disposition; it neither reads the operation nor retries an uncertain reply.

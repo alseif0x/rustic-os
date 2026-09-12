@@ -1,0 +1,29 @@
+{
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "version": 2,
+  "status": "native_lifecycle_subset",
+  "max_envelope_bytes": 32768,
+  "max_depth": 16,
+  "operations": [
+    {
+      "name": "operations.get",
+      "schema": "operations.get.schema.json",
+      "owner": "files",
+      "actions": [
+        "operations.inspect"
+      ],
+      "effect": "observation",
+      "description": "Inspect one retained admission through its stable ID; distinguish prepared work, live stop state and proven terminal effects."
+    },
+    {
+      "name": "operations.cancel",
+      "schema": "operations.cancel.schema.json",
+      "owner": "files",
+      "actions": [
+        "operations.cancel"
+      ],
+      "effect": "cancel_request",
+      "description": "Request a volatile stop under independent cancel authority; the acknowledgement discloses no inspection result."
+    }
+  ]
+}

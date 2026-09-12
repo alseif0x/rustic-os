@@ -79,6 +79,7 @@ impl Owner<'_> {
                         Ok(p)
                             if admission::live(p.op)
                                 || p.op == admission::OBSERVE
+                                || p.op == rustic_sdk::abi::files::lifecycle::CANCEL
                                 || excluded.is_none() && p.op == admission::SCHEDULE =>
                         {
                             dispatch(

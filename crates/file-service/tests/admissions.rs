@@ -4,6 +4,7 @@ mod admissions {
     mod activity;
     mod authority;
     mod control;
+    mod lifecycle;
     mod observation;
     mod reasons;
     mod scheduling;

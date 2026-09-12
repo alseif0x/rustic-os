@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rusticos:services:v2:operations.get",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "$defs": {
+    "input": {
+      "type": "object",
+      "properties": {
+        "operation_id": {
+          "$ref": "urn:rusticos:services:v2:types#/$defs/admission_id"
+        }
+      },
+      "required": [
+        "operation_id"
+      ],
+      "additionalProperties": false
+    },
+    "output": {
+      "$ref": "urn:rusticos:services:v2:types#/$defs/operation"
+    },
+    "request": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 2
+        },
+        "method": {
+          "const": "operations.get"
+        },
+        "params": {
+          "$ref": "#/$defs/input"
+        }
+      },
+      "required": [
+        "version",
+        "method",
+        "params"
+      ],
+      "additionalProperties": false
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 2
+            },
+            "method": {
+              "const": "operations.get"
+            },
+            "result": {
+              "$ref": "#/$defs/output"
+            }
+          },
+          "required": [
+            "version",
+            "method",
+            "result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": 2
+            },
+            "method": {
+              "const": "operations.get"
+            },
+            "error": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/error"
+            }
+          },
+          "required": [
+            "version",
+            "method",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

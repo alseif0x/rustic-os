@@ -25,6 +25,12 @@ pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Erro
             "get" => (a::GET, 0),
             "observe" => (a::OBSERVE, 0),
             "observe-v2" => (a::OBSERVE, s::actor::flags::OBSERVE_V2),
+            "inspect" => (a::OBSERVE, s::actor::flags::LIFECYCLE),
+            "cancel" => (rustic_sdk::files::lifecycle::CANCEL, 0),
+            "lost-cancel" => (
+                rustic_sdk::files::lifecycle::CANCEL,
+                s::actor::flags::DISCARD_REPLY,
+            ),
             "lost-result" => (a::GET, s::actor::flags::DISCARD_REPLY),
             "activity" => (a::ACTIVITY, 0),
             "request-cancel" => (a::REQUEST_CANCEL, 0),

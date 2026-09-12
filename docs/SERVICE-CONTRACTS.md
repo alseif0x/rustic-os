@@ -2,6 +2,12 @@
 
 # Shared service contracts, version 1
 
+The newer [retained lifecycle v2](FILE-LIFECYCLE.md) deliberately versions the
+stable admission ID, terminal history representation and minimal cancellation
+acknowledgement. This page remains the v1 specification and historical binding
+contract; its eight schemas and digests are unchanged. Native v2 discovery is
+still separate work.
+
 The eight-operation specification is checked on the host. [#6](https://github.com/alseif0x/rustic-os/issues/6) and [ADR-0003](architecture/ADR-0003-service-contracts.md) record the contract decision. Native [files.read](FILES-READ.md) and [completed files.replace/operations.get](FILE-OPERATIONS.md) bindings now connect three methods to real storage and authority. The remaining logical surface, agent and MCP integration retain their implementation work; the complete catalog is not a running server or a grant of authority.
 
 ## Canonical sources and boundaries

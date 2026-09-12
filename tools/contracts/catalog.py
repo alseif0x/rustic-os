@@ -15,6 +15,10 @@ class Catalog:
     def __init__(self, root=ROOT):
         self.root = root
         self.manifest = json.loads((root / "catalog.json").read_text())
+        self.version = self.manifest['version']
+        if type(self.version) is not int or self.version not in (1, 2):
+            raise ValueError('unsupported service contract version')
+        prefix = f'urn:rusticos:services:v{self.version}:'
         self.schemas = {}
         for path in sorted(root.glob("*.schema.json")):
             schema = json.loads(path.read_text())
@@ -33,11 +37,11 @@ class Catalog:
             if name in self.entries:
                 raise ValueError("duplicate method")
             schema = json.loads((root / entry["schema"]).read_text())
-            if schema["$id"] != "urn:rusticos:services:v1:" + name:
+            if schema["$id"] != prefix + name:
                 raise ValueError("method/schema identity mismatch")
             self.entries[name] = (entry, schema)
             self.expanded(name)  # Resolve all referenced contract types now.
-        declared = self.schemas["urn:rusticos:services:v1:types"]["$defs"]["method"]["enum"]
+        declared = self.schemas[prefix + 'types']["$defs"]["method"]["enum"]
         if set(declared) != set(self.entries) or len(declared) != len(self.entries):
             raise ValueError("catalog and method enum diverge")
 

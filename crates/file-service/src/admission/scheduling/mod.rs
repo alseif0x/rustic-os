@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Incarnation-local FIFO over already durable records, never a source of authority.
+mod cancellation;
 mod dispatch;
 mod execution;
 mod inventory;

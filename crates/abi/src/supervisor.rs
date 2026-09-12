@@ -53,6 +53,8 @@ pub mod actor {
         pub const DISCARD_REPLY: u64 = 1;
         /// OBSERVE only: explicitly request cause-aware observation profile 2.
         pub const OBSERVE_V2: u64 = 2;
+        /// Typed service-v2 projection of one profile-2 observation.
+        pub const LIFECYCLE: u64 = 3;
     }
 }
 pub const SPIN: u64 = 1;

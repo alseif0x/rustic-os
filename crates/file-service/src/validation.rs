@@ -25,6 +25,13 @@ pub(super) fn request(p: &Packet) -> Result<(), Error> {
         | admission::ACTIVITY
         | admission::REQUEST_CANCEL => p.count == 16 && p.id == 0 && p.arg == 0,
         admission::SCHEDULE => p.count == 16 && p.id == 0 && p.arg == 0,
+        lifecycle::CANCEL => {
+            if p.arg != lifecycle::VERSION {
+                return Err(Error::UnsupportedVersion);
+            }
+            lifecycle::CancelAck::decode_request(p)?;
+            true
+        }
         admission::OBSERVE => {
             if !matches!(
                 p.arg,

@@ -45,6 +45,72 @@ fn fixture() -> (Replacement, Status) {
 }
 
 #[test]
+fn logical_inspection_and_minimal_cancel_each_use_one_bound_exchange() {
+    use rustic_abi::files::lifecycle as l;
+    let (_, status) = fixture();
+    transport::reset();
+    transport::respond(move |p| {
+        a::ObservationV2::Retained {
+            status,
+            prevention: None,
+        }
+        .packet(p.context)
+        .unwrap()
+    });
+    let mut client = files::Client::new(1, 7, 11);
+    assert_eq!(
+        client.operation_inspect(status.id).unwrap().state,
+        l::State::Prepared
+    );
+    assert_eq!(transport::requests().len(), 1);
+    for fault in 0..9 {
+        transport::reset();
+        transport::respond(move |p| {
+            assert_eq!(l::CancelAck::decode_request(&p), Ok(status.id));
+            let mut reply = l::CancelAck {
+                id: status.id,
+                disposition: l::Disposition::Requested,
+            }
+            .packet(p.context)
+            .unwrap();
+            match fault {
+                1 => reply.version += 1,
+                2 => reply.id = 1,
+                3 => reply.arg = 4,
+                4 => reply.count = 24,
+                5 => reply.context += 1,
+                6 => reply.data[39] = 1,
+                8 => {
+                    reply = Packet::new(l::CANCEL);
+                    reply.context = p.context;
+                    reply.status = E::Denied as u8;
+                }
+                _ => (),
+            }
+            reply
+        });
+        transport::wrong_peer(fault == 7);
+        let mut client = files::Client::new(1, 7, 11);
+        assert_eq!(
+            client.operation_cancel(status.id),
+            match fault {
+                0 => Ok(l::CancelAck {
+                    id: status.id,
+                    disposition: l::Disposition::Requested
+                }),
+                8 => Err(E::Denied),
+                _ => Err(E::Uncertain),
+            }
+        );
+        assert_eq!(
+            transport::requests().len(),
+            1,
+            "no read-then-stop or replay"
+        );
+    }
+}
+
+#[test]
 fn detailed_observation_rejects_fallback_corruption_and_wrong_binding_without_retry() {
     let (_, mut status) = fixture();
     status.state = State::Cancelled;

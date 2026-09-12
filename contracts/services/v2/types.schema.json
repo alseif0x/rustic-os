@@ -1,0 +1,268 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rusticos:services:v2:types",
+  "$comment": "SPDX-License-Identifier: Apache-2.0",
+  "$defs": {
+    "method": {
+      "enum": [
+        "operations.get",
+        "operations.cancel"
+      ]
+    },
+    "admission_id": {
+      "type": "string",
+      "pattern": "^ad_[0-9a-f]{32}_[0-9a-f]{16}$"
+    },
+    "instance": {
+      "type": "string",
+      "pattern": "^si_[0-9a-f]{32}_[0-9a-f]{16}$"
+    },
+    "completion_id": {
+      "type": "string",
+      "pattern": "^op_[0-9a-f]{32}_[0-9a-f]{16}$"
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "enum": [
+            "access_denied",
+            "outcome_unknown",
+            "unsupported_version",
+            "unsupported",
+            "busy",
+            "unavailable",
+            "uncertain",
+            "closed",
+            "interrupted",
+            "protocol_error",
+            "io_error"
+          ]
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "additionalProperties": false
+    },
+    "operation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/admission_id"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/instance"
+            },
+            "state": {
+              "const": "prepared"
+            },
+            "effect": {
+              "const": "none"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "state",
+            "effect"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/admission_id"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/instance"
+            },
+            "state": {
+              "const": "queued"
+            },
+            "effect": {
+              "const": "none"
+            },
+            "stop_pending": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "state",
+            "effect",
+            "stop_pending"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/admission_id"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/instance"
+            },
+            "state": {
+              "const": "running"
+            },
+            "effect": {
+              "const": "none"
+            },
+            "stop_pending": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "state",
+            "effect",
+            "stop_pending"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/admission_id"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/instance"
+            },
+            "state": {
+              "const": "reconciling"
+            },
+            "effect": {
+              "const": "unknown"
+            },
+            "stop_pending": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "state",
+            "effect",
+            "stop_pending"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/admission_id"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/instance"
+            },
+            "state": {
+              "const": "succeeded"
+            },
+            "effect": {
+              "const": "committed"
+            },
+            "completion_id": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/completion_id"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "state",
+            "effect",
+            "completion_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/admission_id"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/instance"
+            },
+            "state": {
+              "const": "cancelled"
+            },
+            "effect": {
+              "const": "none"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "state",
+            "effect"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/admission_id"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/instance"
+            },
+            "state": {
+              "const": "failed"
+            },
+            "effect": {
+              "const": "none"
+            },
+            "failure": {
+              "enum": [
+                "version_conflict",
+                "access_denied"
+              ]
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "state",
+            "effect",
+            "failure"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation_id": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/admission_id"
+            },
+            "service_instance": {
+              "$ref": "urn:rusticos:services:v2:types#/$defs/instance"
+            },
+            "state": {
+              "const": "prevented"
+            },
+            "effect": {
+              "const": "none"
+            }
+          },
+          "required": [
+            "operation_id",
+            "service_instance",
+            "state",
+            "effect"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

@@ -6,6 +6,7 @@ from .authority_cases import cleanup, fence
 from .cases import counters, pid
 from .oracle import snapshot
 from .scheduling_cases import settled
+from . import lifecycle_observations as logical
 
 
 def retained(uart, result, reason):
@@ -23,11 +24,12 @@ def paired_retained(uart, results, reasons):
     try:
         views = [retained(uart, r, c) for r, c in zip(results, reasons, strict=True)]
         clients = [paired(uart, inspector, v) for v in views]
+        lifecycle = [logical.retained(uart, v, inspector) for v in views]
     finally:
         cleanup(uart, inspector)
     if counters(uart) != baseline:
         raise AssertionError('observation client leaked resources')
-    return dict(views=views, clients=clients)
+    return dict(views=views, clients=clients, lifecycle=lifecycle)
 
 
 def authority(uart, data, admitted):

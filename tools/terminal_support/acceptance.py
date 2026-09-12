@@ -18,6 +18,7 @@ from .discovery_cases import exercise as discovery_exercise, after_reboot as dis
 from .oracle import inspect
 from . import prevention_cases
 from .prevention_report import verify as verify_prevention
+from .lifecycle_report import verify as verify_lifecycle
 
 def verify(image, timeout=60, output=None):
     image = Path(image).resolve()
@@ -69,6 +70,7 @@ def verify(image, timeout=60, output=None):
                 allocation = data.stat().st_blocks * 512
         (output / "files.bin").write_bytes(selected)
         verify_prevention(prevention)
+        verify_lifecycle(prevention)
         evidence = {"verified":True,"boots":2,"commands_phase_one":cases,"oracle":oracle,"allocated_bytes":allocation,
                     "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"authority":authority,"takeover":takeover,"management":management,"read_contract":read_contract,"storage":storage,"discovery":discovery,"prevention":prevention}
         (output / "terminal.json").write_text(json.dumps(evidence,indent=2)+"\n")

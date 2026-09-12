@@ -4,6 +4,7 @@ mod admissions;
 mod authority;
 mod discovery;
 mod files;
+mod lifecycle;
 mod management;
 mod operations;
 mod processes;
@@ -65,6 +66,9 @@ pub fn exact(args: &Args<'_>, n: usize) -> Result<(), Error> {
 pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
     match argument(a, 0)? {
         "help" => {
+            output::text(
+                "inspect-operation ADMISSION_ID | request-operation-cancel ADMISSION_ID\r\nact-admission PID inspect|cancel|lost-cancel ADMISSION_ID (service v2)\r\n",
+            );
             output::text("enable-prevention-reasons (explicit persistent format v5 upgrade)\r\n");
             output::text(
                 "observe-admission ADMISSION_ID | observe-admission-v2 ADMISSION_ID | schedule-admission ADMISSION_ID | admission-activity ADMISSION_ID | request-cancel ADMISSION_ID\r\nadmission-session FILE OTHER RIGHTS [private] | act-admission PID execute|schedule|get|observe|observe-v2|activity|request-cancel|lost-stop|lost-schedule|lost-result ADMISSION_ID\r\nScheduling returns before settlement; cancellation replies acknowledge a request, not durable prevention. Private sessions use a supervisor-assigned subject.\r\n",
@@ -113,6 +117,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         | "observe-admission-v2" => admissions::execute(s, a)?,
         "admission-session" | "act-admission" => admission_actors::execute(s, a)?,
         "capabilities" => discovery::execute(s, a)?,
+        "inspect-operation" | "request-operation-cancel" => lifecycle::execute(s, a)?,
         "enable-operations" | "replace-ref" | "replace-fill-ref" | "operation" => {
             operations::execute(s, a)?
         }

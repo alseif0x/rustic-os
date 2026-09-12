@@ -3,6 +3,7 @@
 mod admissions;
 mod client;
 mod discovery;
+mod lifecycle_client;
 mod operations;
 mod range;
 mod recovery;
@@ -15,4 +16,4 @@ mod paths;
 pub use client::Client;
 pub use metadata::Metadata;
 pub use rustic_abi::files::{Error, Packet};
-pub use rustic_abi::files::{admission, capabilities, operation, read, reference};
+pub use rustic_abi::files::{admission, capabilities, lifecycle, operation, read, reference};

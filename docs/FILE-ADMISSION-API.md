@@ -78,6 +78,7 @@ admission and completed-operation transfers cannot consume or abort each other.
 | 56 / 57 | Live activity / volatile stop request; separate [activity framing](FILE-ACTIVITY.md) |
 | 59 | Schedule a durable admitted record; [queued/activity reply](FILE-SCHEDULING.md) |
 | 60 | Read one [coherent observation](FILE-OBSERVATION.md), explicit native profile 1 or cause-aware profile 2 |
+| 61 | Request a [service-v2 stop](FILE-LIFECYCLE.md); minimal acknowledgement under independent CANCEL authority |
 
 Open uses the typed replacement argument layout. ID requests carry 16 lineage
 bytes and the admission number in `version`. Retry lookup uses the existing
