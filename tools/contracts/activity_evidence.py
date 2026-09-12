@@ -12,7 +12,7 @@ def check_activity(cases):
         "inspect_only": (0, 4, 17, True),
         "foreign_scope": (0, 8, 27, True),
     }
-    for name in (*expected, "failed_drain"):
+    for name in (*expected, "failed_drain", "saturated"):
         found = [case for case in cases if case.get("case") == "public_activity_" + name]
         require(len(found) == 1, "missing or duplicate native activity case")
         case = found[0]
@@ -22,6 +22,13 @@ def check_activity(cases):
         if name == "failed_drain":
             require(case.get("uncertain") is True and "committed" not in case,
                     "failed drain fabricated a definitive result")
+            continue
+        if name == "saturated":
+            # A saturated run still has to show owner progress and prevention.
+            require(all(case.get(field) is True for field in
+                        ("staging_full", "undrained_client", "owner_progress", "stopped"))
+                    and case.get("committed") is False,
+                    "saturated execution lacks owner progress or durable prevention")
             continue
         skip, rights, denied, committed = expected[name]
         require(all(type(case.get(field)) is int and case[field] == value
