@@ -2,6 +2,11 @@
 
 # Native capability discovery
 
+The original support vector described below remains compatible. The subsequent
+[lifecycle negotiation API](FILE-NEGOTIATION.md) adds explicit v2 method/profile
+selection with reviewed digests and the current IPC responder. It does not
+change the v1 vector or complete the logical registry methods.
+
 A client should not have to guess what a running service implements. This first
 #22 increment lets any bound native client ask the file service which logical
 [service-v1](SERVICE-CONTRACTS.md) methods it implements right now, and the
@@ -26,7 +31,7 @@ Availability is derived from the volume this service has actually mounted:
 | `files.read` | `available` | The bounded range profile is implemented |
 | `files.replace`, `operations.get` | `available` only on a scoped (format-3) volume, else `unavailable` | Completed replacements and receipts need that format |
 | `capabilities.list` | `degraded` | Only this service's own methods are answered, not a registry |
-| `capabilities.describe` | `unavailable` | The guest carries no reviewed contract digest |
+| `capabilities.describe` | `unavailable` | The general v1 registry descriptor is not implemented; the separate v2 selector carries reviewed lifecycle digests |
 | `operations.cancel` | `unavailable` | The [native live stop](FILE-ACTIVITY.md) is a separate profile, not this method |
 | `events.read`, `system.status` | `unavailable` | Owned by services that do not implement them yet |
 
@@ -74,12 +79,12 @@ separate unused-key probe, not proof that a replacement executed; scoped
 replacement execution is covered by the recovery mission. Unexpected probe
 errors fail validation rather than being interpreted as support.
 
-This is not an implementation of `capabilities.list`: that output also requires
-a service instance for the answering incarnation, which the guest does not yet
-report for discovery, and `capabilities.describe` additionally requires the
-reviewed contract digest, which the guest does not carry. Both remain
-`specified_not_implemented`. Live registry aggregation across services, events
-and the complete M1 mission stay in #22/#13/#15.
+This is not an implementation of `capabilities.list` or `capabilities.describe`.
+The separate v2 selector identifies its current responder within a native boot
+and connection and checks its reviewed digests. It does not implement the v1
+registry's service-instance identity, pagination, visibility or full descriptors.
+Both logical registry methods remain `specified_not_implemented`. Live registry
+aggregation across services, events and the complete M1 mission stay in #22/#13/#15.
 
 ## Native acceptance
 

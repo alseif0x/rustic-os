@@ -32,6 +32,8 @@ impl State {
                 | s::actor::FILL
                 | s::actor::OPERATION_GET
                 | s::actor::CAPABILITIES
+                | s::actor::PROFILE_GET
+                | s::actor::PROFILE_CANCEL
         ) {
             return Err(1);
         }
@@ -49,6 +51,9 @@ impl State {
             }
             s::actor::flags::OBSERVE_V2 => w[5] == a::OBSERVE as u64,
             s::actor::flags::LIFECYCLE => w[5] == a::OBSERVE as u64,
+            s::actor::flags::NEGOTIATED => {
+                w[5] == a::OBSERVE as u64 || w[5] == lifecycle::CANCEL as u64
+            }
             _ => false,
         };
         if w[7] != 0

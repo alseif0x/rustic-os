@@ -31,6 +31,9 @@ pub fn run(files: &mut Client, control: &Endpoint, owner: u64, scope: u32, other
             }
             a::OPERATION_GET => super::operations::inspect(files, scope),
             a::CAPABILITIES => super::discovery::report(files),
+            a::PROFILE_GET | a::PROFILE_CANCEL => {
+                super::discovery::profile(files, w[0] == a::PROFILE_CANCEL)
+            }
             a::READ => {
                 let mut bytes = [0; 1024];
                 let first = files.read(scope, &mut bytes);

@@ -127,10 +127,18 @@ The [measurement guide](MEASUREMENTS.md) defines the separate #20 protocol, metr
 
 ## Completed workspace operations
 
+The [native lifecycle negotiation](FILE-NEGOTIATION.md) extends the terminal
+mission with mounted support, exact contract digests, separate rights and current
+responder checks across service restart/reboot. Run `negotiation-native` against
+the resulting `artifacts/terminal-test/terminal.json`; the current host suites
+contain 81 contract tests and 177 runner tests. The direct/isolated VM inventories
+and evidence budgets are unchanged. Rebuild reviewed sandbox infrastructure
+after this harness change. Counts in earlier increment records are historical.
+
 The [service-v2 lifecycle guide](FILE-LIFECYCLE.md) documents the current typed
 inspection/minimal cancellation bindings and `lifecycle-check`, `lifecycle-export`
-and `lifecycle-native` commands. The current suites have 80 contract tests and
-174 runner tests; the counts in earlier increment descriptions below are historical.
+and `lifecycle-native` commands. That delivery passed 80 contract tests and
+174 runner tests; see the current counts above.
 Its native evidence extends the existing terminal mission, with no extra recovery
 groups, VM modes or resource/export limits. CI validates the new terminal report.
 Rebuild reviewed sandbox infrastructure after this harness change.

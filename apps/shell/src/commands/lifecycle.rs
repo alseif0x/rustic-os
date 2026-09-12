@@ -1,13 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Manual presentation of the narrow, versioned logical lifecycle.
 use super::*;
+use rustic_sdk::abi::services::Method;
 use rustic_sdk::files::lifecycle::{Disposition, Failure, State};
 
 pub(super) fn execute(s: &mut Session, args: &Args<'_>) -> Result<(), Error> {
     exact(args, 2)?;
     let id = argument(args, 1)?.parse()?;
-    if argument(args, 0)? == "request-operation-cancel" {
-        let ack = s.files.operation_cancel(id)?;
+    let command = argument(args, 0)?;
+    if matches!(command, "request-operation-cancel" | "cancel-negotiated") {
+        let ack = if command == "cancel-negotiated" {
+            s.files
+                .negotiate_lifecycle(Method::OperationsCancel)?
+                .cancel(id)?
+        } else {
+            s.files.operation_cancel(id)?
+        };
         let disposition = match ack.disposition {
             Disposition::Requested => "requested",
             Disposition::AlreadyRequested => "already_requested",
@@ -19,7 +27,13 @@ pub(super) fn execute(s: &mut Session, args: &Args<'_>) -> Result<(), Error> {
         ));
         return Ok(());
     }
-    let operation = s.files.operation_inspect(id)?;
+    let operation = if command == "inspect-negotiated" {
+        s.files
+            .negotiate_lifecycle(Method::OperationsGet)?
+            .inspect(id)?
+    } else {
+        s.files.operation_inspect(id)?
+    };
     let (state, effect) = match operation.state {
         State::Prepared => ("prepared", "none"),
         State::Queued { .. } => ("queued", "none"),

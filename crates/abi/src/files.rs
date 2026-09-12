@@ -34,6 +34,7 @@ pub const MAX_INLINE: usize = 1024;
 pub mod admission;
 pub mod capabilities;
 pub mod lifecycle;
+pub mod negotiation;
 pub const CANCEL_RIGHT: u8 = 8;
 pub mod operation;
 pub const INSPECT_RIGHT: u8 = 4;
@@ -160,7 +161,7 @@ impl Packet {
         if b.len() != SIZE
             || b[0] != VERSION
             || b[3] as usize > DATA
-            || !matches!(b[1],1..=24|32..=34|48..=61)
+            || !matches!(b[1],1..=24|32..=34|48..=62)
         {
             return Err(Error::Protocol);
         }

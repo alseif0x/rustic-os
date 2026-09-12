@@ -137,3 +137,10 @@ The [service-v2 lifecycle binding](FILE-LIFECYCLE.md) adds
 uses one cause-aware query and preserves the admission identity on completion.
 Cancellation uses one separately authorized exchange and returns only that ID
 and a disposition; it neither reads the operation nor retries an uncertain reply.
+
+Use [native profile selection](FILE-NEGOTIATION.md) through
+`Client::negotiate_lifecycle(Method::OperationsGet)` or `OperationsCancel` to
+check the exact reviewed contract on the current IPC connection before calling
+`inspect` or `cancel`. The returned selection borrows that client and cannot
+survive its rebind. Current responder identity is separate from historical
+operation origin, and support never grants authority.

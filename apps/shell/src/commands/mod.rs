@@ -6,6 +6,7 @@ mod discovery;
 mod files;
 mod lifecycle;
 mod management;
+mod negotiation;
 mod operations;
 mod processes;
 mod read;
@@ -67,6 +68,9 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
     match argument(a, 0)? {
         "help" => {
             output::text(
+                "lifecycle-profile operations.get|operations.cancel\r\ninspect-negotiated ADMISSION_ID | cancel-negotiated ADMISSION_ID\r\nact PID profile-get|profile-cancel | act-admission PID inspect-negotiated|cancel-negotiated ADMISSION_ID\r\n",
+            );
+            output::text(
                 "inspect-operation ADMISSION_ID | request-operation-cancel ADMISSION_ID\r\nact-admission PID inspect|cancel|lost-cancel ADMISSION_ID (service v2)\r\n",
             );
             output::text("enable-prevention-reasons (explicit persistent format v5 upgrade)\r\n");
@@ -117,6 +121,8 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         | "observe-admission-v2" => admissions::execute(s, a)?,
         "admission-session" | "act-admission" => admission_actors::execute(s, a)?,
         "capabilities" => discovery::execute(s, a)?,
+        "lifecycle-profile" => negotiation::execute(s, a)?,
+        "inspect-negotiated" | "cancel-negotiated" => lifecycle::execute(s, a)?,
         "inspect-operation" | "request-operation-cancel" => lifecycle::execute(s, a)?,
         "enable-operations" | "replace-ref" | "replace-fill-ref" | "operation" => {
             operations::execute(s, a)?

@@ -2,6 +2,10 @@
 
 # Retained operation lifecycle, service version 2
 
+The subsequent [native negotiation binding](FILE-NEGOTIATION.md) selects these
+methods by exact version/profile and reviewed descriptor digest on the current
+IPC connection. The commands below remain the lower-level lifecycle entry points.
+
 This bounded binding lets native clients inspect a prepared, scheduled or retained
 file operation and request a stop under separate authority. It implements the next
 logical boundary in [#47](https://github.com/alseif0x/rustic-os/issues/47).
@@ -21,8 +25,10 @@ Those are breaking shape and authority changes, so this binding uses a separate
 and `operations.cancel`. The eight v1 schemas, digests and native completed-receipt
 binding keep their original meanings. This is a reviewed two-method subset, not
 an implied upgrade of every method to v2. [Discovery](DISCOVERY.md) still reports
-the existing v1 inventory. Live v2 catalog/profile negotiation and integration
-into the complete deterministic mission remain #22/#47 work; MCP remains #39.
+the existing v1 inventory. The separate [v2 selector](FILE-NEGOTIATION.md) now
+checks these two reviewed method profiles on the current native connection.
+General registry discovery and the complete deterministic mission remain
+#22/#47 work; MCP remains #39.
 
 The SDK exchanges binary packets, not JSON. The adjacent schemas define the
 logical input/output and envelope; offline descriptors and evidence validation
@@ -156,6 +162,6 @@ mission. Its report includes 22 typed inspections and ten minimal acknowledgemen
 
 The standalone native validator consumes those results and the identified kernel;
 it does not run a VM. The full recovery regression retains 49 groups / 98 boots,
-and direct/isolated inventories remain 22/26 scenarios. Current host suites have
+and direct/isolated inventories remain 22/26 scenarios. The lifecycle delivery passed
 80 contract and 174 runner tests. This increment adds terminal workload inside
 the existing two-boot scenario, with unchanged evidence and guest resource limits.

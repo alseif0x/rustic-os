@@ -20,13 +20,19 @@ pub fn run(files: &mut Client, w: [u64; 8]) -> [u64; 8] {
             return super::live::discard_admission_reply(files, id, w[4] as u8).map(|()| [0; 8]);
         }
         if w[4] == a::OBSERVE as u64 {
-            if w[5] == actor::flags::LIFECYCLE {
-                return lifecycle::inspect(files, id);
+            if matches!(w[5], actor::flags::LIFECYCLE | actor::flags::NEGOTIATED) {
+                return lifecycle::inspect(files, id, w[5] == actor::flags::NEGOTIATED);
             }
             return observation::run(files, id, w[5] == actor::flags::OBSERVE_V2);
         }
         if w[4] == rustic_sdk::files::lifecycle::CANCEL as u64 {
-            let ack = files.operation_cancel(id)?;
+            let ack = if w[5] == actor::flags::NEGOTIATED {
+                files
+                    .negotiate_lifecycle(rustic_sdk::abi::services::Method::OperationsCancel)?
+                    .cancel(id)?
+            } else {
+                files.operation_cancel(id)?
+            };
             return Ok([0, ack.disposition as u64, 0, 0, 0, 0, 0, 0]);
         }
         if w[4] == a::EXECUTE as u64 || w[4] == a::GET as u64 {

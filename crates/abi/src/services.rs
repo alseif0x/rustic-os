@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Shared identity of the logical service-v1 methods. Identity is not implementation:
+//! Shared method-name identity established by service-v1. Select contract versions
+//! separately; a method name alone never selects v1 or v2. Identity is not implementation:
 //! a method listed here may be unavailable in every running service.
 pub const VERSION: u8 = 1;
 

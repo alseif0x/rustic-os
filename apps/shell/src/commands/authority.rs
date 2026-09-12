@@ -49,6 +49,8 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                         "fill" => p::actor::FILL,
                         "operation-get" => p::actor::OPERATION_GET,
                         "capabilities" => p::actor::CAPABILITIES,
+                        "profile-get" => p::actor::PROFILE_GET,
+                        "profile-cancel" => p::actor::PROFILE_CANCEL,
                         _ => return Err(Error::Usage),
                     },
                 )

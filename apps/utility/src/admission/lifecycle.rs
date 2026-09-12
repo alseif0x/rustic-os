@@ -6,8 +6,19 @@ use rustic_sdk::files::{
     lifecycle::{Failure, State},
 };
 
-pub(super) fn inspect(files: &mut Client, id: AdmissionId) -> Result<[u64; 8], Error> {
-    let (state, detail, failure) = match files.operation_inspect(id)?.state {
+pub(super) fn inspect(
+    files: &mut Client,
+    id: AdmissionId,
+    negotiated: bool,
+) -> Result<[u64; 8], Error> {
+    let operation = if negotiated {
+        files
+            .negotiate_lifecycle(rustic_sdk::abi::services::Method::OperationsGet)?
+            .inspect(id)?
+    } else {
+        files.operation_inspect(id)?
+    };
+    let (state, detail, failure) = match operation.state {
         State::Prepared => (1, 0, 0),
         State::Queued { stop_pending } => (2, stop_pending as u64, 0),
         State::Running { stop_pending } => (3, stop_pending as u64, 0),

@@ -19,6 +19,8 @@ from .oracle import inspect
 from . import prevention_cases
 from .prevention_report import verify as verify_prevention
 from .lifecycle_report import verify as verify_lifecycle
+from . import negotiation_cases
+from .negotiation_report import verify as verify_negotiation
 
 def verify(image, timeout=60, output=None):
     image = Path(image).resolve()
@@ -48,9 +50,12 @@ def verify(image, timeout=60, output=None):
                                 authority = authority_exercise(uart, data)
                                 takeover = takeover_exercise(uart, data)
                                 management = management_exercise(uart,data)
+                                negotiation = dict(before_upgrade=negotiation_cases.before_upgrade(uart, data))
                                 prevention = prevention_cases.exercise(uart, data)
+                                negotiation['legacy'] = prevention.pop('negotiation')
                                 read_contract = read_exercise(uart, data)
                                 discovery = discovery_exercise(uart)
+                                negotiation['restart'] = negotiation_cases.restart(uart, data, prevention['results'][0])
                                 prevention_cases.checkpoint(data, prevention)
                                 cases = uart.commands
                             else:
@@ -60,6 +65,7 @@ def verify(image, timeout=60, output=None):
                                 after_reboot(uart, read_contract)
                                 discovery_after_reboot(uart, discovery)
                                 prevention_cases.after_reboot(uart, data, prevention)
+                                negotiation_cases.after_reboot(uart, data, negotiation, prevention['results'][0])
                             uart.send(b"exit\r")
                             uart.until(b"RUSTIC TERMINAL stopped=1 reclaimed=1")
                             if vm.wait(timeout=10) != 33:
@@ -71,8 +77,9 @@ def verify(image, timeout=60, output=None):
         (output / "files.bin").write_bytes(selected)
         verify_prevention(prevention)
         verify_lifecycle(prevention)
+        verify_negotiation(negotiation)
         evidence = {"verified":True,"boots":2,"commands_phase_one":cases,"oracle":oracle,"allocated_bytes":allocation,
-                    "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"authority":authority,"takeover":takeover,"management":management,"read_contract":read_contract,"storage":storage,"discovery":discovery,"prevention":prevention}
+                    "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"authority":authority,"takeover":takeover,"management":management,"read_contract":read_contract,"storage":storage,"discovery":discovery,"prevention":prevention,"negotiation":negotiation}
         (output / "terminal.json").write_text(json.dumps(evidence,indent=2)+"\n")
         result = {"outcome":"success","returncode":33,"timed_out":False,"elapsed_seconds":round(time.monotonic()-started,3),
                   "build_id":metadata["build_id"],"image_sha256":metadata["image_sha256"],"terminal":evidence}

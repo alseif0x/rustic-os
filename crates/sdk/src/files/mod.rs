@@ -4,6 +4,8 @@ mod admissions;
 mod client;
 mod discovery;
 mod lifecycle_client;
+mod negotiation;
+pub use negotiation::LifecycleBinding;
 mod operations;
 mod range;
 mod recovery;

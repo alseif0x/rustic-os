@@ -46,6 +46,8 @@ pub mod actor {
     pub const ADMISSION: u64 = 13;
     /// Ask the bound service what it implements; the answer grants nothing.
     pub const CAPABILITIES: u64 = 14;
+    pub const PROFILE_GET: u64 = 15;
+    pub const PROFILE_CANCEL: u64 = 16;
     /// Modifiers for ADMISSION. These are flags, not action values.
     pub mod flags {
         /// Submit a live stop and exit without decoding its reply. A discarded
@@ -55,6 +57,8 @@ pub mod actor {
         pub const OBSERVE_V2: u64 = 2;
         /// Typed service-v2 projection of one profile-2 observation.
         pub const LIFECYCLE: u64 = 3;
+        /// Select the reviewed lifecycle profile before inspection/cancellation.
+        pub const NEGOTIATED: u64 = 4;
     }
 }
 pub const SPIN: u64 = 1;

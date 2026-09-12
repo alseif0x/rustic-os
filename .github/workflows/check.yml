@@ -118,6 +118,7 @@ jobs:
           .cache/contracts-venv/bin/python -m tools.contracts read-native --evidence artifacts/boot/terminal-test/terminal.json --output artifacts/boot/terminal-test/read-conformance.json
           .cache/contracts-venv/bin/python -m tools.contracts capabilities-native --evidence artifacts/boot/terminal-test/terminal.json --output artifacts/boot/terminal-test/capabilities.json
           .cache/contracts-venv/bin/python -m tools.contracts lifecycle-native --evidence artifacts/boot/terminal-test/terminal.json --output artifacts/boot/terminal-test/lifecycle.json
+          .cache/contracts-venv/bin/python -m tools.contracts negotiation-native --evidence artifacts/boot/terminal-test/terminal.json --output artifacts/boot/terminal-test/negotiation.json
           .cache/contracts-venv/bin/python -m tools.contracts operations-native --evidence artifacts/boot/recovery-test/recovery.json --output artifacts/boot/recovery-test/operation-conformance.json
           .cache/contracts-venv/bin/python -m tools.contracts activity-native --evidence artifacts/boot/recovery-test/recovery.json --output artifacts/boot/recovery-test/activity-correspondence.json
       - name: Preserve boot evidence and images

@@ -9,6 +9,7 @@ from .oracle import snapshot
 from .scheduling_cases import settled
 from . import prevention_observations as observations
 from . import lifecycle_cases
+from . import negotiation_cases
 
 
 def inspect(data, results, reasons):
@@ -41,6 +42,7 @@ def exercise(uart, data):
             f'admit-ref {ws} {resource} v_{version:016x} e_{epoch:016x} k_{key:016x} "never"'))
 
     old = admit(initial["epoch"], 0x8000)
+    negotiation = negotiation_cases.legacy_cancel(uart, data, old)
     old = status(uart.command(f"cancel-admission {old['id']}"))
     legacy_view = observations.paired_retained(uart, [old], ['unknown'])
     if snapshot(data)[1]['format'] != 4:
@@ -87,7 +89,7 @@ def exercise(uart, data):
     if final["files"] != initial["files"] or final["nodes"][file_id]["version"] != edited_version:
         raise AssertionError("prevented work changed file bytes or leaked temporary files")
     terminal_view = observations.paired_retained(uart, results, reasons)
-    return {"verified": True, "format": 5, "legacy_cause": "unknown", "lifecycle": lifecycle,
+    return {"verified": True, "format": 5, "legacy_cause": "unknown", "lifecycle": lifecycle, "negotiation": negotiation,
             "replay_writes": 0, "results": results, "reasons": reasons,
             "observations": dict(legacy=legacy_view, migrated=migrated_view, authority=authority_view,
                                  prepared=prepared_view, terminal=terminal_view),

@@ -35,6 +35,10 @@ impl<P: super::Progress> Rpc<P> {
     pub fn pending(&self) -> bool {
         self.state.pending()
     }
+    /// Authenticated IPC sender pinned by the last successful exchange. Boot-local.
+    pub(crate) fn responder(&self) -> u64 {
+        self.peer
+    }
     pub fn failed(&self) -> bool {
         self.state.failed()
     }
