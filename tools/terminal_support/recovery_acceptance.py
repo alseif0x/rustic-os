@@ -76,6 +76,8 @@ def verify(image, timeout=60, output=None):
             cases.extend(verify_activity(session, owned_disk, temporary, image, mount))
             from .saturation_cases import verify as verify_saturation
             cases.extend(verify_saturation(session, owned_disk, temporary, image, mount))
+            from .lost_stop_cases import verify as verify_lost_stop
+            cases.extend(verify_lost_stop(session, owned_disk, temporary, image, mount))
             for name, cut in CUTS.items():
                 with owned_disk(temporary / ("cut-" + name + ".raw"), True, evidence_name=name + "-reboot") as data:
                     with data.open("r+b") as f: f.write(base["bytes"])

@@ -36,10 +36,10 @@ def check_entries(catalog, entries):
     return len(seen)
 
 def native_check(catalog, evidence):
-    require(isinstance(evidence, dict) and evidence.get("verified") is True and evidence.get("boots") == 60, "incomplete native recovery mission")
+    require(isinstance(evidence, dict) and evidence.get("verified") is True and evidence.get("boots") == 62, "incomplete native recovery mission")
     require(isinstance(evidence.get("kernel_sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", evidence["kernel_sha256"]), "missing guest identity")
     cases = evidence.get("cases")
-    require(isinstance(cases, list) and len(cases) == 30 and all(isinstance(c, dict) and c.get("verified") is True for c in cases), "missing recovery cases")
+    require(isinstance(cases, list) and len(cases) == 31 and all(isinstance(c, dict) and c.get("verified") is True for c in cases), "missing recovery cases")
     check_activity(cases)
     main = [c for c in cases if c.get("case") == "scoped_operations_lost_reply_namespaces_restart_reboot"]
     require(len(main) == 1, "missing scoped operation mission")

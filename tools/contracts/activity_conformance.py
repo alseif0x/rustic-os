@@ -137,7 +137,7 @@ def native_check(catalog, evidence):
     require(isinstance(evidence.get("kernel_sha256"), str)
             and re.fullmatch(r"[0-9a-f]{64}", evidence["kernel_sha256"]), "missing guest identity")
     cases = [c for c in evidence.get("cases", []) if str(c.get("case", "")).startswith("public_activity_")]
-    require(len(cases) == 7, "incomplete live-control inventory")
+    require(len(cases) == 8, "incomplete live-control inventory")
     states = {}
     for case in cases:
         states[case["case"]] = check_case(catalog, case)["state"]

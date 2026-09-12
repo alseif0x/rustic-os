@@ -43,6 +43,12 @@ pub mod actor {
     pub const FILL: u64 = 11;
     pub const OPERATION_GET: u64 = 12;
     pub const ADMISSION: u64 = 13;
+    /// Modifiers for ADMISSION. These are flags, not action values.
+    pub mod flags {
+        /// Submit a live stop and exit without decoding its reply. A discarded
+        /// acknowledgement is not evidence that the stop was refused.
+        pub const DISCARD_REPLY: u64 = 1;
+    }
 }
 pub const SPIN: u64 = 1;
 pub const FAULT: u64 = 2;

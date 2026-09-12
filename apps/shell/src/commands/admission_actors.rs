@@ -23,10 +23,11 @@ pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Erro
         exact(args, 4)?;
         let id: a::AdmissionId = argument(args, 3)?.parse()?;
         let lineage = id.lineage();
-        let op = match argument(args, 2)? {
-            "execute" => a::EXECUTE,
-            "activity" => a::ACTIVITY,
-            "request-cancel" => a::REQUEST_CANCEL,
+        let (op, discard) = match argument(args, 2)? {
+            "execute" => (a::EXECUTE, 0),
+            "activity" => (a::ACTIVITY, 0),
+            "request-cancel" => (a::REQUEST_CANCEL, 0),
+            "lost-stop" => (a::REQUEST_CANCEL, s::actor::flags::DISCARD_REPLY),
             _ => return Err(Error::Usage),
         };
         let r = session.service([
@@ -36,7 +37,7 @@ pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Erro
             u64::from_le_bytes(lineage[8..].try_into().unwrap()),
             id.number(),
             op as u64,
-            0,
+            discard,
             0,
         ])?;
         super::takeover::actor(r);

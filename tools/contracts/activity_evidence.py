@@ -12,7 +12,7 @@ def check_activity(cases):
         "inspect_only": (0, 4, 17, True),
         "foreign_scope": (0, 8, 27, True),
     }
-    for name in (*expected, "failed_drain", "saturated"):
+    for name in (*expected, "failed_drain", "saturated", "lost_stop"):
         found = [case for case in cases if case.get("case") == "public_activity_" + name]
         require(len(found) == 1, "missing or duplicate native activity case")
         case = found[0]
@@ -22,6 +22,13 @@ def check_activity(cases):
         if name == "failed_drain":
             require(case.get("uncertain") is True and "committed" not in case,
                     "failed drain fabricated a definitive result")
+            continue
+        if name == "lost_stop":
+            # An unread acknowledgement must not weaken prevention or replay work.
+            require(all(case.get(field) is True for field in
+                        ("discarded_reply", "stopped", "stale_reply_rejected"))
+                    and case.get("committed") is False,
+                    "a discarded stop acknowledgement changed the reported outcome")
             continue
         if name == "saturated":
             # A saturated run still has to show owner progress and prevention.

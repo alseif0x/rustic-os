@@ -65,7 +65,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
     match argument(a, 0)? {
         "help" => {
             output::text(
-                "admission-activity ADMISSION_ID | request-cancel ADMISSION_ID\r\nadmission-session FILE OTHER RIGHTS | act-admission PID execute|activity|request-cancel ADMISSION_ID\r\nLive cancellation replies acknowledge a request, not durable prevention.\r\n",
+                "admission-activity ADMISSION_ID | request-cancel ADMISSION_ID\r\nadmission-session FILE OTHER RIGHTS | act-admission PID execute|activity|request-cancel|lost-stop ADMISSION_ID\r\nLive cancellation replies acknowledge a request, not durable prevention.\r\n",
             );
             exact(a, 1)?;
             output::text(

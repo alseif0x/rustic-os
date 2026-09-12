@@ -46,7 +46,7 @@ class OperationConformance(unittest.TestCase):
             value = copy.deepcopy(good); mutate(value)
             with self.assertRaises(ContractError): check_entries(self.catalog,value)
     def native_evidence(self):
-        value = {"verified":True,"boots":60,"kernel_sha256":"a"*64,"cases":[{"case":"old"+str(i),"verified":True} for i in range(13)]}
+        value = {"verified":True,"boots":62,"kernel_sha256":"a"*64,"cases":[{"case":"old"+str(i),"verified":True} for i in range(13)]}
         value["cases"] += [{"case":"public_activity_"+name,"verified":True,"skip":skip,"rights":rights,
                             "denied":denied,"committed":committed,"status_during_io":True,
                             "reboot_verified":True,"sha256":"b"*64}
@@ -58,6 +58,9 @@ class OperationConformance(unittest.TestCase):
         value["cases"].append({"case":"public_activity_saturated","verified":True,"staging_full":True,
                                "undrained_client":True,"owner_progress":True,"stopped":True,
                                "committed":False,"reboot_verified":True,"sha256":"b"*64})
+        value["cases"].append({"case":"public_activity_lost_stop","verified":True,"discarded_reply":True,
+                               "stopped":True,"stale_reply_rejected":True,"committed":False,
+                               "reboot_verified":True,"sha256":"b"*64})
         value["cases"].append({"case":"scoped_operations_lost_reply_namespaces_restart_reboot","verified":True,"exchanges":entries(self.catalog)})
         value["cases"] += [{"case":"scoped_operation_"+name,"verified":True,"committed":name=="final_flush"} for name in ("data","receipt","metadata","header","final_flush")]
         value["cases"] += [{"case":"controlled_operation_"+name,"verified":True,"skip":skip,"committed":skip>=15,
@@ -88,6 +91,9 @@ class OperationConformance(unittest.TestCase):
             mutations = [("case", "unrelated"), ("reboot_verified", False), ("sha256", "unknown")]
             if good["cases"][index]["case"].endswith("failed_drain"):
                 mutations += [("uncertain", False), ("committed", False)]
+            elif good["cases"][index]["case"].endswith("lost_stop"):
+                mutations += [("discarded_reply", False), ("stale_reply_rejected", False),
+                              ("stopped", False), ("committed", True)]
             elif good["cases"][index]["case"].endswith("saturated"):
                 mutations += [("staging_full", False), ("undrained_client", False),
                               ("owner_progress", False), ("stopped", False), ("committed", True)]
@@ -102,7 +108,7 @@ class OperationConformance(unittest.TestCase):
         altered = copy.deepcopy(good)
         altered["cases"][live[1]] = copy.deepcopy(altered["cases"][live[0]])
         with self.assertRaises(ContractError): native_check(self.catalog, altered)
-        altered = copy.deepcopy(good); altered["boots"] = 58
+        altered = copy.deepcopy(good); altered["boots"] = 60
         with self.assertRaises(ContractError): native_check(self.catalog, altered)
 
 if __name__ == "__main__": unittest.main()

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Owner-stepped native client; file service independently enforces each action.
 use rustic_sdk::{
-    abi::files::{Error, admission as a},
+    abi::{
+        files::{Error, admission as a},
+        supervisor::actor,
+    },
     files::Client,
 };
 pub fn run(files: &mut Client, w: [u64; 8]) -> [u64; 8] {
@@ -26,6 +29,10 @@ pub fn run(files: &mut Client, w: [u64; 8]) -> [u64; 8] {
                 0,
                 0,
             ]);
+        }
+        if w[5] == actor::flags::DISCARD_REPLY {
+            // The service must settle its accepted stop without this client.
+            return super::live::discard_stop_reply(files, id).map(|()| [0; 8]);
         }
         let result = if w[4] == a::ACTIVITY as u64 {
             files.admission_activity(id)?

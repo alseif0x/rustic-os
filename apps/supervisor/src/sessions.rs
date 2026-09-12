@@ -38,12 +38,20 @@ impl State {
     }
     pub(super) fn admission_actor(&mut self, w: [u64; 8]) -> Result<[u64; 8], u64> {
         use rustic_sdk::abi::files::admission as a;
-        if w[6..] != [0; 2]
+        // Only a stop may be submitted without reading its reply; the discarded
+        // acknowledgement is a fault fixture, never an additional authority.
+        let discard = w[6];
+        if w[7] != 0
+            || discard > s::actor::flags::DISCARD_REPLY
+            || (discard != 0 && w[5] != a::REQUEST_CANCEL as u64)
             || !matches!(w[5], x if x == a::EXECUTE as u64 || x == a::ACTIVITY as u64 || x == a::REQUEST_CANCEL as u64)
         {
             return Err(1);
         }
-        self.actor_words(w[1], [s::actor::ADMISSION, w[2], w[3], w[4], w[5], 0, 0, 0])
+        self.actor_words(
+            w[1],
+            [s::actor::ADMISSION, w[2], w[3], w[4], w[5], discard, 0, 0],
+        )
     }
     fn actor_words(&mut self, pid: u64, words: [u64; 8]) -> Result<[u64; 8], u64> {
         let child = self

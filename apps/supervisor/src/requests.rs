@@ -24,7 +24,8 @@ impl State {
             | s::JOB_STATUS => 2,
             s::HOLD_IO => 3,
             s::RUN => 6,
-            s::ACT_ADMISSION => 6,
+            // The seventh word carries the deliberate discard flag for a live stop.
+            s::ACT_ADMISSION => 7,
             s::HELPER_START => 4,
             s::ACT | s::MOVE_CHECK => 3,
             _ => return Err(1),

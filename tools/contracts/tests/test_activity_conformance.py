@@ -39,7 +39,9 @@ def inventory():
                  committed=True, denied=27),
             case("failed_drain", phases=(), state="admitted", terminal=0, committed=False, uncertain=True),
             case("saturated", phases=(("running",), ("stopping", 1), ("stopping", 1)),
-                 state="cancelled", terminal=9, committed=False)]
+                 state="cancelled", terminal=9, committed=False),
+            case("lost_stop", phases=(("running",), ("stopping", 1)),
+                 state="cancelled", terminal=10, committed=False)]
 
 
 def evidence(cases=None):
@@ -58,7 +60,7 @@ class ActivityCorrespondenceTests(unittest.TestCase):
 
     def test_native_inventory_maps_success_prevention_and_reconciliation(self):
         result = native_check(self.catalog, evidence())
-        self.assertEqual(result["cases"], 7)
+        self.assertEqual(result["cases"], 8)
         self.assertEqual(result["states"]["public_activity_early"], "cancelled")
         self.assertEqual(result["states"]["public_activity_header"], "succeeded")
         self.assertEqual(result["states"]["public_activity_failed_drain"], "reconciling")

@@ -113,7 +113,7 @@ reading the result, exits and leaves recovery to a fresh authorized client.
 
 Use `cargo xtask check`, the runner/contract tests in [DEVELOPMENT.md](DEVELOPMENT.md),
 and `python3 tools/boot.py run --mode recovery-test --timeout 60`. The recovery
-inventory is 23 groups/46 VM boots. Four new groups use the actual shell, SDK,
+inventory at that increment was 23 groups/46 VM boots; [DEVELOPMENT.md](DEVELOPMENT.md) carries the current count. Four new groups use the actual shell, SDK,
 authenticated IPC, file server and VirtIO disk: lost acceptance reply plus pending
 restart/reboot and explicit execution/cancellation; acceptance first-write EIO;
 cancellation first-write EIO; execution final-flush EIO. An independent Python
