@@ -10,15 +10,23 @@ from terminal_support.operation_cases import operation
 
 
 def transcript():
-    return ("RusticOS native terminal 0.1\n" * 46
+    return ("RusticOS native terminal 0.1\n" * 58
             + "error: Uncertain\n" * 15
-            + "RUSTIC IO_OBSERVATION held=1\n" * 6
+            + "RUSTIC IO_OBSERVATION held=1\n" * 12
+            + "admission-activity-v1\n" * 10
             + "IdempotencyConflict\nExpiredEpoch\noperation-v1\npersistent format v3\npersistent format v4\nadmission-v1\n")
 
 
 class RecoveryEvidenceTests(unittest.TestCase):
     def test_accepts_complete_recovery_inventory(self):
         self.assertTrue(reached("recovery-test", transcript()))
+
+    def test_rejects_previous_inventory_and_duplicated_live_evidence(self):
+        old = transcript().replace("RusticOS native terminal 0.1\n", "", 12)
+        old = old.replace("RUSTIC IO_OBSERVATION held=1\n", "", 6)
+        old = old.replace("admission-activity-v1\n", "")
+        self.assertFalse(reached("recovery-test", old))
+        self.assertFalse(reached("recovery-test", transcript() + "admission-activity-v1\n"))
 
     def test_operation_parser_rejects_duplicate_or_ambiguous_results(self):
         valid = ("operation-v1 id=op_test service_instance=si_test state=succeeded effect=committed cancel_requested=false\n"
@@ -34,7 +42,8 @@ class RecoveryEvidenceTests(unittest.TestCase):
     def test_rejects_missing_cases_and_panics(self):
         for marker in ("RusticOS native terminal 0.1", "error: Uncertain",
                        "RUSTIC IO_OBSERVATION held=1", "IdempotencyConflict", "ExpiredEpoch",
-                       "operation-v1", "persistent format v3", "persistent format v4", "admission-v1"):
+                       "operation-v1", "persistent format v3", "persistent format v4", "admission-v1",
+                       "admission-activity-v1"):
             with self.subTest(missing=marker):
                 self.assertFalse(reached("recovery-test", transcript().replace(marker, "", 1)))
         self.assertFalse(reached("recovery-test", transcript() + "RUSTIC PANIC"))
