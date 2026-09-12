@@ -16,7 +16,7 @@ impl Caller {
     ) -> Result<Grant, Error> {
         let grant = clients.grant_at(self.slot).ok_or(Error::Revoked)?;
         grant.check(self.peer, self.context, now)?;
-        if grant.subject == 0 || grant.rights & right == 0 {
+        if grant.subject == 0 || grant.rights & right != right {
             return Err(Error::Denied);
         }
         Ok(grant)

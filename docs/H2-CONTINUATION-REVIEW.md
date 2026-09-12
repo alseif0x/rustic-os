@@ -6,6 +6,10 @@ This review compares `3a78229` with `5ee7bb4`: seven commits including the
 instruction file and an evidence-inventory fix. It reviews code, claims, native
 fixtures and failure detection. It is not a whole-OS security audit.
 
+This is a historical review of those revisions. Its proposed next scheduling slice
+is now implemented in [bounded scheduled file execution](FILE-SCHEDULING.md),
+which records current behavior, validation and remaining acceptance.
+
 ## Baseline and work worth retaining
 
 At `3a78229`, another authorized client could inspect or request a stop during

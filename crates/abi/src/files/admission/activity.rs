@@ -5,6 +5,7 @@ use crate::files::{Error, Packet, operation::Instance};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActivityPhase {
+    Queued,
     Running,
     Stopping,
     Settling,
@@ -21,12 +22,13 @@ pub struct Activity {
 }
 impl Activity {
     fn validate(self, op: u8) -> Result<(), Error> {
-        if !super::live(op)
+        if !(super::live(op) || op == super::SCHEDULE)
             || self.service_instance.lineage() != self.id.lineage()
             || self.service_instance.sequence() > self.id.number()
             || (op == super::REQUEST_CANCEL || self.phase == ActivityPhase::Stopping)
                 && !self.cancel_requested
             || self.phase == ActivityPhase::Running && self.cancel_requested
+            || self.phase == ActivityPhase::Queued && self.io_pending
         {
             return Err(Error::Protocol);
         }
@@ -38,6 +40,7 @@ impl Activity {
         p.context = context;
         p.version = self.id.number();
         p.arg = match self.phase {
+            ActivityPhase::Queued => 4,
             ActivityPhase::Running => 1,
             ActivityPhase::Stopping => 2,
             ActivityPhase::Settling => 3,
@@ -53,7 +56,7 @@ impl Activity {
             || p.id != 0
             || p.count != 24
             || p.data[24..] != [0; 16]
-            || p.arg & !0x303 != 0
+            || p.arg & !0x307 != 0
         {
             return Err(Error::Protocol);
         }
@@ -65,7 +68,8 @@ impl Activity {
                 u64::from_le_bytes(p.data[16..24].try_into().unwrap()),
             )
             .map_err(|_| Error::Protocol)?,
-            phase: match p.arg & 3 {
+            phase: match p.arg & 7 {
+                4 => ActivityPhase::Queued,
                 1 => ActivityPhase::Running,
                 2 => ActivityPhase::Stopping,
                 3 => ActivityPhase::Settling,

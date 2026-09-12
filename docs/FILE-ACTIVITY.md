@@ -2,19 +2,20 @@
 
 # Live control of an explicit file execution
 
-The first functional #47 increment lets another authorized native client query an executing admission and request a stop while a real disk command remains pending. It extends the [explicit admission profile](FILE-ADMISSION-API.md). The initiating `admission_execute` call still waits for its settled result; no background execution queue or automatic scheduling is introduced.
+The first functional #47 increment lets another authorized native client query an executing admission and request a stop while a real disk command remains pending. It extends the [explicit admission profile](FILE-ADMISSION-API.md). The initiating `admission_execute` call still waits for its settled result; that first increment did not schedule background work. The subsequent [bounded scheduling API](FILE-SCHEDULING.md) returns control to the initiator and extends these live calls to queued work.
 
 ## Observable contract
 
-Two new native calls operate only during active explicit execution:
+These native calls observe/control active execution and, through the scheduling API, queued work:
 
 | SDK call / shell command | Authority | Result |
 | --- | --- | --- |
 | `admission_activity` / `admission-activity ID` | Current `INSPECT`, trusted retained subject and object/workspace scope | One volatile snapshot of the active execution |
 | `admission_request_cancel` / `request-cancel ID` | Independent current `CANCEL`, same trusted subject/scope | A stop accepted in memory and a volatile snapshot; not durable prevention |
 
-The snapshot identifies the admission and its originating service instance, with `running`, `stopping` or `settling`, `cancel_requested` and `io_pending`. It contains no file content, receipt hash, device address or new authority. It is an observation at request handling time, not a lease on the current state or a completion result.
+The snapshot identifies the admission and its originating service instance, with `queued`, `running`, `stopping` or `settling`, `cancel_requested` and `io_pending`. It contains no file content, receipt hash, device address or new authority. It is an observation at request handling time, not a lease on the current state or a completion result.
 
+- `queued`: an explicit execution ticket exists in the live service; pending I/O is false. A latched stop remains volatile until prevention is persisted.
 - `running`: the file publication has not crossed its header boundary and no stop has been accepted.
 - `stopping`: prevention/draining or the durable cancellation record is still in progress. It does not mean cancellation has survived a crash.
 - `settling`: the file publication may already be visible; even an accepted stop cannot promise prevention or rollback.
@@ -23,7 +24,7 @@ Only the existing durable `admission_get` result `Cancelled` establishes persist
 
 After a stop has been accepted under current authority, later revocation does not undo that accepted request. The service drains/prevents publication where still possible and persists its terminal record as owned housekeeping. New requests always recheck authority; losing the executor's binding prevents it from receiving a result under a dead grant. The existing settled `admission_cancel` call retains its separate semantics and authority checks.
 
-No active execution at ordinary dispatch returns `Unavailable` for a valid live request with its required right, without revealing whether the supplied retained ID exists. During active execution an unknown ID or hidden subject/scope returns `OutcomeUnknown`; missing rights, stale contexts and foreign peers remain denied. Ordinary storage requests, including the older settled `CANCEL`, receive `Busy` from other clients while this controller owns storage. Use the new live calls for progress/control, then the durable APIs after settlement. During other controlled transitions such as ACCEPT, public traffic still waits for ordinary dispatch.
+No active or queued execution at ordinary dispatch returns `Unavailable` for a valid live request with its required right, without revealing whether the supplied retained ID exists. During active execution an unknown ID or hidden subject/scope returns `OutcomeUnknown`; missing rights, stale contexts and foreign peers remain denied. Ordinary storage requests, including the older settled `CANCEL`, receive `Busy` from other clients while this controller owns storage. Use the new live calls for progress/control, then the durable APIs after settlement. During other controlled transitions such as ACCEPT, public traffic still waits for ordinary dispatch.
 
 ## Ownership and progress
 
@@ -47,6 +48,7 @@ The native live-control profile is not a service-v1 implementation, but its fact
 
 | Native fact | service-v1 operation |
 | --- | --- |
+| Activity `queued` | `queued`, effect `none`; only an actual schedule establishes this fact |
 | Activity `running` | `running`, effect `none` |
 | Activity `stopping` (stop accepted) | `running`, effect `none`, `cancel_requested` true |
 | Activity `settling` | `reconciling`, effect `unknown` |
@@ -66,9 +68,9 @@ One divergence is recorded rather than hidden: pre-terminal work is identified b
 
 ## Wire and compatibility
 
-ABI version 1 adds opcode 56 (`ACTIVITY`) and 57 (`REQUEST_CANCEL`). Requests use the existing admission-ID framing. Responses are one 64-byte packet: `id=0`, `version=admission number`, `count=24`, payload `lineage[16]` and `instance:u64`; the remaining 16 bytes are zero. `arg` low bits are 1/2/3 for running/stopping/settling, bit 8 is cancellation requested and bit 9 is pending I/O. All other bits/fields are checked. These packets cannot decode as durable admission status. A missing/malformed stop response is `Uncertain`; the SDK does not automatically replay it.
+ABI version 1 adds opcode 56 (`ACTIVITY`) and 57 (`REQUEST_CANCEL`). Requests use the existing admission-ID framing. Responses are one 64-byte packet: `id=0`, `version=admission number`, `count=24`, payload `lineage[16]` and `instance:u64`; the remaining 16 bytes are zero. `arg` low bits are 1/2/3 for running/stopping/settling (the scheduling extension adds 4 for queued), bit 8 is cancellation requested and bit 9 is pending I/O. All other bits/fields are checked. These packets cannot decode as durable admission status. A missing/malformed stop response is `Uncertain`; the SDK does not automatically replay it.
 
-Old peers reject the new opcodes explicitly. The eight-method service-v1 catalog is still `specified_not_implemented` as a whole; these native live calls do not advertise implementation of its `operations.cancel` schema. Queue admission, full state/profile mapping, discovery and events remain #47/#22/#15 work.
+Old peers reject the new opcodes explicitly. The eight-method service-v1 catalog is still `specified_not_implemented` as a whole; these native live calls do not advertise implementation of its `operations.cancel` schema. The [scheduling extension](FILE-SCHEDULING.md) adds native queue admission with opcode 59. Full lifecycle/profile mapping, discovery and events remain #47/#22/#15 work.
 
 ## Native acceptance
 
@@ -76,7 +78,7 @@ The owner can provision two deterministic utilities with `admission-session FILE
 
 [Native cases](../tools/terminal_support/activity_cases.py) hold a real VirtIO completion before publication, during the header and during the final flush. A second CANCEL-only client requests a stop while the owner queries activity/control. The independent disk reader and a second VM boot check the final file and retained result. Further cases deny an inspect-only stop and another file's scope, and inject a failed drain after a live stop request. Helpers cannot execute with only inspect/cancel rights; CANCEL-only inspection is denied. Resource counts return to baseline after normal client cleanup.
 
-Host tests additionally cover every pending publication position, wrong subjects/peers/generations, revoked cancellation authority, uncertain drain failure, malformed framing and a lost/wrong SDK reply without automatic retry. These host models are distinct from native IPC evidence. One further native group and its host model saturate both staging slots and leave a client's replies undrained across a real held execution, then check owner progress, live status, an accepted stop, the durable `Cancelled` record, the retained staging and returned resources. A further native group submits a stop through `act-admission PID lost-stop ID` and never reads its acknowledgement: the service still accepts the stop, prevents the publication and records `Cancelled`, while the undelivered reply poisons only that client's own binding, so its next live call fails instead of decoding a stale result. Client-slot exhaustion beyond the supervisor's two-utility policy, the remaining loss/restart cuts, a background execution queue and full service-v1 conformance remain additional #47 acceptance; the issue stays open.
+Host tests additionally cover every pending publication position, wrong subjects/peers/generations, revoked cancellation authority, uncertain drain failure, malformed framing and a lost/wrong SDK reply without automatic retry. These host models are distinct from native IPC evidence. One further native group and its host model saturate both staging slots and leave a client's replies undrained across a real held execution, then check owner progress, live status, an accepted stop, the durable `Cancelled` record, the retained staging and returned resources. A further native group submits a stop through `act-admission PID lost-stop ID` and never reads its acknowledgement: the service still accepts the stop, prevents the publication and records `Cancelled`, while the undelivered reply poisons only that client's own binding, so its next live call fails instead of decoding a stale result. All four client bindings are reachable with shell, supervisor and two utilities; no quota increase is needed. The scheduling extension adds a bounded execution queue and selected loss/restart cuts. The remaining combined pressure/failure matrix and full service-v1 profile remain #47 acceptance; the issue stays open.
 
 Run the configured checks in [DEVELOPMENT.md](DEVELOPMENT.md), including:
 
@@ -89,4 +91,4 @@ python3 tools/boot.py run --mode recovery-test --timeout 60
   --evidence artifacts/boot/recovery-test/recovery.json
 ```
 
-The expanded native recovery inventory is 31 groups/62 VM boots, including six live-control groups, one saturated-execution group and one discarded-acknowledgement group. Results are accepted only with the run's actual kernel/build identifiers, transcripts and independent disk observations. The implementing agent reviews ownership, visibility, dependency direction and the native/host distinction; this is not an independent security audit. Publication and CI evidence are recorded in #47.
+That increment supplied 31 recovery groups/62 VM boots, including six live-control groups, one saturated-execution group and one discarded-acknowledgement group. The scheduling extension expands the current inventory to 35 groups/70 VM boots; [DEVELOPMENT.md](DEVELOPMENT.md) records the combined gate. Results are accepted only with the run's actual kernel/build identifiers, transcripts and independent disk observations. The implementing agent reviews ownership, visibility, dependency direction and the native/host distinction; this is not an independent security audit. Publication and CI evidence are recorded in #47.

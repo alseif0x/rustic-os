@@ -25,6 +25,7 @@ def observation_flags(observation):
                 "invalid native activity flag")
     requested = observation["requested"] == 1
     require((observation["phase"] != "running" or not requested)
-            and (observation["phase"] != "stopping" or requested),
+            and (observation["phase"] != "stopping" or requested)
+            and (observation["phase"] != "queued" or observation["pending"] == 0),
             "native phase contradicts the stop flag")
     return requested

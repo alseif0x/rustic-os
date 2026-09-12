@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Explicitly scheduled durable admissions. This is not the service-v1 async profile.
+//! Durable preparation and bounded explicit scheduling, separate from service-v1.
 mod activity;
 mod identity;
 mod status;
@@ -16,6 +16,8 @@ pub const EXECUTE: u8 = 54;
 pub const CANCEL: u8 = 55;
 pub const ACTIVITY: u8 = 56;
 pub const REQUEST_CANCEL: u8 = 57;
+/// Enqueue an already durable admission under current execution authority.
+pub const SCHEDULE: u8 = 59;
 
 pub const fn live(op: u8) -> bool {
     matches!(op, ACTIVITY | REQUEST_CANCEL)

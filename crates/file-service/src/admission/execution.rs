@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Explicit execution with bounded public control between owned publication polls.
-use super::{ActiveExecution, Caller, control::drive_stoppable};
+mod publication;
+use super::{ActiveExecution, Caller};
 use crate::{Clients, Server, reply};
-use rustic_abi::files::{Error, INSPECT_RIGHT};
+use rustic_abi::files::Error;
 use rustic_fs::{AdmissionId, AdmissionState, AdmissionStatus, PollDisk};
 
 impl Server {
@@ -25,43 +26,16 @@ impl Server {
         }
         grant.access(&self.volume, old.request.id, true)?;
         let mut active = ActiveExecution::new(self, grant.subject, old)?;
-        let write = self
-            .volume
-            .prepare_admitted(disk, grant.subject, id)
-            .map_err(reply::error)?;
-        let settled = drive_stoppable(
-            &mut self.clients,
-            write,
-            Some((caller, INSPECT_RIGHT)),
-            &mut |clients, phase, pending| {
-                active.observe(phase, pending, false);
-                let now = control(clients, &mut active);
-                (now, active.stopping())
-            },
+        let settled = self.publish_admission_active(
+            disk,
+            caller,
+            grant.subject,
+            id,
+            &mut active,
+            &mut control,
         )?;
         if settled.result.is_none() {
-            // Publication was prevented. Finish the service-owned terminal record
-            // even after requester loss. A prior accepted stop is not undone by
-            // later revocation. No speculative Cancelled result is disclosed.
-            active.stop();
-            let write = self
-                .volume
-                .prepare_cancellation(disk, grant.subject, id)
-                .map_err(reply::error)?;
-            let retired = drive_stoppable(
-                &mut self.clients,
-                write,
-                None,
-                &mut |clients, phase, pending| {
-                    active.observe(phase, pending, true);
-                    (control(clients, &mut active), false)
-                },
-            )?
-            .result
-            .ok_or(Error::Uncertain)?;
-            if retired.state != AdmissionState::Cancelled {
-                return Err(Error::Uncertain);
-            }
+            self.prevent_admission_active(disk, grant.subject, id, &mut active, &mut control)?;
         }
         if let Some(error) = settled.denied {
             return Err(if settled.result.is_some() {

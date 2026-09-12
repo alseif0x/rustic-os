@@ -32,9 +32,11 @@ pub fn run(files: &mut Client, w: [u64; 8]) -> [u64; 8] {
         }
         if w[5] == actor::flags::DISCARD_REPLY {
             // The service must settle its accepted stop without this client.
-            return super::live::discard_stop_reply(files, id).map(|()| [0; 8]);
+            return super::live::discard_admission_reply(files, id, w[4] as u8).map(|()| [0; 8]);
         }
-        let result = if w[4] == a::ACTIVITY as u64 {
+        let result = if w[4] == a::SCHEDULE as u64 {
+            files.admission_schedule(id)?
+        } else if w[4] == a::ACTIVITY as u64 {
             files.admission_activity(id)?
         } else if w[4] == a::REQUEST_CANCEL as u64 {
             files.admission_request_cancel(id)?
@@ -44,6 +46,7 @@ pub fn run(files: &mut Client, w: [u64; 8]) -> [u64; 8] {
         Ok([
             0,
             match result.phase {
+                a::ActivityPhase::Queued => 4,
                 a::ActivityPhase::Running => 1,
                 a::ActivityPhase::Stopping => 2,
                 a::ActivityPhase::Settling => 3,

@@ -24,6 +24,7 @@ pub(super) fn request(p: &Packet) -> Result<(), Error> {
         | admission::CANCEL
         | admission::ACTIVITY
         | admission::REQUEST_CANCEL => p.count == 16 && p.id == 0 && p.arg == 0,
+        admission::SCHEDULE => p.count == 16 && p.id == 0 && p.arg == 0,
         OPERATION_PART => p.count == 16 && p.id == 0 && matches!(p.arg, 40 | 80),
         REFERENCES => p.count == 0 && p.version == 0,
         READ_OPEN | READ_CHUNK => p.count == 30,

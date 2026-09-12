@@ -5,7 +5,7 @@
 mod admission;
 mod authority;
 mod capabilities;
-pub use admission::{ActiveExecution, Caller};
+pub use admission::{ActiveExecution, Caller, ExecutionQueue};
 mod clients;
 pub use clients::Clients;
 mod disk;

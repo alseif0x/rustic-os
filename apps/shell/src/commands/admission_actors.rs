@@ -25,6 +25,8 @@ pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Erro
         let lineage = id.lineage();
         let (op, discard) = match argument(args, 2)? {
             "execute" => (a::EXECUTE, 0),
+            "schedule" => (a::SCHEDULE, 0),
+            "lost-schedule" => (a::SCHEDULE, s::actor::flags::DISCARD_REPLY),
             "activity" => (a::ACTIVITY, 0),
             "request-cancel" => (a::REQUEST_CANCEL, 0),
             "lost-stop" => (a::REQUEST_CANCEL, s::actor::flags::DISCARD_REPLY),

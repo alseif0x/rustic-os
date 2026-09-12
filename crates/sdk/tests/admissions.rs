@@ -45,6 +45,43 @@ fn fixture() -> (Replacement, Status) {
 }
 
 #[test]
+fn scheduling_returns_queued_and_never_retries_a_lost_or_misbound_reply() {
+    let (_, status) = fixture();
+    for fault in 0..5 {
+        transport::reset();
+        transport::respond(move |p| {
+            let mut view = a::Activity {
+                id: status.id,
+                service_instance: status.service_instance,
+                phase: a::ActivityPhase::Queued,
+                cancel_requested: false,
+                io_pending: false,
+            };
+            if fault == 1 {
+                view.id = AdmissionId::new([7; 16], 10).unwrap();
+            }
+            let mut packet = view.packet(p.op, p.context).unwrap();
+            if fault == 2 {
+                packet.context += 1;
+            }
+            if fault == 3 {
+                packet.arg |= 0x200;
+            }
+            packet
+        });
+        transport::wrong_peer(fault == 4);
+        let mut client = files::Client::new(1, 7, 11);
+        let result = client.admission_schedule(status.id);
+        if fault == 0 {
+            assert_eq!(result.unwrap().phase, a::ActivityPhase::Queued);
+        } else {
+            assert_eq!(result, Err(E::Uncertain));
+        }
+        assert_eq!(transport::requests().len(), 1);
+    }
+}
+
+#[test]
 fn active_control_rejects_corrupt_or_unbound_results_without_replaying_a_stop() {
     let (_, status) = fixture();
     for op in [a::ACTIVITY, a::REQUEST_CANCEL] {

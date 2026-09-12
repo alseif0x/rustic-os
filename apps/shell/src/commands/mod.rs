@@ -66,7 +66,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
     match argument(a, 0)? {
         "help" => {
             output::text(
-                "admission-activity ADMISSION_ID | request-cancel ADMISSION_ID\r\nadmission-session FILE OTHER RIGHTS | act-admission PID execute|activity|request-cancel|lost-stop ADMISSION_ID\r\nLive cancellation replies acknowledge a request, not durable prevention.\r\n",
+                "schedule-admission ADMISSION_ID | admission-activity ADMISSION_ID | request-cancel ADMISSION_ID\r\nadmission-session FILE OTHER RIGHTS | act-admission PID execute|schedule|activity|request-cancel|lost-stop|lost-schedule ADMISSION_ID\r\nScheduling returns before settlement; cancellation replies acknowledge a request, not durable prevention.\r\n",
             );
             exact(a, 1)?;
             output::text(
@@ -100,7 +100,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         }
         "retry-key" | "receipt" | "replace" | "rotate-receipts" => recovery::execute(s, a)?,
         "enable-admissions" | "admit-ref" | "admission" | "execute-admission"
-        | "cancel-admission" | "admission-activity" | "request-cancel" => {
+        | "cancel-admission" | "admission-activity" | "request-cancel" | "schedule-admission" => {
             admissions::execute(s, a)?
         }
         "admission-session" | "act-admission" => admission_actors::execute(s, a)?,

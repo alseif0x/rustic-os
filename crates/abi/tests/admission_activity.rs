@@ -2,6 +2,47 @@
 use rustic_abi::files::{Packet, admission as a, operation::Instance};
 
 #[test]
+fn queued_is_an_acknowledged_schedule_not_pending_device_io_or_a_durable_result() {
+    for stop in [false, true] {
+        let view = a::Activity {
+            id: a::AdmissionId::new([7; 16], 9).unwrap(),
+            service_instance: Instance::new([7; 16], 8).unwrap(),
+            phase: a::ActivityPhase::Queued,
+            cancel_requested: stop,
+            io_pending: false,
+        };
+        let packet = view.packet(a::SCHEDULE, 3).unwrap();
+        assert_eq!(
+            a::Activity::decode(&Packet::decode(&packet.encode()).unwrap()),
+            Ok(view)
+        );
+        assert!(a::Status::decode(&packet).is_err());
+        assert!(
+            a::Activity {
+                io_pending: true,
+                ..view
+            }
+            .packet(a::ACTIVITY, 3)
+            .is_err()
+        );
+        assert!(
+            a::Activity::decode(&Packet {
+                arg: packet.arg | 0x200,
+                ..packet
+            })
+            .is_err()
+        );
+        assert!(
+            a::Activity::decode(&Packet {
+                op: a::EXECUTE,
+                ..packet
+            })
+            .is_err()
+        );
+    }
+}
+
+#[test]
 fn activity_is_not_a_terminal_receipt_and_rejects_reserved_or_inconsistent_fields() {
     let value = a::Activity {
         id: a::AdmissionId::new([7; 16], 9).unwrap(),

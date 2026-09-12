@@ -9,6 +9,12 @@ use rustic_abi::files::{
 };
 
 impl<P: crate::rpc::Progress> Client<P> {
+    /// Schedule an already durable admission and return before settlement.
+    /// A lost reply is uncertain; inspect activity/durable status before deciding
+    /// whether to explicitly resubmit. Restart never resumes a volatile schedule.
+    pub fn admission_schedule(&mut self, id: AdmissionId) -> Result<a::Activity, Error> {
+        self.admission_live(id, a::SCHEDULE)
+    }
     /// Live observation only. Unavailable means this service is not currently
     /// executing a matching operation; recover durable facts with admission_get.
     pub fn admission_activity(&mut self, id: AdmissionId) -> Result<a::Activity, Error> {
@@ -19,7 +25,7 @@ impl<P: crate::rpc::Progress> Client<P> {
         self.admission_live(id, a::REQUEST_CANCEL)
     }
     fn admission_live(&mut self, id: AdmissionId, op: u8) -> Result<a::Activity, Error> {
-        let error = if op == a::REQUEST_CANCEL {
+        let error = if matches!(op, a::REQUEST_CANCEL | a::SCHEDULE) {
             Error::Uncertain
         } else {
             Error::Protocol

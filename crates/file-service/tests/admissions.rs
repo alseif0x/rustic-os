@@ -4,6 +4,7 @@ mod admissions {
     mod activity;
     mod authority;
     mod control;
+    mod scheduling;
     mod wire;
 }
 use rustic_abi::files::{Error, INSPECT_RIGHT, WRITE_RIGHT};

@@ -8,7 +8,8 @@ and [controlled settlement](FILE-ADMISSION-CONTROL.md), for #12/#13/#43.
 
 Preparation acknowledges that the complete replacement arguments were retained.
 It does not change the file or schedule background execution. The caller explicitly
-executes the admitted request under current authority. This provides a useful
+executes it under current authority, or explicitly uses the subsequent
+[scheduling API](FILE-SCHEDULING.md) to return before settlement. This provides a useful
 checkpoint for a deterministic client or future agent without silently resuming
 old work after restart. It is a bounded native profile, not implementation of the
 general service-v1 asynchronous lifecycle or its `operations.cancel` schema.
@@ -26,7 +27,7 @@ not grant authority to the current service or client.
 | `Cancelled` | None | Both return the existing terminal status without I/O |
 | `Committed` | Confirmed | Both return the existing terminal status; cancellation is too late |
 
-A version conflict leaves the request admitted. The client must cancel it or resolve
+For legacy explicit `EXECUTE`, a version conflict leaves the request admitted. The client must cancel it or resolve
 the conflict explicitly; it cannot replace the saved expected version in place.
 Queries, identical retries, service restart and VM reboot never execute work.
 The volume refuses epoch rotation while an admission remains pending. Two records
@@ -38,7 +39,8 @@ The original settled `CANCEL` and other ordinary storage requests receive `Busy`
 from other clients during that execution; public traffic during ACCEPT/CANCEL still
 waits for ordinary dispatch. Private owner revocation, expiry and detach remain
 serviced between device polls. Only `Cancelled` proves durable prevention; a live
-stop acknowledgement does not. Automatic background scheduling remains unimplemented.
+stop acknowledgement does not. Explicit scheduling is available through the separate opcode 59; durable preparation
+alone never starts it, and restart never schedules work automatically.
 
 ## Authority
 
@@ -74,6 +76,7 @@ admission and completed-operation transfers cannot consume or abort each other.
 | 52 / 53 | Status by admission ID / workspace and retry tuple |
 | 54 / 55 | Explicit execute / cancel |
 | 56 / 57 | Live activity / volatile stop request; separate [activity framing](FILE-ACTIVITY.md) |
+| 59 | Schedule a durable admitted record; [queued/activity reply](FILE-SCHEDULING.md) |
 
 Open uses the typed replacement argument layout. ID requests carry 16 lineage
 bytes and the admission number in `version`. Retry lookup uses the existing
@@ -101,7 +104,7 @@ automatically. Existing format-3 readers must not mount this volume.
 1. Create a file and run `ref WORKSPACE PATH` and `stat PATH` to obtain actual references/version.
 2. Run `admit-ref WORKSPACE RESOURCE VERSION EPOCH KEY "replacement bytes"`.
 3. Use `admission ADMISSION_ID`, or `admission WORKSPACE EPOCH KEY` after a missing reply.
-4. Run `execute-admission ADMISSION_ID` or `cancel-admission ADMISSION_ID`.
+4. Run `execute-admission ADMISSION_ID`, `schedule-admission ADMISSION_ID` or `cancel-admission ADMISSION_ID`. For scheduled work, use `admission-activity` / `request-cancel` while active, then inspect durable status after settlement.
 5. For a committed result, run `operation OPERATION_ID` and verify with `read-ref`.
 
 Copy identifiers returned by the running system. Do not invent a version, epoch,
@@ -128,6 +131,7 @@ adds native cancellation-only sessions, stops racing real execution and a failed
 
 ABI, staging, authorization, publication, SDK and shell concerns have separate
 modules. No new external dependency, kernel policy or unsafe boundary is introduced.
-The next lifecycle increment needs a bounded execution queue, public cancellation
-during active execution and coherent events/status mapped to service-v1. Discovery
+The subsequent [scheduling increment](FILE-SCHEDULING.md) supplies a bounded queue
+and public live control. Complete failure/profile semantics and coherent events/status
+mapped to service-v1 remain lifecycle work. Discovery
 and the deterministic M1 mission remain required before claiming the full agent surface.

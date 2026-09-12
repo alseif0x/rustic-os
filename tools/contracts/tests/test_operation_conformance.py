@@ -7,6 +7,7 @@ from tools.contracts.catalog import Catalog
 from tools.contracts.operation_fixture import HostOperations
 from tools.contracts.operation_conformance import VECTORS, check_entries, host_check, native_check, request
 from tools.contracts.validation import ContractError
+from tools.contracts.tests.scheduling_fixtures import scheduling_cases
 
 def entries(catalog):
     backend, result = HostOperations(catalog), []
@@ -46,7 +47,8 @@ class OperationConformance(unittest.TestCase):
             value = copy.deepcopy(good); mutate(value)
             with self.assertRaises(ContractError): check_entries(self.catalog,value)
     def native_evidence(self):
-        value = {"verified":True,"boots":62,"kernel_sha256":"a"*64,"cases":[{"case":"old"+str(i),"verified":True} for i in range(13)]}
+        value = {"verified":True,"boots":70,"kernel_sha256":"a"*64,"cases":[{"case":"old"+str(i),"verified":True} for i in range(13)]}
+        value["cases"] += scheduling_cases()
         value["cases"] += [{"case":"public_activity_"+name,"verified":True,"skip":skip,"rights":rights,
                             "denied":denied,"committed":committed,"status_during_io":True,
                             "reboot_verified":True,"sha256":"b"*64}

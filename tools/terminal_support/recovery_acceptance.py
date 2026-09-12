@@ -34,7 +34,7 @@ def verify(image, timeout=60, output=None):
             with preserve_failure(data, output, evidence_name, metadata):
                 yield data
     @contextlib.contextmanager
-    def session(boot, data, name, fault=None):
+    def session(boot, data, name, fault=None, *, abrupt=False):
         transcript, log = output / (name + ".serial.log"), output / (name + ".qemu.log")
         serials.append(transcript); logs.append(log)
         with preserve_failure(data, output, name, metadata), tempfile.TemporaryDirectory(prefix="rustic-recovery-uart-") as socket_dir:
@@ -44,19 +44,21 @@ def verify(image, timeout=60, output=None):
                 try:
                     uart.until()
                     yield uart
-                    if fault is None:
+                    if fault is None and not abrupt:
                         uart.send(b"exit\r")
                         uart.until(b"RUSTIC TERMINAL stopped=1 reclaimed=1")
                         if vm.wait(timeout=10) != 33:
                             raise AssertionError("unclean recovery VM exit")
                     else:
-                        # Abruptly terminate only this owned VM after the guest has observed the I/O failure.
+                        # Only this owned VM: selected I/O fault or deliberate restart cut.
                         vm.kill(); vm.wait(timeout=10)
                 finally:
                     uart.close()
     try:
         with tempfile.TemporaryDirectory(prefix="rustic-recovery-test-") as temporary:
             temporary = Path(temporary)
+            from .scheduling_cases import verify as verify_scheduling
+            cases.extend(verify_scheduling(session, owned_disk, temporary, image, mount))
             with owned_disk(temporary / "data.raw", True, evidence_name="reboot") as data:
                 base = {}
                 def capture(old, retry):

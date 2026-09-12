@@ -11,11 +11,15 @@ from .oracle import snapshot
 
 
 def activity(text):
+    # The diagnostic is emitted by the kernel while user formatting can span
+    # several UART writes. Preserve raw serial evidence; remove only a complete,
+    # known diagnostic frame from this parsed response, even inside a field.
+    text = re.sub(r"RUSTIC IO_OBSERVATION held=1 owner=[1-9][0-9]* request=[1-9][0-9]*\r?\n", "", text)
     lines = text.replace("\r\n", "\n").splitlines()
     headers = [line for line in lines if line.startswith("admission-activity-v1 ")]
     if len(headers) != 1 or any(line.startswith("error:") for line in lines):
         raise AssertionError("missing or ambiguous live activity")
-    match = re.fullmatch(r"admission-activity-v1 id=(ad_[0-9a-f]{32}_[0-9a-f]{16}) service_instance=(si_[0-9a-f]{32}_[0-9a-f]{16}) phase=(running|stopping|settling) cancel_requested=([01]) io_pending=([01])", headers[0])
+    match = re.fullmatch(r"admission-activity-v1 id=(ad_[0-9a-f]{32}_[0-9a-f]{16}) service_instance=(si_[0-9a-f]{32}_[0-9a-f]{16}) phase=(queued|running|stopping|settling) cancel_requested=([01]) io_pending=([01])", headers[0])
     if not match:
         raise AssertionError("invalid live activity")
     return dict(id=match[1], instance=match[2], phase=match[3], requested=int(match[4]), pending=int(match[5]))

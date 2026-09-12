@@ -67,6 +67,8 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `admit-ref WORKSPACE RESOURCE VERSION EPOCH KEY TEXT` | Persist replacement arguments without executing them |
 | `admission ADMISSION_ID` / `admission WORKSPACE EPOCH KEY` | Inspect a retained admission after fresh authorization |
 | `execute-admission ADMISSION_ID` / `cancel-admission ADMISSION_ID` | Explicit execution or cancellation; terminal states remain immutable |
+| `schedule-admission ADMISSION_ID` | [Schedule already durable work](FILE-SCHEDULING.md); return an activity snapshot before settlement |
+| `admission-activity ADMISSION_ID` / `request-cancel ADMISSION_ID` | Query queued/active work or request a volatile stop under separate rights |
 | `enable-operations` | Explicit one-way upgrade to the [workspace operation format](FILE-OPERATIONS.md) |
 | `replace-ref WORKSPACE RESOURCE VERSION EPOCH KEY TEXT` | Replace at an observed version; return the original operation identity and SHA-256 receipt |
 | `operation OPERATION_ID`, `operation WORKSPACE EPOCH KEY` | Inspect a retained completed result after a lost reply, later edit or restart |

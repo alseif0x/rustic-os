@@ -31,6 +31,20 @@ impl Record {
     }
 }
 impl Volume {
+    /// Trusted storage inventory only; never a public discovery/authority API.
+    /// Legacy and empty slots remain occupied/empty storage facts, not admissions.
+    /// Services must authorize every use of the returned subject and arguments.
+    pub fn retained_admission(&self, slot: usize) -> Result<Option<(u64, Admission<'_>)>, Error> {
+        let records = &self.admissions()?.records;
+        let record = records.get(slot).ok_or(Error::Invalid)?;
+        match record {
+            Some(record) if record.admission.is_some() => {
+                Ok(Some((record.subject, record.admission_view()?)))
+            }
+            _ => Ok(None),
+        }
+    }
+
     pub(super) fn admissions(&self) -> Result<&Recovery, Error> {
         self.ready()?;
         self.metadata

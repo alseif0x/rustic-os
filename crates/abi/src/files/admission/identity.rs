@@ -25,7 +25,11 @@ impl AdmissionId {
         self.number
     }
     pub fn packet(self, op: u8, context: u32) -> Result<Packet, Error> {
-        if !matches!(op, super::GET | super::EXECUTE | super::CANCEL) && !super::live(op) {
+        if !matches!(
+            op,
+            super::GET | super::EXECUTE | super::CANCEL | super::SCHEDULE
+        ) && !super::live(op)
+        {
             return Err(Error::Protocol);
         }
         let mut p = Packet::new(op);
@@ -36,7 +40,10 @@ impl AdmissionId {
         Ok(p)
     }
     pub fn decode(p: &Packet) -> Result<Self, Error> {
-        if (!matches!(p.op, super::GET | super::EXECUTE | super::CANCEL) && !super::live(p.op))
+        if (!matches!(
+            p.op,
+            super::GET | super::EXECUTE | super::CANCEL | super::SCHEDULE
+        ) && !super::live(p.op))
             || p.status != 0
             || p.id != 0
             || p.arg != 0

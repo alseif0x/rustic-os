@@ -1,56 +1,30 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Restricted authority view while publication exclusively owns volume and disk.
-use super::Caller;
-use crate::{CLIENTS, Clients, Grant, Server};
-use rustic_abi::files::{
-    CANCEL_RIGHT, Error, INSPECT_RIGHT, Packet, admission as a, operation::Instance,
-};
+use super::{Caller, scope::Scope};
+use crate::{Clients, Server};
+use rustic_abi::files::{CANCEL_RIGHT, Error, INSPECT_RIGHT, Packet, admission as a};
 use rustic_fs::{Admission, PublicationPhase};
-
-#[derive(Clone, Copy)]
-struct Binding {
-    grant: Grant,
-    allowed: u8,
-}
 
 pub struct ActiveExecution {
     observation: a::Activity,
-    bindings: [Option<Binding>; CLIENTS],
+    scope: Scope,
 }
 impl ActiveExecution {
     pub(super) fn new(server: &Server, subject: u64, old: Admission<'_>) -> Result<Self, Error> {
-        let mut bindings = [None; CLIENTS];
-        for (slot, binding) in bindings.iter_mut().enumerate() {
-            if let Some(grant) = server.grant_at(slot) {
-                let mut allowed = 0;
-                if grant.subject == subject {
-                    for right in [INSPECT_RIGHT, CANCEL_RIGHT] {
-                        if grant
-                            .operation_scope(
-                                &server.volume,
-                                old.request.workspace,
-                                old.request.id,
-                                right,
-                            )
-                            .is_ok()
-                        {
-                            allowed |= right;
-                        }
-                    }
-                }
-                *binding = Some(Binding { grant, allowed });
-            }
-        }
+        let scope = Scope::new(server, subject, &old)?;
         Ok(Self {
             observation: a::Activity {
-                id: a::AdmissionId::new(old.status.id.lineage, old.status.id.number)?,
-                service_instance: Instance::new(old.status.id.lineage, old.instance)?,
+                id: scope.id,
+                service_instance: scope.instance,
                 phase: a::ActivityPhase::Running,
                 cancel_requested: false,
                 io_pending: false,
             },
-            bindings,
+            scope,
         })
+    }
+    pub(super) fn observation(&self) -> a::Activity {
+        self.observation
     }
     pub fn pending(&self) -> bool {
         self.observation.io_pending
@@ -91,22 +65,8 @@ impl ActiveExecution {
             } else {
                 INSPECT_RIGHT
             };
-            let grant = caller.check_right(clients, now, right)?;
-            let binding = self
-                .bindings
-                .get(caller.slot)
-                .copied()
-                .flatten()
-                .ok_or(Error::OutcomeUnknown)?;
-            let saved = binding.grant;
-            if binding.allowed & right == 0
-                || grant.peer != saved.peer
-                || grant.endpoint != saved.endpoint
-                || grant.generation != saved.generation
-                || grant.subject != saved.subject
-                || grant.scope != saved.scope
-                || a::AdmissionId::decode(&p)? != self.observation.id
-            {
+            self.scope.check(clients, caller, right, now)?;
+            if a::AdmissionId::decode(&p)? != self.observation.id {
                 return Err(Error::OutcomeUnknown);
             }
             if p.op == a::REQUEST_CANCEL {

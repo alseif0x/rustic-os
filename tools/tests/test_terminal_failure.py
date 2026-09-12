@@ -65,6 +65,7 @@ class TerminalFailureTests(unittest.TestCase):
                 patch.object(recovery_acceptance, "exercise", return_value={}),
                 patch.object(recovery_acceptance, "verify_final"),
                 patch.object(recovery_acceptance, "snapshot", reject_snapshot),
+                patch("terminal_support.scheduling_cases.verify", return_value=[]),
                 patch.object(Path, "write_bytes", observe_write),
                 self.assertRaises(AssertionError) as caught,
             ):

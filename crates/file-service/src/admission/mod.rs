@@ -2,7 +2,11 @@
 //! Durable admissions with explicit public execution. Admission is not authority.
 mod active;
 mod authority;
+mod scheduling;
+mod scope;
+pub use scheduling::ExecutionQueue;
 mod execution;
+mod prevention;
 pub use active::ActiveExecution;
 mod cancellation;
 mod control;

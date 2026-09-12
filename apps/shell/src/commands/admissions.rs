@@ -65,15 +65,18 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             };
             print(result);
         }
-        "admission-activity" | "request-cancel" => {
+        "admission-activity" | "request-cancel" | "schedule-admission" => {
             exact(a, 2)?;
             let id = argument(a, 1)?.parse()?;
-            let v = if argument(a, 0)? == "request-cancel" {
+            let v = if argument(a, 0)? == "schedule-admission" {
+                s.files.admission_schedule(id)?
+            } else if argument(a, 0)? == "request-cancel" {
                 s.files.admission_request_cancel(id)?
             } else {
                 s.files.admission_activity(id)?
             };
             let phase = match v.phase {
+                rustic_sdk::files::admission::ActivityPhase::Queued => "queued",
                 rustic_sdk::files::admission::ActivityPhase::Running => "running",
                 rustic_sdk::files::admission::ActivityPhase::Stopping => "stopping",
                 rustic_sdk::files::admission::ActivityPhase::Settling => "settling",

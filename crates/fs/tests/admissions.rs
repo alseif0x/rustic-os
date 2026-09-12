@@ -43,6 +43,49 @@ fn content(v: &Volume, disk: &mut MemoryDisk, id: u32, expected: &[u8]) {
 }
 
 #[test]
+fn bounded_admission_inventory_excludes_legacy_receipts_without_reclaiming_their_slots() {
+    let (mut disk, request) = base();
+    let mut v = Volume::mount(&mut disk).unwrap();
+    v.replace_scoped(&mut disk, 9, 0, request, b"legacy")
+        .unwrap();
+    v.enable_admissions(&mut disk).unwrap();
+    let next = Replacement {
+        version: v.stat(request.id).unwrap().version,
+        retry: Retry {
+            key: 43,
+            ..request.retry
+        },
+        ..request
+    };
+    let admitted = v.admit_replace(&mut disk, 10, 0, next, b"next").unwrap();
+    let operations = disk.operations;
+    assert!(v.retained_admission(0).unwrap().is_none());
+    let (subject, view) = v.retained_admission(1).unwrap().unwrap();
+    assert_eq!(subject, 10);
+    assert_eq!(view.status, admitted);
+    assert_eq!(view.bytes, b"next");
+    assert!(matches!(
+        v.retained_admission(rustic_fs::RETAINED),
+        Err(Error::Invalid)
+    ));
+    assert_eq!(
+        disk.operations, operations,
+        "enumeration must never issue I/O"
+    );
+    let third = Replacement {
+        retry: Retry {
+            key: 44,
+            ..request.retry
+        },
+        ..next
+    };
+    assert_eq!(
+        v.admit_replace(&mut disk, 10, 0, third, b"third"),
+        Err(Error::Full)
+    );
+}
+
+#[test]
 fn admission_and_cancellation_survive_restart_and_never_reexecute_on_retry() {
     let (mut disk, request) = base();
     let mut v = Volume::mount(&mut disk).unwrap();

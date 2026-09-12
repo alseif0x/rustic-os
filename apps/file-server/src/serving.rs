@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Fair bounded dispatch: one request per client per pass, owned pending replies.
 mod control;
-use rustic_file_service::{CLIENTS, Server};
+use rustic_file_service::{CLIENTS, Caller, ExecutionQueue, Server};
 use rustic_sdk::{
-    abi::{files::Packet, runtime as wire},
+    abi::{
+        files::{Packet, admission},
+        runtime as wire,
+    },
     ipc::{Endpoint, Message},
     runtime,
 };
@@ -22,6 +25,7 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
     }
     let mut administrator = 0;
     let mut replies: [Option<Message>; CLIENTS + 1] = [const { None }; CLIENTS + 1];
+    let mut queue = ExecutionQueue::new();
     loop {
         // Replies are retried without stopping progress of unrelated clients.
         for (slot, reply) in replies.iter_mut().enumerate() {
@@ -106,7 +110,20 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
                 Ok(message) => {
                     let output = match Packet::decode(message.payload()) {
                         Ok(request) => {
-                            if request.op == rustic_sdk::abi::files::REPLACE_COMMIT
+                            if request.op == admission::SCHEDULE
+                                || !queue.is_empty() && admission::live(request.op)
+                            {
+                                server.scheduling_request(
+                                    &mut queue,
+                                    Caller {
+                                        slot,
+                                        peer: message.sender(),
+                                        context: request.context,
+                                    },
+                                    request,
+                                    runtime::clock(),
+                                )
+                            } else if request.op == rustic_sdk::abi::files::REPLACE_COMMIT
                                 || rustic_sdk::abi::files::admission::controlled(request.op)
                             {
                                 let mut owner =
@@ -144,6 +161,16 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
                 Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {}
                 Err(_) => detach(server, slot),
             }
+        }
+        // The scheduling reply is owned independently from execution. Its client
+        // participates in active dispatch even if that reply is unread or lost.
+        let mut owner = control::Owner::new(&admin, &mut administrator, &mut replies);
+        let ran = owner.run_scheduled(server, disk, &mut queue);
+        if owner.lost {
+            return 0;
+        }
+        if ran {
+            continue;
         }
         let mut tokens = [0; CLIENTS + 1];
         tokens[0] = admin.token();

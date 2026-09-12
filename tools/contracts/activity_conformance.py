@@ -13,7 +13,7 @@ from .activity_identity import native_identity, observation_flags
 
 # Volatile observation phases. A live observation is never a terminal result:
 # `settling` cannot claim effect none, and no phase may map to succeeded/cancelled.
-LIVE = {"running": ("running", "none"), "stopping": ("running", "none"),
+LIVE = {"queued": ("queued", "none"), "running": ("running", "none"), "stopping": ("running", "none"),
         "settling": ("reconciling", "unknown")}
 
 # Retained admission records, read after settlement through the durable API.
@@ -112,7 +112,7 @@ def check_case(catalog, case):
     for observation in observations:
         operation = live_operation(status, observation)
         check_operation(catalog, operation)
-        phase = ("running", "stopping", "settling").index(observation["phase"])
+        phase = ("queued", "running", "stopping", "settling").index(observation["phase"])
         require(phase >= last_phase, "publication phase moved backwards")
         last_phase = phase
         require(not observed or operation["cancel_requested"],

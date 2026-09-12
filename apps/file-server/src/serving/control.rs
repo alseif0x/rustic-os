@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Private owner IPC during one logical replacement; settlement precedes revoke ACK.
 mod public;
-use rustic_file_service::{CLIENTS, Clients, Server};
+use rustic_file_service::{CLIENTS, Clients, ExecutionQueue, Server};
 use rustic_sdk::{
     abi::{
         files::{Error, Packet},
@@ -68,6 +68,24 @@ impl<'a> Owner<'a> {
                 self.poll(clients, pending)
             })
         };
+        self.finish(server);
+        result
+    }
+    pub(super) fn run_scheduled(
+        &mut self,
+        server: &mut Server,
+        disk: &mut super::super::disk::Disk,
+        queue: &mut ExecutionQueue,
+    ) -> bool {
+        let ran = server
+            .run_scheduled(disk, queue, runtime::clock(), |clients, active, queue| {
+                self.scheduled_poll(clients, active, queue)
+            })
+            .is_some();
+        self.finish(server);
+        ran
+    }
+    fn finish(&mut self, server: &Server) {
         if let Some((correlation, mut words)) = self.deferred.take() {
             // Neither an ACK nor a lost client reply is a rollback claim. Report
             // live settlement only after the admitted command was drained.
@@ -75,7 +93,6 @@ impl<'a> Owner<'a> {
             words[4] = server.volume.sequence();
             self.replies[CLIENTS] = Some(Message::new(correlation, &wire::encode(words)).unwrap());
         }
-        result
     }
     fn poll(&mut self, clients: &mut Clients, pending: bool) -> u64 {
         if !self.lost && self.deferred.is_none() {
