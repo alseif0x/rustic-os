@@ -32,11 +32,13 @@ Queries, identical retries, service restart and VM reboot never execute work.
 The volume refuses epoch rotation while an admission remains pending. Two records
 are shared with legacy/completed receipts, and files remain limited to 1,024 bytes.
 
-The native server processes one controlled publication at a time. Public cancel
-requests arriving during execution wait for ordinary dispatch and may be too late.
-Private owner revocation, expiry and detach remain serviced between device polls.
-This API promises durable prevention only when it returns `Cancelled`; it promises
-neither public in-flight preemption nor automatic background progress.
+The native server processes one controlled publication at a time. [Live activity
+and stop requests](FILE-ACTIVITY.md) now remain responsive during explicit execution.
+The original settled `CANCEL` and other ordinary storage requests receive `Busy`
+from other clients during that execution; public traffic during ACCEPT/CANCEL still
+waits for ordinary dispatch. Private owner revocation, expiry and detach remain
+serviced between device polls. Only `Cancelled` proves durable prevention; a live
+stop acknowledgement does not. Automatic background scheduling remains unimplemented.
 
 ## Authority
 
@@ -71,6 +73,7 @@ admission and completed-operation transfers cannot consume or abort each other.
 | 48 / 49 / 50 / 51 | Admission open / chunk / durable accept / volatile abort |
 | 52 / 53 | Status by admission ID / workspace and retry tuple |
 | 54 / 55 | Explicit execute / cancel |
+| 56 / 57 | Live activity / volatile stop request; separate [activity framing](FILE-ACTIVITY.md) |
 
 Open uses the typed replacement argument layout. ID requests carry 16 lineage
 bytes and the admission number in `version`. Retry lookup uses the existing
@@ -120,8 +123,8 @@ Host checks challenge separate cancellation authority, hidden subjects/scopes,
 inspection-only reauthorization, protocol mixing, malformed or lost SDK replies
 and every pending cancellation position. Existing storage crash-cut and owner
 control tests still apply. These are selected fault models, not physical power-loss
-guarantees or an independent security audit. Native cancellation-only helper grants
-and public cancellation racing an executing request remain additional acceptance work.
+guarantees or an independent security audit. The subsequent [live-control increment](FILE-ACTIVITY.md)
+adds native cancellation-only sessions, stops racing real execution and a failed-drain case.
 
 ABI, staging, authorization, publication, SDK and shell concerns have separate
 modules. No new external dependency, kernel policy or unsafe boundary is introduced.

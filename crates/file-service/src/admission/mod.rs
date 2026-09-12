@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Durable admissions with explicit public execution. Admission is not authority.
+mod active;
 mod authority;
+mod execution;
+pub use active::ActiveExecution;
 mod cancellation;
 mod control;
 mod transition;

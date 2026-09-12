@@ -43,6 +43,57 @@ fn fixture() -> (Replacement, Status) {
         },
     )
 }
+
+#[test]
+fn active_control_rejects_corrupt_or_unbound_results_without_replaying_a_stop() {
+    let (_, status) = fixture();
+    for op in [a::ACTIVITY, a::REQUEST_CANCEL] {
+        for fault in 0..6 {
+            transport::reset();
+            transport::respond(move |p| {
+                let mut activity = a::Activity {
+                    id: status.id,
+                    service_instance: status.service_instance,
+                    phase: a::ActivityPhase::Settling,
+                    cancel_requested: p.op == a::REQUEST_CANCEL,
+                    io_pending: true,
+                };
+                if fault == 1 {
+                    activity.id = AdmissionId::new([8; 16], 9).unwrap();
+                    activity.service_instance = Instance::new([8; 16], 9).unwrap();
+                }
+                let mut reply = activity.packet(p.op, p.context).unwrap();
+                match fault {
+                    2 => reply.arg &= !0x100,
+                    3 => reply.count = 32,
+                    4 => reply.context += 1,
+                    _ => (),
+                }
+                reply
+            });
+            transport::wrong_peer(fault == 5);
+            let mut client = files::Client::new(1, 7, 11);
+            let result = if op == a::ACTIVITY {
+                client.admission_activity(status.id)
+            } else {
+                client.admission_request_cancel(status.id)
+            };
+            if fault == 0 || fault == 2 && op == a::ACTIVITY {
+                assert!(result.is_ok());
+            } else {
+                assert_eq!(
+                    result,
+                    Err(if op == a::ACTIVITY {
+                        E::Protocol
+                    } else {
+                        E::Uncertain
+                    })
+                );
+            }
+            assert_eq!(transport::requests().len(), 1);
+        }
+    }
+}
 fn respond(mut status: Status, corrupt: bool) {
     transport::reset();
     transport::respond(move |p| {

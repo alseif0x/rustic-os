@@ -24,6 +24,7 @@ impl State {
             | s::JOB_STATUS => 2,
             s::HOLD_IO => 3,
             s::RUN => 6,
+            s::ACT_ADMISSION => 6,
             s::HELPER_START => 4,
             s::ACT | s::MOVE_CHECK => 3,
             _ => return Err(1),
@@ -119,6 +120,7 @@ impl State {
                 u32::try_from(w[3]).map_err(|_| 1u64)?,
             ),
             s::ACT => self.actor(w[1], w[2]),
+            s::ACT_ADMISSION => self.admission_actor(w),
             s::MOVE_CHECK => self.move_check(w[1], w[2]),
             s::EXIT => {
                 call([k::SHUTDOWN, 0, 0, 0, 0, 0, 0, 0]).map_err(|_| 4u64)?;

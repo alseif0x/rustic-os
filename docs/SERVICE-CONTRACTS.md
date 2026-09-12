@@ -35,6 +35,8 @@ The native bindings implement files.read and the completed_operations profile of
 
 ## Bounds and data meaning
 
+The [native live-control profile](FILE-ACTIVITY.md) additionally services authorized activity and volatile stop requests during explicit execution. Its acknowledgement is not durable cancellation, its initiating execute call remains synchronous, and it is not the logical `operations.cancel` schema. Queue/profile mapping and full shared conformance remain #47/#43 work.
+
 | Value | Version 1 bound and mapping |
 | --- | --- |
 | Reference, cursor, version, retry epoch/key | 1–64 ASCII letters, digits, `_` or `-`; opaque bounded string in a native binding, not an integer handle |

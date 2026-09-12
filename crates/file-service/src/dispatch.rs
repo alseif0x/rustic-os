@@ -50,6 +50,20 @@ impl Server {
             crate::validation::request(&request)?;
             let grant = self.grant_at(slot).ok_or(Error::Denied)?;
             grant.check(peer, request.context, now)?;
+            if admission::live(request.op) {
+                let right = if request.op == admission::REQUEST_CANCEL {
+                    CANCEL_RIGHT
+                } else {
+                    INSPECT_RIGHT
+                };
+                if grant.subject == 0 || grant.rights & right == 0 {
+                    return Err(Error::Denied);
+                }
+                admission::AdmissionId::decode(&request)?;
+                // No active execution exists at ordinary dispatch. Do not reveal
+                // which retained identity exists or silently perform another action.
+                return Err(Error::Unavailable);
+            }
             if (admission::OPEN..=admission::CANCEL).contains(&request.op) {
                 response = self.admission_request(slot, grant, request)?;
                 return Ok(());

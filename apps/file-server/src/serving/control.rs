@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Private owner IPC during one logical replacement; settlement precedes revoke ACK.
+mod public;
 use rustic_file_service::{CLIENTS, Clients, Server};
 use rustic_sdk::{
     abi::{
@@ -39,7 +40,19 @@ impl<'a> Owner<'a> {
         peer: u64,
         request: Packet,
     ) -> Packet {
-        let result = if rustic_sdk::abi::files::admission::controlled(request.op) {
+        let result = if request.op == rustic_sdk::abi::files::admission::EXECUTE {
+            server.admission_execute_active(
+                disk,
+                rustic_file_service::Caller {
+                    slot,
+                    peer,
+                    context: request.context,
+                },
+                request,
+                runtime::clock(),
+                |clients, active| self.active_poll(clients, active, slot),
+            )
+        } else if rustic_sdk::abi::files::admission::controlled(request.op) {
             server.admission_with(
                 disk,
                 rustic_file_service::Caller {

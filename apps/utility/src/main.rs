@@ -2,6 +2,7 @@
 #![no_std]
 #![no_main]
 mod actions;
+mod admission;
 mod operations;
 mod pressure;
 mod read;
@@ -22,7 +23,9 @@ fn run(files: u64, control: u64, peer: u64) -> u64 {
     let mut client = rustic_sdk::files::Client::new(files, peer, words[3] as u32);
     if matches!(
         words[0],
-        rustic_sdk::abi::supervisor::SESSION | rustic_sdk::abi::supervisor::HELPER
+        rustic_sdk::abi::supervisor::SESSION
+            | rustic_sdk::abi::supervisor::HELPER
+            | rustic_sdk::abi::supervisor::ADMISSION_SESSION
     ) {
         return session::run(
             &mut client,

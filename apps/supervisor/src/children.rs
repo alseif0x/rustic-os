@@ -25,7 +25,9 @@ impl State {
             if child.closed {
                 continue;
             }
-            if matches!(child.role, s::SESSION | s::HELPER) && child.control.pending() {
+            if matches!(child.role, s::SESSION | s::HELPER | s::ADMISSION_SESSION)
+                && child.control.pending()
+            {
                 match child.control.poll() {
                     Ok(Some(message)) => {
                         if let Ok(w) = k::decode(message.payload()) {

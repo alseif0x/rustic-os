@@ -6,7 +6,9 @@ impl<P: crate::rpc::Progress> Client<P> {
     pub(super) fn operation_exchange(&mut self, mut p: Packet) -> Result<Packet, Error> {
         self.require_binding()?;
         p.context = self.context;
-        let durable = p.op == REPLACE_COMMIT || admission::controlled(p.op);
+        let durable = p.op == REPLACE_COMMIT
+            || admission::controlled(p.op)
+            || p.op == admission::REQUEST_CANCEL;
         let message = self.rpc.exchange(&p.encode()).map_err(|e| match e {
             _ if durable => Error::Uncertain,
             crate::Error::Interrupted => Error::Interrupted,
@@ -40,7 +42,8 @@ impl<P: crate::rpc::Progress> Client<P> {
             return Ok(None);
         };
         let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT | REPLACE_COMMIT)
-            || admission::controlled(p.op);
+            || admission::controlled(p.op)
+            || p.op == admission::REQUEST_CANCEL;
         let error = if durable {
             Error::Uncertain
         } else {
@@ -62,7 +65,8 @@ impl<P: crate::rpc::Progress> Client<P> {
         self.require_binding()?;
         p.context = self.context;
         let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT | REPLACE_COMMIT)
-            || admission::controlled(p.op);
+            || admission::controlled(p.op)
+            || p.op == admission::REQUEST_CANCEL;
         let malformed = if durable {
             Error::Uncertain
         } else {

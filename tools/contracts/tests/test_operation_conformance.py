@@ -46,7 +46,15 @@ class OperationConformance(unittest.TestCase):
             value = copy.deepcopy(good); mutate(value)
             with self.assertRaises(ContractError): check_entries(self.catalog,value)
     def native_evidence(self):
-        value = {"verified":True,"boots":46,"kernel_sha256":"a"*64,"cases":[{"case":"old"+str(i),"verified":True} for i in range(13)]}
+        value = {"verified":True,"boots":58,"kernel_sha256":"a"*64,"cases":[{"case":"old"+str(i),"verified":True} for i in range(13)]}
+        value["cases"] += [{"case":"public_activity_"+name,"verified":True,"skip":skip,"rights":rights,
+                            "denied":denied,"committed":committed,"status_during_io":True,
+                            "reboot_verified":True,"sha256":"b"*64}
+                           for name,skip,rights,denied,committed in (("early",0,8,0,False),
+                           ("header",15,8,0,True),("flush",16,8,0,True),("inspect_only",0,4,17,True),
+                           ("foreign_scope",0,8,27,True))]
+        value["cases"].append({"case":"public_activity_failed_drain","verified":True,
+                               "uncertain":True,"reboot_verified":True,"sha256":"b"*64})
         value["cases"].append({"case":"scoped_operations_lost_reply_namespaces_restart_reboot","verified":True,"exchanges":entries(self.catalog)})
         value["cases"] += [{"case":"scoped_operation_"+name,"verified":True,"committed":name=="final_flush"} for name in ("data","receipt","metadata","header","final_flush")]
         value["cases"] += [{"case":"controlled_operation_"+name,"verified":True,"skip":skip,"committed":skip>=15,
@@ -69,5 +77,26 @@ class OperationConformance(unittest.TestCase):
         for invalid in (None, good["cases"][-2], {**good["cases"][-1], "skip": 15}):
             altered = copy.deepcopy(good); altered["cases"][-1] = invalid
             with self.assertRaises(ContractError): native_check(self.catalog, altered)
+
+    def test_native_activity_rejects_missing_cases_and_contradictory_outcomes(self):
+        good = self.native_evidence()
+        live = [i for i,c in enumerate(good["cases"]) if c["case"].startswith("public_activity_")]
+        for index in live:
+            mutations = [("case", "unrelated"), ("reboot_verified", False), ("sha256", "unknown")]
+            if good["cases"][index]["case"].endswith("failed_drain"):
+                mutations += [("uncertain", False), ("committed", False)]
+            else:
+                case = good["cases"][index]
+                mutations += [("status_during_io", False), ("skip", 99), ("rights", 15),
+                              ("denied", 99), ("committed", not case["committed"])]
+            for field, invalid in mutations:
+                altered = copy.deepcopy(good); altered["cases"][index][field] = invalid
+                with self.subTest(index=index, field=field), self.assertRaises(ContractError):
+                    native_check(self.catalog, altered)
+        altered = copy.deepcopy(good)
+        altered["cases"][live[1]] = copy.deepcopy(altered["cases"][live[0]])
+        with self.assertRaises(ContractError): native_check(self.catalog, altered)
+        altered = copy.deepcopy(good); altered["boots"] = 46
+        with self.assertRaises(ContractError): native_check(self.catalog, altered)
 
 if __name__ == "__main__": unittest.main()

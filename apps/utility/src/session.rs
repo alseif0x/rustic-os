@@ -25,6 +25,7 @@ pub fn run(files: &mut Client, control: &Endpoint, owner: u64, scope: u32, other
             return 4;
         };
         let r = match w[0] {
+            a::ADMISSION => super::admission::run(files, w),
             a::API_READ | a::READ_OPEN | a::READ_NEXT | a::FILL => {
                 read.execute(w[0], files, scope, other)
             }

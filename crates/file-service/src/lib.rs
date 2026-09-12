@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 mod admission;
 mod authority;
-pub use admission::Caller;
+pub use admission::{ActiveExecution, Caller};
 mod clients;
 pub use clients::Clients;
 mod disk;

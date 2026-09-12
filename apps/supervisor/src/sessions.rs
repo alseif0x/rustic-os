@@ -36,12 +36,23 @@ impl State {
         }
         self.actor_words(pid, [action, 0, 0, 0, 0, 0, 0, 0])
     }
+    pub(super) fn admission_actor(&mut self, w: [u64; 8]) -> Result<[u64; 8], u64> {
+        use rustic_sdk::abi::files::admission as a;
+        if w[6..] != [0; 2]
+            || !matches!(w[5], x if x == a::EXECUTE as u64 || x == a::ACTIVITY as u64 || x == a::REQUEST_CANCEL as u64)
+        {
+            return Err(1);
+        }
+        self.actor_words(w[1], [s::actor::ADMISSION, w[2], w[3], w[4], w[5], 0, 0, 0])
+    }
     fn actor_words(&mut self, pid: u64, words: [u64; 8]) -> Result<[u64; 8], u64> {
         let child = self
             .children
             .iter_mut()
             .flatten()
-            .find(|c| c.pid == pid && matches!(c.role, s::SESSION | s::HELPER))
+            .find(|c| {
+                c.pid == pid && matches!(c.role, s::SESSION | s::HELPER | s::ADMISSION_SESSION)
+            })
             .ok_or(2u64)?;
         if child.control.pending() {
             return Err(3);
@@ -57,7 +68,9 @@ impl State {
             .children
             .iter()
             .flatten()
-            .find(|c| c.pid == pid && matches!(c.role, s::SESSION | s::HELPER))
+            .find(|c| {
+                c.pid == pid && matches!(c.role, s::SESSION | s::HELPER | s::ADMISSION_SESSION)
+            })
             .ok_or(2u64)?;
         let phase = if c.actor_state == 1 && runtime::clock() >= c.actor_deadline {
             3

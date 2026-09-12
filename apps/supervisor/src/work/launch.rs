@@ -45,7 +45,7 @@ impl Draft {
                 self.expires,
                 u64::from(matches!(
                     self.role,
-                    s::LOST_REPLY | s::LOST_OPERATION | s::LOST_ADMISSION
+                    s::LOST_REPLY | s::LOST_OPERATION | s::LOST_ADMISSION | s::ADMISSION_SESSION
                 )),
             ]
         }
@@ -155,6 +155,7 @@ impl State {
                 | s::LOST_REPLY
                 | s::LOST_OPERATION
                 | s::LOST_ADMISSION
+                | s::ADMISSION_SESSION
                 | s::SESSION
                 | s::HELPER
         ) || lease > 360000
@@ -169,6 +170,7 @@ impl State {
                 | s::LOST_REPLY
                 | s::LOST_OPERATION
                 | s::LOST_ADMISSION
+                | s::ADMISSION_SESSION
                 | s::SESSION
                 | s::HELPER
         );
@@ -178,14 +180,19 @@ impl State {
             }
             if self.policy == 0
                 || scope == 0
-                || rights
-                    != if matches!(role, s::LOST_REPLY | s::LOST_OPERATION | s::LOST_ADMISSION) {
-                        7
-                    } else if role == s::SESSION {
-                        3
-                    } else {
-                        1
-                    }
+                || if role == s::ADMISSION_SESSION {
+                    rights == 0 || rights & !15 != 0
+                } else {
+                    rights
+                        != if matches!(role, s::LOST_REPLY | s::LOST_OPERATION | s::LOST_ADMISSION)
+                        {
+                            7
+                        } else if role == s::SESSION {
+                            3
+                        } else {
+                            1
+                        }
+                }
             {
                 return Err(2);
             }

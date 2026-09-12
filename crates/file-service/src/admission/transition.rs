@@ -58,34 +58,9 @@ impl Server {
         mut control: impl FnMut(&mut Clients, bool) -> u64,
     ) -> Result<AdmissionStatus, Error> {
         let now = control(&mut self.clients, false);
-        let grant = caller.check(&self.clients, now)?;
-        let old = self.inspect_admission(grant, id)?;
-        if old.status.state != State::Admitted {
-            return Ok(old.status);
-        }
-        grant.access(&self.volume, old.request.id, true)?;
-        let write = self
-            .volume
-            .prepare_admitted(disk, grant.subject, id)
-            .map_err(reply::error)?;
-        let settled = drive(
-            &mut self.clients,
-            write,
-            Some((caller, rustic_abi::files::INSPECT_RIGHT)),
-            &mut control,
-        )?;
-        if let Some(error) = settled.denied {
-            if settled.result.is_some() {
-                return Err(Error::Uncertain);
-            }
-            self.retire_admission(disk, grant.subject, id, &mut control)?;
-            return Err(error);
-        }
-        Ok(self
-            .volume
-            .admission_by_id(grant.subject, id)
-            .map_err(reply::error)?
-            .status)
+        self.execute_admission_active_with(disk, caller, id, now, |clients, active| {
+            control(clients, active.pending())
+        })
     }
 
     /// Service housekeeping, never delegated cancellation authority. The only

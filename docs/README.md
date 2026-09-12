@@ -38,6 +38,7 @@ Start with the [project overview](../README.md) for current capabilities and the
 | [Recoverable replacements](FILE-RECOVERY.md) | Atomic file/version receipts, bounded retries, identity, legacy upgrade and native I/O fault tests |
 | [Durable admission storage](FILE-ADMISSION.md) | Persistent pre-effect identity, cancellation records, explicit format-4 migration and restart evidence |
 | [Public admission API](FILE-ADMISSION-API.md) | Explicit durable preparation, status, execution and independent cancellation through SDK/terminal |
+| [Live execution control](FILE-ACTIVITY.md) | Authorized activity and stop requests while an explicit file execution has pending I/O |
 | [Admission control](FILE-ADMISSION-CONTROL.md) | Pollable service admission, fresh execution authority and durable cleanup after owner revocation |
 
 ## Requirements and design

@@ -65,6 +65,24 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             };
             print(result);
         }
+        "admission-activity" | "request-cancel" => {
+            exact(a, 2)?;
+            let id = argument(a, 1)?.parse()?;
+            let v = if argument(a, 0)? == "request-cancel" {
+                s.files.admission_request_cancel(id)?
+            } else {
+                s.files.admission_activity(id)?
+            };
+            let phase = match v.phase {
+                rustic_sdk::files::admission::ActivityPhase::Running => "running",
+                rustic_sdk::files::admission::ActivityPhase::Stopping => "stopping",
+                rustic_sdk::files::admission::ActivityPhase::Settling => "settling",
+            };
+            output::format(format_args!(
+                "admission-activity-v1 id={} service_instance={} phase={} cancel_requested={} io_pending={}\r\n",
+                v.id, v.service_instance, phase, v.cancel_requested as u8, v.io_pending as u8
+            ));
+        }
         "execute-admission" | "cancel-admission" => {
             exact(a, 2)?;
             let id = argument(a, 1)?.parse()?;

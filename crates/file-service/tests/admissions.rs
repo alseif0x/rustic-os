@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 mod support;
 mod admissions {
+    mod activity;
     mod authority;
     mod control;
     mod wire;
