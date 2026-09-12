@@ -18,14 +18,14 @@ MODES = tuple(EXPECTED) + ("terminal", "terminal-init")
 
 def reached(mode, serial):
     if mode == "recovery-test":
-        return (serial.count("RusticOS native terminal 0.1") == 88
+        return (serial.count("RusticOS native terminal 0.1") == 98
                 and serial.count("error: Uncertain") == 17
                 and "operation-v1" in serial
                 and "persistent format v3" in serial
                 and "persistent format v4" in serial
                 and "admission-v1" in serial
-                and serial.count("RUSTIC IO_OBSERVATION held=1") == 27
-                and serial.count("admission-activity-v1") == 62
+                and serial.count("RUSTIC IO_OBSERVATION held=1") == 31
+                and serial.count("admission-activity-v1") == 91
                 and "phase=queued" in serial
                 and "IdempotencyConflict" in serial
                 and "ExpiredEpoch" in serial

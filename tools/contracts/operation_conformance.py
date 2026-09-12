@@ -10,6 +10,7 @@ from .validation import require, validate_exchange
 from .activity_evidence import check_activity
 from .scheduling_evidence import check_scheduling
 from .scheduled_failure_evidence import check_scheduled_failures
+from .scheduling_authority_evidence import check_authority
 
 VECTORS = json.loads((Path(__file__).resolve().parents[2] / "contracts/services/v1/fixtures/replace-cases.json").read_text())["cases"]
 
@@ -38,10 +39,11 @@ def check_entries(catalog, entries):
     return len(seen)
 
 def native_check(catalog, evidence):
-    require(isinstance(evidence, dict) and evidence.get("verified") is True and type(evidence.get("boots")) is int and evidence["boots"] == 88, "incomplete native recovery mission")
+    require(isinstance(evidence, dict) and evidence.get("verified") is True and type(evidence.get("boots")) is int and evidence["boots"] == 98, "incomplete native recovery mission")
     require(isinstance(evidence.get("kernel_sha256"), str) and re.fullmatch(r"[0-9a-f]{64}", evidence["kernel_sha256"]), "missing guest identity")
     cases = evidence.get("cases")
-    require(isinstance(cases, list) and len(cases) == 44 and all(isinstance(c, dict) and c.get("verified") is True for c in cases), "missing recovery cases")
+    require(isinstance(cases, list) and len(cases) == 49 and all(isinstance(c, dict) and c.get("verified") is True for c in cases), "missing recovery cases")
+    check_authority(catalog, cases)
     check_activity(cases)
     check_scheduling(catalog, cases)
     check_scheduled_failures(catalog, cases)

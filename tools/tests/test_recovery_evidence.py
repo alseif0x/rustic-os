@@ -10,10 +10,10 @@ from terminal_support.operation_cases import operation
 
 
 def transcript():
-    return ("RusticOS native terminal 0.1\n" * 88
+    return ("RusticOS native terminal 0.1\n" * 98
             + "error: Uncertain\n" * 17
-            + "RUSTIC IO_OBSERVATION held=1\n" * 27
-            + "admission-activity-v1\n" * 62 + "phase=queued\n"
+            + "RUSTIC IO_OBSERVATION held=1\n" * 31
+            + "admission-activity-v1\n" * 91 + "phase=queued\n"
             + "IdempotencyConflict\nExpiredEpoch\noperation-v1\npersistent format v3\npersistent format v4\nadmission-v1\n")
 
 
@@ -22,10 +22,9 @@ class RecoveryEvidenceTests(unittest.TestCase):
         self.assertTrue(reached("recovery-test", transcript()))
 
     def test_rejects_previous_inventory_and_duplicated_live_evidence(self):
-        old = transcript().replace("RusticOS native terminal 0.1\n", "", 18)
-        old = old.replace("RUSTIC IO_OBSERVATION held=1\n", "", 9)
-        old = old.replace("admission-activity-v1\n", "", 34)
-        old = old.replace("error: Uncertain\n", "", 2)
+        old = transcript().replace("RusticOS native terminal 0.1\n", "", 10)
+        old = old.replace("RUSTIC IO_OBSERVATION held=1\n", "", 4)
+        old = old.replace("admission-activity-v1\n", "", 29)
         self.assertFalse(reached("recovery-test", old))
         self.assertFalse(reached("recovery-test", transcript() + "admission-activity-v1\n"))
 

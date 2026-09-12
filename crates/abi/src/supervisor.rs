@@ -63,3 +63,6 @@ pub const LOST_OPERATION: u64 = 10;
 pub const LOST_ADMISSION: u64 = 11;
 /// Explicit owner-issued diagnostic session; requested file rights remain scoped.
 pub const ADMISSION_SESSION: u64 = 12;
+/// Owner-issued diagnostic actor whose durable-operation subject is its own PID.
+/// The caller cannot select or impersonate an existing subject.
+pub const PRIVATE_ADMISSION_SESSION: u64 = 13;

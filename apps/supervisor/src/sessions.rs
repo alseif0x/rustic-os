@@ -61,7 +61,14 @@ impl State {
             .iter_mut()
             .flatten()
             .find(|c| {
-                c.pid == pid && matches!(c.role, s::SESSION | s::HELPER | s::ADMISSION_SESSION)
+                c.pid == pid
+                    && matches!(
+                        c.role,
+                        s::SESSION
+                            | s::HELPER
+                            | s::ADMISSION_SESSION
+                            | s::PRIVATE_ADMISSION_SESSION
+                    )
             })
             .ok_or(2u64)?;
         if child.control.pending() {
@@ -79,7 +86,14 @@ impl State {
             .iter()
             .flatten()
             .find(|c| {
-                c.pid == pid && matches!(c.role, s::SESSION | s::HELPER | s::ADMISSION_SESSION)
+                c.pid == pid
+                    && matches!(
+                        c.role,
+                        s::SESSION
+                            | s::HELPER
+                            | s::ADMISSION_SESSION
+                            | s::PRIVATE_ADMISSION_SESSION
+                    )
             })
             .ok_or(2u64)?;
         let phase = if c.actor_state == 1 && runtime::clock() >= c.actor_deadline {

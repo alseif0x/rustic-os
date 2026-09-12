@@ -29,6 +29,15 @@ pub fn run(disk: &mut super::disk::Disk, server: &mut Server, admin: Endpoint) -
     loop {
         // Replies are retried without stopping progress of unrelated clients.
         for (slot, reply) in replies.iter_mut().enumerate() {
+            if slot < CLIENTS && reply.is_some() {
+                match server.grant_at(slot) {
+                    Some(grant) => control::replies::restrict(
+                        reply,
+                        control::replies::denial(&grant, runtime::clock()),
+                    ),
+                    None => *reply = None,
+                }
+            }
             if let Some(message) = reply {
                 let token = if slot == CLIENTS {
                     admin.token()

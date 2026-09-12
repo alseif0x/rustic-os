@@ -66,7 +66,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
     match argument(a, 0)? {
         "help" => {
             output::text(
-                "schedule-admission ADMISSION_ID | admission-activity ADMISSION_ID | request-cancel ADMISSION_ID\r\nadmission-session FILE OTHER RIGHTS | act-admission PID execute|schedule|activity|request-cancel|lost-stop|lost-schedule ADMISSION_ID\r\nScheduling returns before settlement; cancellation replies acknowledge a request, not durable prevention.\r\n",
+                "schedule-admission ADMISSION_ID | admission-activity ADMISSION_ID | request-cancel ADMISSION_ID\r\nadmission-session FILE OTHER RIGHTS [private] | act-admission PID execute|schedule|get|activity|request-cancel|lost-stop|lost-schedule|lost-result ADMISSION_ID\r\nScheduling returns before settlement; cancellation replies acknowledge a request, not durable prevention. Private sessions use a supervisor-assigned subject.\r\n",
             );
             exact(a, 1)?;
             output::text(

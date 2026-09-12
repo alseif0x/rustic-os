@@ -43,10 +43,17 @@ impl Draft {
                 self.scope as u64,
                 self.rights as u64,
                 self.expires,
-                u64::from(matches!(
-                    self.role,
-                    s::LOST_REPLY | s::LOST_OPERATION | s::LOST_ADMISSION | s::ADMISSION_SESSION
-                )),
+                if self.role == s::PRIVATE_ADMISSION_SESSION {
+                    self.pid
+                } else {
+                    u64::from(matches!(
+                        self.role,
+                        s::LOST_REPLY
+                            | s::LOST_OPERATION
+                            | s::LOST_ADMISSION
+                            | s::ADMISSION_SESSION
+                    ))
+                },
             ]
         }
     }
@@ -156,6 +163,7 @@ impl State {
                 | s::LOST_OPERATION
                 | s::LOST_ADMISSION
                 | s::ADMISSION_SESSION
+                | s::PRIVATE_ADMISSION_SESSION
                 | s::SESSION
                 | s::HELPER
         ) || lease > 360000
@@ -171,6 +179,7 @@ impl State {
                 | s::LOST_OPERATION
                 | s::LOST_ADMISSION
                 | s::ADMISSION_SESSION
+                | s::PRIVATE_ADMISSION_SESSION
                 | s::SESSION
                 | s::HELPER
         );
@@ -180,7 +189,7 @@ impl State {
             }
             if self.policy == 0
                 || scope == 0
-                || if role == s::ADMISSION_SESSION {
+                || if matches!(role, s::ADMISSION_SESSION | s::PRIVATE_ADMISSION_SESSION) {
                     rights == 0 || rights & !15 != 0
                 } else {
                     rights

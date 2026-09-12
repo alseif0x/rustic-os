@@ -96,6 +96,17 @@ class FailureExporterTests(unittest.TestCase):
                 self.assertEqual([entry["path"] for entry in report["errors"]],
                                  ["failure-initial.json"])
 
+    def test_scheduling_authority_failures_keep_their_fixed_session_evidence(self):
+        selected = set()
+        for name in ('human_edit', 'read_write', 'inspect_all', 'scope_subject', 'revoked_cancel'):
+            for ending in ('', '-reboot'):
+                selected |= self.add_session('scheduling_authority_' + name + ending)
+        artifacts, report = self.exported()
+        self.assertEqual(set(artifacts), set(self.base) | selected)
+        self.assertEqual(report['status'], 'captured')
+        with self.assertRaisesRegex(ValueError, 'unknown recovery session'):
+            export_failure.session_files('scheduling_authority_unreviewed')
+
     def test_missing_selected_extras_produce_partial_capture(self):
         selected = self.add_session("data-fault")
         missing = {"failure-data-fault.files.bin", "data-fault.qemu.log"}

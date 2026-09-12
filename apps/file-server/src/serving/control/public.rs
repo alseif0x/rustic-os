@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Bounded transport progress, separate from the service's live authority view.
-use super::Owner;
+use super::{Owner, replies};
 use rustic_file_service::{ActiveExecution, CLIENTS, Caller, Clients, ExecutionQueue};
 use rustic_sdk::{
     abi::files::{Error, Packet, admission},
@@ -54,10 +54,10 @@ impl Owner<'_> {
                 continue;
             };
             let endpoint = Endpoint::from_bootstrap(grant.endpoint);
-            if grant.rights == 0 || grant.expires != 0 && runtime::clock() >= grant.expires {
-                self.replies[slot] = None;
-                continue;
-            }
+            // Fencing removes result data, not bounded transport progress. Retain
+            // a correlated denial under backpressure and reject new calls promptly.
+            let denial = replies::denial(&grant, runtime::clock());
+            replies::restrict(&mut self.replies[slot], denial);
             if let Some(reply) = &self.replies[slot] {
                 match endpoint.send(reply) {
                     Ok(()) => self.replies[slot] = None,
@@ -75,6 +75,7 @@ impl Owner<'_> {
             match endpoint.receive() {
                 Ok(message) => {
                     let output = match Packet::decode(message.payload()) {
+                        Ok(p) if denial.is_some() => replies::refuse(&p, denial.unwrap()),
                         Ok(p)
                             if admission::live(p.op)
                                 || excluded.is_none() && p.op == admission::SCHEDULE =>

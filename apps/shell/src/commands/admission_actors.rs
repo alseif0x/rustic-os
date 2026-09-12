@@ -4,20 +4,15 @@ use super::*;
 use rustic_sdk::abi::{files::admission as a, supervisor as s};
 pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Error> {
     if argument(args, 0)? == "admission-session" {
-        exact(args, 4)?;
+        let role = match args.len() {
+            4 => s::ADMISSION_SESSION,
+            5 if argument(args, 4)? == "private" => s::PRIVATE_ADMISSION_SESSION,
+            _ => return Err(Error::Usage),
+        };
         let scope = session.files.resolve(session.cwd, argument(args, 1)?)?;
         let other = session.files.resolve(session.cwd, argument(args, 2)?)?;
         let rights = number(args, 3)?;
-        let r = session.service([
-            s::RUN,
-            s::ADMISSION_SESSION,
-            scope as u64,
-            other as u64,
-            rights,
-            0,
-            0,
-            0,
-        ])?;
+        let r = session.service([s::RUN, role, scope as u64, other as u64, rights, 0, 0, 0])?;
         output::format(format_args!("started pid={}\r\n", r[1]));
     } else {
         exact(args, 4)?;

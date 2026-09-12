@@ -28,6 +28,7 @@ fn run(files: u64, control: u64, peer: u64) -> u64 {
         rustic_sdk::abi::supervisor::SESSION
             | rustic_sdk::abi::supervisor::HELPER
             | rustic_sdk::abi::supervisor::ADMISSION_SESSION
+            | rustic_sdk::abi::supervisor::PRIVATE_ADMISSION_SESSION
     ) {
         return session::run(
             &mut client,

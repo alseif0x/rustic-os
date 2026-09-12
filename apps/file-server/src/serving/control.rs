@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Private owner IPC during one logical replacement; settlement precedes revoke ACK.
 mod public;
+pub(super) mod replies;
 use rustic_file_service::{CLIENTS, Clients, ExecutionQueue, Server};
 use rustic_sdk::{
     abi::{
@@ -163,8 +164,11 @@ impl<'a> Owner<'a> {
                 words[2] = (before - clients.pending()) as u64;
             }
             for (slot, reply) in self.replies[..CLIENTS].iter_mut().enumerate() {
-                if clients.grant_at(slot).is_none_or(|grant| grant.rights == 0) {
-                    *reply = None;
+                match clients.grant_at(slot) {
+                    Some(grant) => {
+                        replies::restrict(reply, replies::denial(&grant, runtime::clock()))
+                    }
+                    None => *reply = None,
                 }
             }
             Ok(())

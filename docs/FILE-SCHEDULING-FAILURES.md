@@ -102,7 +102,7 @@ python3 tools/boot.py run --mode recovery-test --timeout 60
   --evidence artifacts/boot/recovery-test/recovery.json
 ```
 
-The combined inventory is 44 recovery groups across 88 VM boots. Its common gate
+At this failure-test delivery the combined inventory was 44 recovery groups across 88 VM boots. Its common gate
 requires 27 held-I/O observations, 62 activity replies and 17 expected uncertainty
 responses. The nine new groups supplement the four original scheduling groups and
 the prior explicit-execution regression. Host tests for this increment include 64
@@ -124,8 +124,7 @@ suite to 160 tests. Reports from other modes retain their existing limits.
 
 These cuts establish bounded native behavior; they do not implement the logical
 `operations.cancel` method, unify admission/completion IDs or add structured retained
-failure causes. Native evidence for a separate human edit before scheduling and the
-complete scheduled denial matrix still needs to supplement the existing host tests
-and explicit-execution denial cases. Those requirements must not be checked off
-solely because the shared controller already has another fixture. Method/profile
+failure causes. The later [authority increment](FILE-SCHEDULING-AUTHORITY.md)
+supplies the separate native human edit and scheduled denial matrix, expanding
+the combined inventory to 49 groups / 98 boots. Method/profile
 discovery and the complete deterministic mission remain #22/#15 integration work.

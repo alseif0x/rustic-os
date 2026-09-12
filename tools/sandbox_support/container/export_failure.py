@@ -20,7 +20,10 @@ SESSIONS = ("initial", "reboot",
             "admitted_data", "admitted_data-reboot", "admitted_final_flush",
             "admitted_final_flush-reboot", "legacy", "upgrade", "operations-initial", "operations-reboot",
             *("operations-" + name + ending for name in ("data", "receipt", "metadata", "header", "final_flush")
-              for ending in ("-fault", "-reboot")))
+              for ending in ("-fault", "-reboot")),
+            *("scheduling_authority_" + name + ending
+              for name in ("human_edit", "read_write", "inspect_all", "scope_subject", "revoked_cancel")
+              for ending in ("", "-reboot")))
 
 
 def session_files(name):
@@ -39,7 +42,7 @@ def base_files(mode):
         raise ValueError("invalid boot mode")
     result = dict(BASE)
     if mode == "recovery-test":
-        # The 44-case/88-boot reports exceed 64 KiB; retain a fixed 128 KiB ceiling.
+        # Expanded recovery reports exceed 64 KiB; retain a fixed 128 KiB ceiling.
         result.update({"result.json": 128 * 1024, "recovery.json": 128 * 1024})
     return result
 

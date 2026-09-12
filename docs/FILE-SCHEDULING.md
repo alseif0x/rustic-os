@@ -154,6 +154,8 @@ only the exact complete diagnostic frame that can interleave a shell response.
 The subsequent [scheduled failure increment](FILE-SCHEDULING-FAILURES.md) adds nine
 native groups for late stops, unread cancellation/result replies, actual service
 restart, selected pre/post-publication EIO and combined queue/staging/reply pressure.
-The current combined inventory is 44 groups/88 boots; the counts above describe
-the original scheduling delivery. The logical lifecycle/profile, separate native
-human-edit case and complete scheduled denial matrix remain #47 acceptance.
+The subsequent [authority increment](FILE-SCHEDULING-AUTHORITY.md) adds the native
+human-edit and scheduled denial matrix, including foreign subjects and prompt
+revocation refusals. The current combined inventory is 49 groups/98 boots; the
+counts above describe the original scheduling delivery. The full logical
+lifecycle/profile remains #47 acceptance.
