@@ -152,7 +152,7 @@ fn failed_refresh_clears_prior_support_and_never_downgrades() {
                 3 => {
                     r = Packet::new(n::DESCRIBE);
                     r.context = p.context;
-                    r.status = E::Busy as u8;
+                    r.status = E::Revoked as u8;
                 }
                 4 => r.id = Method::OperationsCancel as u32,
                 _ => (),
@@ -166,6 +166,68 @@ fn failed_refresh_clears_prior_support_and_never_downgrades() {
         assert_eq!(client.cancel_selected(id()), Err(E::Unavailable));
         assert_eq!(transport::requests().len(), 3);
     }
+}
+
+#[test]
+fn busy_refresh_preserves_existing_control_only_on_the_same_binding() {
+    for fault in 0..5 {
+        let mut client = selected();
+        if fault == 1 {
+            client.context = 12;
+        }
+        transport::respond(move |p| {
+            if p.op != n::DESCRIBE {
+                return reply(p);
+            }
+            let mut r = Packet::new(n::DESCRIBE);
+            r.context = p.context + u32::from(fault == 3);
+            r.status = E::Busy as u8;
+            if fault == 4 {
+                r.op = a::OBSERVE;
+            }
+            r
+        });
+        transport::wrong_peer(fault == 2);
+        assert_eq!(
+            client.select_lifecycle(Method::OperationsGet),
+            Err(if fault < 2 { E::Busy } else { E::Protocol })
+        );
+        assert_eq!(
+            transport::requests().len(),
+            3,
+            "no implicit discovery retry"
+        );
+        if fault == 0 {
+            assert!(client.inspect_selected(id()).is_ok());
+            assert!(client.cancel_selected(id()).is_ok());
+            assert_eq!(transport::requests().len(), 5);
+        } else {
+            client.context = 11;
+            assert_eq!(client.inspect_selected(id()), Err(E::Unavailable));
+            assert_eq!(client.cancel_selected(id()), Err(E::Unavailable));
+            assert_eq!(transport::requests().len(), 3);
+        }
+    }
+}
+
+#[test]
+fn busy_cannot_select_a_method_that_was_never_selected() {
+    let mut client = selected();
+    client.rebind(1, 7, 11);
+    client.select_lifecycle(Method::OperationsGet).unwrap();
+    transport::respond(|p| {
+        let mut r = Packet::new(n::DESCRIBE);
+        r.context = p.context;
+        r.status = E::Busy as u8;
+        r
+    });
+    assert_eq!(
+        client.select_lifecycle(Method::OperationsCancel),
+        Err(E::Busy)
+    );
+    assert_eq!(client.cancel_selected(id()), Err(E::Unavailable));
+    transport::respond(reply);
+    assert!(client.inspect_selected(id()).is_ok());
 }
 
 #[test]

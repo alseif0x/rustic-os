@@ -47,6 +47,9 @@ def verify(cases):
             assert all(type(v) is int for v in c['readback'].values())
             assert c['readback'] == dict(status=0, value=len(content), other=disk['epoch'], control_denied=1, version=expected_version), 'client did not verify committed readback'
         elif kind == 'cancel':
+            busy = c['refresh_busy']
+            assert all(type(v) is int for v in busy.values())
+            assert busy == dict(status=20, value=0, other=0, control_denied=0, version=0), 'missing busy-refresh boundary'
             acknowledgement(c['ack'], identity, 'requested', client=True)
             inspected(c['terminal'], 'cancelled', identity)
         else:

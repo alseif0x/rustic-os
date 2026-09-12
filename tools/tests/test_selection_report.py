@@ -27,6 +27,7 @@ def fixture():
         if completed:
             case['readback'] = dict(status=0, value=len(content), other=1, control_denied=1, version=20)
         elif kind == 'cancel':
+            case['refresh_busy'] = dict(status=20, value=0, other=0, control_denied=0, version=0)
             case['ack'] = ack(identity, 'requested', True)
         else:
             case['denied'] = [dict(status=18, value=0, other=0, control_denied=0, version=0) for _ in range(2)]
@@ -54,6 +55,8 @@ class SelectionReport(unittest.TestCase):
             lambda c:c[1]['disk'].update(version=20),
             lambda c:c[1]['disk']['record'].update(committed=20),
             lambda c:c[1]['ack'].update(disposition='too_late'),
+            lambda c:c[1]['refresh_busy'].update(status=0),
+            lambda c:c[1].pop('refresh_busy'),
             lambda c:c[2]['disk']['record'].update(prevention='requested'),
             lambda c:c[2]['denied'][1].update(status=0),
             lambda c:c[2]['terminal']['operation'].update(failure='version_conflict'),

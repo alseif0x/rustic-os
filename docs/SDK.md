@@ -149,6 +149,8 @@ For a workflow that prepares and controls work on one client, call
 `select_lifecycle` separately for get and cancel before scheduling, then use
 `inspect_selected` and `cancel_selected`. Both bounded selections belong to the
 client; ordinary read/admit/schedule calls can run between them. Rebind clears
-them, failed refresh clears them, and selected calls do not renegotiate or retry.
+them. Failed refresh clears them except for a validated `Busy` on the same
+binding, which preserves existing support for live control. Busy never selects
+a new method. Selected calls do not renegotiate or retry.
 The service still checks current authority for every call. See the
 [single-client example and native acceptance](FILE-NEGOTIATION.md).

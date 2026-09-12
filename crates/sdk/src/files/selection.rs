@@ -30,17 +30,28 @@ impl<P: crate::rpc::Progress> Client<P> {
     /// the client for the lifetime of the selection. At most get and cancel are
     /// retained. The returned descriptor is metadata, not an executable token.
     ///
-    /// A failed refresh clears both selections; rebind always clears them too.
+    /// A failed refresh clears both selections, except an authenticated Busy
+    /// reply on the same context preserves previous support for live control.
+    /// Busy never adds a selection. Rebind always clears both selections.
     /// A context change observed here or by a selected call clears old entries.
     /// Selection is explicit and may return Busy during a publication. Select
     /// before scheduling: later calls do not renegotiate, downgrade or retry.
     pub fn select_lifecycle(&mut self, method: Method) -> Result<Descriptor, Error> {
         let mut previous = core::mem::take(&mut self.selection);
         let index = slot(method)?;
-        let descriptor = self.lifecycle_descriptor(method)?;
         if previous.context != self.context {
             previous = Selection::default();
         }
+        let descriptor = match self.lifecycle_descriptor(method) {
+            Ok(descriptor) => descriptor,
+            Err(Error::Busy) => {
+                // Publication temporarily defers discovery, not existing live
+                // control. The transport already validated sender and context.
+                self.selection = previous;
+                return Err(Error::Busy);
+            }
+            Err(error) => return Err(error),
+        };
         previous.context = self.context;
         previous.methods[index] = Some(descriptor);
         self.selection = previous;

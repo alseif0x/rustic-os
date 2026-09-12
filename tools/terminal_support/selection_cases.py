@@ -50,6 +50,11 @@ def exercise(uart, data, workspace, resource):
         held(uart)
         item['running'] = logical.inspect(uart, admission, 'running', client, stop=False, selected=True)
         if kind == 'cancel':
+            # A valid temporary discovery refusal must not disable the profiles
+            # already selected on either client's current connection.
+            item['refresh_busy'] = actor(uart, client, 'select-get', 20)
+            uart.command('select-lifecycle operations.cancel', 'error: Busy')
+            logical.inspect(uart, admission, 'running', client, stop=False, selected=True)
             item['ack'] = logical.cancel(uart, admission, 'requested', client, selected=True)
             logical.inspect(uart, admission, 'running', client, stop=True, selected=True)
         elif kind == 'revoke':

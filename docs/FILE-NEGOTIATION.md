@@ -28,7 +28,11 @@ client between selected calls. The returned descriptor is metadata; no API
 accepts it back as authority or as a transferable selection. `rebind` clears both
 entries even if the numeric binding values are unchanged. A context change
 observed during selection or a selected call also clears previous entries.
-Failure to refresh a selection clears both entries; a successful unavailable
+Failure to refresh a selection clears both entries except for a validated `Busy`
+reply on the same connection/context. That temporary discovery refusal preserves
+already selected support so it cannot disable live inspection/cancellation; it
+never adds support for a method that was not previously selected. Malformed,
+misbound, denied and revoked replies still clear selections. A successful unavailable
 descriptor replaces that method's previous support. Missing/unavailable selection
 returns `Unavailable` before a request is sent. Selected calls never discover,
 downgrade or automatically retry, including after an uncertain cancellation.
@@ -164,6 +168,8 @@ fixture and injects I/O holds/revocation, but does not read or prepare on the
 utility's behalf. Independent disk checks compare arguments, original identity,
 terminal cause, file content/version and other files. Resource counts return to
 baseline. The shell also proves both selections are cleared on service restart.
+During active I/O, both clients attempt a fresh selection, receive `Busy` and
+still inspect/cancel through their previously selected profiles.
 
 `mission-prepare` and `mission-verify` are fixed diagnostic actions, not general
 workflow or agent APIs. Each process attempts one candidate with key `0x8300`
