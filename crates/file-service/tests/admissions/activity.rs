@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::*;
-use rustic_abi::files::{CANCEL_RIGHT, READ_RIGHT, admission as a};
+use rustic_abi::files::{
+    BEGIN, CANCEL_RIGHT, CHUNK, COMMIT, Packet, READ_RIGHT, WRITE_RIGHT, admission as a,
+};
 
 fn id(status: rustic_fs::AdmissionStatus) -> a::AdmissionId {
     a::AdmissionId::new(status.id.lineage, status.id.number).unwrap()
@@ -227,4 +229,86 @@ fn cached_scope_never_extends_an_expired_cancellation_grant() {
         })
         .unwrap();
     assert_eq!(result.state, State::Committed);
+}
+
+fn stage(s: &mut Server, d: &mut Memory, c: Caller, op: u8, r: Replacement) -> Packet {
+    let mut p = Packet::new(op);
+    p.id = r.id;
+    p.context = c.context;
+    match op {
+        BEGIN => {
+            p.version = r.version;
+            p.arg = 4;
+        }
+        CHUNK => {
+            p.count = 4;
+            p.data[..4].copy_from_slice(b"edit");
+        }
+        _ => (),
+    }
+    s.handle(d, c.slot, c.peer, p, 1)
+}
+
+#[test]
+fn saturated_staging_and_undrained_clients_do_not_starve_live_control() {
+    let (mut s, d, executor, replacement) = base();
+    let cancel = grant(&mut s, 1, 9, replacement.id, CANCEL_RIGHT);
+    let stagers = [
+        grant(&mut s, 2, 9, replacement.id, READ_RIGHT | WRITE_RIGHT),
+        grant(&mut s, 3, 9, replacement.id, READ_RIGHT | WRITE_RIGHT),
+    ];
+    let (mut memory, admitted) = accept(&mut s, d, executor, replacement);
+    // Every staging slot is retained by another client before storage is borrowed.
+    for caller in stagers {
+        assert_eq!(
+            stage(&mut s, &mut memory, caller, BEGIN, replacement).status,
+            0
+        );
+    }
+    assert_eq!(s.pending(), 2);
+    assert_eq!(
+        stage(&mut s, &mut memory, executor, BEGIN, replacement).status,
+        Error::Busy as u8
+    );
+    let mut d = Deferred::new(memory);
+    d.signals.release.set(true);
+    let mut stopped = false;
+    let result = s
+        .execute_admission_active_with(&mut d, executor, admitted.id, 1, |clients, active| {
+            if !stopped && active.pending() {
+                // Retained staging neither advances nor is discarded by execution.
+                assert_eq!(clients.pending(), 2);
+                let query = id(admitted).packet(a::ACTIVITY, executor.context).unwrap();
+                assert!(a::Activity::decode(&active.request(clients, executor, query, 1)).is_ok());
+                let p = id(admitted)
+                    .packet(a::REQUEST_CANCEL, cancel.context)
+                    .unwrap();
+                assert_eq!(active.request(clients, cancel, p, 1).status, 0);
+                stopped = true;
+            }
+            1
+        })
+        .unwrap();
+    assert!(stopped);
+    assert_eq!(result.state, State::Cancelled);
+    assert_eq!(s.pending(), 2);
+    // Saturation delayed only the client that caused it; its staging still commits.
+    let mut memory = d.disk;
+    for (index, caller) in stagers.into_iter().enumerate() {
+        assert_eq!(
+            stage(&mut s, &mut memory, caller, CHUNK, replacement).status,
+            0
+        );
+        assert_eq!(
+            stage(&mut s, &mut memory, caller, COMMIT, replacement).status,
+            if index == 0 { 0 } else { Error::Version as u8 }
+        );
+    }
+    assert_eq!(s.pending(), 0);
+    let mounted = Volume::mount(&mut memory).unwrap();
+    assert_eq!(
+        mounted.admission_by_id(9, admitted.id).unwrap().status,
+        result
+    );
+    assert!(mounted.stat(replacement.id).unwrap().version > replacement.version);
 }

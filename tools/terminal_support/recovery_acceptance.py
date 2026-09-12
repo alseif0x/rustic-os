@@ -74,6 +74,8 @@ def verify(image, timeout=60, output=None):
                 cases.append({"case":"lost_reply_replay_conflict_quota_rotation_reboot", "verified":True, "sha256":state["selected_sha256"]})
             from .activity_cases import verify as verify_activity
             cases.extend(verify_activity(session, owned_disk, temporary, image, mount))
+            from .saturation_cases import verify as verify_saturation
+            cases.extend(verify_saturation(session, owned_disk, temporary, image, mount))
             for name, cut in CUTS.items():
                 with owned_disk(temporary / ("cut-" + name + ".raw"), True, evidence_name=name + "-reboot") as data:
                     with data.open("r+b") as f: f.write(base["bytes"])

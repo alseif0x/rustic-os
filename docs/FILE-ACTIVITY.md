@@ -33,6 +33,14 @@ No active execution at ordinary dispatch returns `Unavailable` for a valid live 
 
 One tick bounds the wait between device polls because block completion is not a `WAIT_SET` source. This is bounded control interleaving within explicit execution, not a general event loop for all filesystem operations. There is one publication, existing two-record retention, no additional process or queue allocation, no disk-format change, no dependency and no new `unsafe` boundary. Rust borrowing is preserved rather than bypassed through raw pointers or recursive calls into the ordinary storage handler.
 
+## Saturation and undrained clients
+
+Capacity is bounded before execution starts: two staging slots, one pending reply per client and the supervisor's two-utility policy. A saturated system must still answer the owner, live status and a stop.
+
+Both staging slots may already be retained by other clients when storage is borrowed. Those transfers neither advance nor disappear during execution; ordinary staging by anyone else is refused with `Busy` both before and during it. A client that never reads its replies keeps its own reply slot full, so the transport skips it and consumes none of its queued requests; its replies remain queued for it and no other client, the private owner path or disk settlement is delayed. Execution and its terminal record are unaffected by that client and its queued work is rechecked against current authority when it finally drains.
+
+Saturating those queues therefore blocks only the client that caused it. It does not extend authority, reorder settlement or turn a volatile stop acknowledgement into durable prevention.
+
 ## Wire and compatibility
 
 ABI version 1 adds opcode 56 (`ACTIVITY`) and 57 (`REQUEST_CANCEL`). Requests use the existing admission-ID framing. Responses are one 64-byte packet: `id=0`, `version=admission number`, `count=24`, payload `lineage[16]` and `instance:u64`; the remaining 16 bytes are zero. `arg` low bits are 1/2/3 for running/stopping/settling, bit 8 is cancellation requested and bit 9 is pending I/O. All other bits/fields are checked. These packets cannot decode as durable admission status. A missing/malformed stop response is `Uncertain`; the SDK does not automatically replay it.
@@ -45,7 +53,7 @@ The owner can provision two deterministic utilities with `admission-session FILE
 
 [Native cases](../tools/terminal_support/activity_cases.py) hold a real VirtIO completion before publication, during the header and during the final flush. A second CANCEL-only client requests a stop while the owner queries activity/control. The independent disk reader and a second VM boot check the final file and retained result. Further cases deny an inspect-only stop and another file's scope, and inject a failed drain after a live stop request. Helpers cannot execute with only inspect/cancel rights; CANCEL-only inspection is denied. Resource counts return to baseline after normal client cleanup.
 
-Host tests additionally cover every pending publication position, wrong subjects/peers/generations, revoked cancellation authority, uncertain drain failure, malformed framing and a lost/wrong SDK reply without automatic retry. These host models are distinct from native IPC evidence. Exhaustive queue saturation, a deliberately stalled live-control client, every loss/restart cut and full service-v1 conformance remain additional #47 acceptance; the issue stays open.
+Host tests additionally cover every pending publication position, wrong subjects/peers/generations, revoked cancellation authority, uncertain drain failure, malformed framing and a lost/wrong SDK reply without automatic retry. These host models are distinct from native IPC evidence. One further native group and its host model saturate both staging slots and leave a client's replies undrained across a real held execution, then check owner progress, live status, an accepted stop, the durable `Cancelled` record, the retained staging and returned resources. Client-slot exhaustion beyond the supervisor's two-utility policy, every loss/restart cut, a background execution queue and full service-v1 conformance remain additional #47 acceptance; the issue stays open.
 
 Run the configured checks in [DEVELOPMENT.md](DEVELOPMENT.md), including:
 
@@ -55,4 +63,4 @@ python3 -m unittest discover -s tools/tests -v
 python3 tools/boot.py run --mode recovery-test --timeout 60
 ```
 
-The expanded native recovery inventory is 29 groups/58 VM boots, including six live-control groups. Results are accepted only with the run's actual kernel/build identifiers, transcripts and independent disk observations. The implementing agent reviews ownership, visibility, dependency direction and the native/host distinction; this is not an independent security audit. Publication and CI evidence are recorded in #47.
+The expanded native recovery inventory is 30 groups/60 VM boots, including six live-control groups and one saturated-execution group. Results are accepted only with the run's actual kernel/build identifiers, transcripts and independent disk observations. The implementing agent reviews ownership, visibility, dependency direction and the native/host distinction; this is not an independent security audit. Publication and CI evidence are recorded in #47.
