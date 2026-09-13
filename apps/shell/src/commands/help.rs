@@ -16,12 +16,16 @@ pub(super) fn execute(args: &Args<'_>) -> Result<(), Error> {
     } else {
         output::text(DEFAULT);
         output::text("tasks list PATH\r\n");
+        output::text("tasks preview add PATH TITLE | tasks preview done PATH ID (no writes)\r\n");
     }
     Ok(())
 }
 
 fn advanced_help() {
     output::text("tasks list PATH (read-only native task document)\r\n");
+    output::text(
+        "tasks preview add PATH TITLE | tasks preview done PATH ID (read-only candidate)\r\n",
+    );
     output::text(
         "select-lifecycle operations.get|operations.cancel\r\ninspect-selected ADMISSION_ID | cancel-selected ADMISSION_ID\r\nact PID select-get|select-cancel|mission-prepare|mission-verify\r\nact-admission PID inspect-selected|cancel-selected ADMISSION_ID\r\n",
     );

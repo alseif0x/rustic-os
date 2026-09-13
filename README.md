@@ -30,6 +30,7 @@ The goal is a practical computer where people can work directly, collaborate wit
 | [Block storage](docs/BLOCK.md) | Bounded VirtIO reads/writes, flush, restart persistence, device errors and DMA recovery |
 | [User-mode disk access](docs/BLOCK-ACCESS.md) | Typed SDK, scoped handles, asynchronous sector I/O, cancellation and process-death recovery |
 | [Native terminal](docs/TERMINAL.md) | Real keyboard input, file commands, isolated utilities, permissions, service restart and reboot persistence |
+| [Tasks application](docs/TASKS.md) | List task documents and preview adding/completing tasks in a separate native process; applying edits remains planned |
 | [File service](docs/FILES.md) | Bounded copy-on-write volume, version checks, scopes, recovery model and independent disk verification |
 | [Client/helper authority](docs/AUTHORITY.md) | Checked subsets, shared revocation, moved-handle denial, inherited expiry and owner control during queue pressure or a stopped file service |
 | [Workspace operations](docs/FILE-OPERATIONS.md) | Scoped retry keys, original SHA-256 receipts, lost-response lookup, explicit format migration and native I/O fault recovery |

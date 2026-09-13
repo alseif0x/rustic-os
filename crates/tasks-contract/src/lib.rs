@@ -13,6 +13,7 @@ extern crate std;
 #[cfg(feature = "tasks-acceptance")]
 pub mod acceptance;
 mod document;
+pub mod preview;
 pub mod wire;
 
 pub use document::{Document, Error, MAX_BYTES, MAX_TASKS, MAX_TITLE, State, Task};

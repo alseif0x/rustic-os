@@ -33,6 +33,8 @@ pub const TASKS_LIST: u64 = 26;
 pub const TASKS_ROW: u64 = 27;
 /// Abort a pending or cached tasks listing and reclaim its child.
 pub const TASKS_ABORT: u64 = 28;
+/// Read-only candidate rows for a task edit; does not submit a mutation.
+pub const TASKS_PREVIEW: u64 = 29;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Separate native tasks application; it never receives console authority.

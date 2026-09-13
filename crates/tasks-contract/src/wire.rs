@@ -5,6 +5,8 @@ use crate::{MAX_TITLE, State, Task};
 
 pub const LIST: u64 = 1;
 pub const NEXT: u64 = 2;
+pub const PREVIEW: u64 = 3;
+pub const PREVIEW_END: u64 = 5;
 
 pub const ROW: u64 = 0;
 pub const END: u64 = 1;
@@ -16,6 +18,7 @@ pub const SERVICE: u64 = 4;
 pub enum Request {
     List,
     Next,
+    Preview(crate::preview::Edit),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,12 +33,16 @@ pub struct Row {
 pub enum Response {
     Row(Row),
     End { count: u32 },
+    PreviewEnd(crate::preview::Summary),
     Invalid,
     Capacity,
     Service { code: u64 },
 }
 
 pub fn decode_request(words: [u64; 8]) -> Option<Request> {
+    if words[0] == PREVIEW && words[7] == 0 {
+        return crate::preview::Edit::decode(words[1..7].try_into().ok()?).map(Request::Preview);
+    }
     if words[2..].iter().any(|word| *word != 0) {
         return None;
     }
@@ -44,6 +51,26 @@ pub fn decode_request(words: [u64; 8]) -> Option<Request> {
         NEXT => (words[1] == 0).then_some(Request::Next),
         _ => None,
     }
+}
+
+pub fn request_words(request: Request) -> [u64; 8] {
+    let mut words = [0; 8];
+    words[0] = match request {
+        Request::List => LIST,
+        Request::Next => NEXT,
+        Request::Preview(edit) => {
+            words[1..7].copy_from_slice(&edit.words());
+            PREVIEW
+        }
+    };
+    words
+}
+
+pub fn preview_end(summary: crate::preview::Summary) -> [u64; 8] {
+    let mut words = [0; 8];
+    words[0] = PREVIEW_END;
+    words[1..].copy_from_slice(&summary.words());
+    words
 }
 
 pub fn row(task: &Task) -> [u64; 8] {
@@ -86,6 +113,9 @@ pub const fn service(code: u64) -> [u64; 8] {
 
 pub fn decode_response(words: [u64; 8]) -> Option<Response> {
     match words[0] {
+        PREVIEW_END => {
+            crate::preview::Summary::decode(words[1..].try_into().ok()?).map(Response::PreviewEnd)
+        }
         ROW => {
             let title_len = usize::try_from(words[3]).ok()?;
             if words[1] == 0 || title_len == 0 || title_len > MAX_TITLE {

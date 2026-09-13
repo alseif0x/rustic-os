@@ -27,6 +27,7 @@ pub(in super::super) struct Cached {
     pub(super) count: usize,
     pub(super) rows: [wire::Row; MAX_TASKS],
     pub(super) deadline: u64,
+    pub(super) preview: Option<rustic_tasks_contract::preview::Summary>,
 }
 
 #[derive(Clone, Copy)]
@@ -50,6 +51,8 @@ pub(super) struct TaskList {
     count: usize,
     rows: [wire::Row; MAX_TASKS],
     deadline: u64,
+    request: wire::Request,
+    preview: Option<rustic_tasks_contract::preview::Summary>,
 }
 
 impl TaskList {
@@ -75,6 +78,8 @@ impl TaskList {
             count: 0,
             rows: [empty; MAX_TASKS],
             deadline: 0,
+            request: wire::Request::List,
+            preview: None,
         }
     }
 
@@ -101,7 +106,7 @@ impl TaskList {
                 }
             }
             Phase::SendList => {
-                self.begin(state, [wire::LIST, 0, 0, 0, 0, 0, 0, 0])?;
+                self.begin(state, wire::request_words(self.request))?;
                 self.phase = Phase::WaitList;
                 Ok(None)
             }
@@ -151,6 +156,7 @@ impl TaskList {
             count: self.count,
             rows: self.rows,
             deadline: self.deadline,
+            preview: self.preview,
         })
     }
 
@@ -185,9 +191,22 @@ impl TaskList {
                 Ok(None)
             }
             wire::Response::End { count } => {
-                if usize::try_from(count).ok() != Some(self.count) {
+                if self.request != wire::Request::List
+                    || usize::try_from(count).ok() != Some(self.count)
+                {
                     return Err(4);
                 }
+                self.deadline = runtime::clock().saturating_add(RESULT_TICKS);
+                self.phase = Phase::Ready;
+                Ok(Some([0, self.pid, self.count as u64, 0, 0, 0, 0, 0]))
+            }
+            wire::Response::PreviewEnd(summary) => {
+                if !matches!(self.request, wire::Request::Preview(_))
+                    || summary.count as usize != self.count
+                {
+                    return Err(4);
+                }
+                self.preview = Some(summary);
                 self.deadline = runtime::clock().saturating_add(RESULT_TICKS);
                 self.phase = Phase::Ready;
                 Ok(Some([0, self.pid, self.count as u64, 0, 0, 0, 0, 0]))
@@ -203,6 +222,25 @@ impl TaskList {
 }
 
 impl State {
+    pub(in super::super) fn task_preview(
+        &mut self,
+        scope: u32,
+        edit: rustic_tasks_contract::preview::Edit,
+    ) -> Result<[u64; 8], u64> {
+        let started = self.task_list(scope)?;
+        // This owner request does not yield: freeze the child request before
+        // the first work poll can provision or activate the read-only child.
+        if let Some(active) = self.work.active.as_mut()
+            && active.ticket.id == started[1]
+            && let Task::TasksList(task) = &mut active.task
+        {
+            task.request = wire::Request::Preview(edit);
+            return Ok(started);
+        }
+        let _ = self.abort_task_list(started[1]);
+        Err(4)
+    }
+
     pub(super) fn start_tasks(&mut self, draft: Draft) -> Result<[u64; 8], u64> {
         let task = TaskList::new(draft);
         if self.task_result.is_some() || !self.work.can_start() {
@@ -233,7 +271,20 @@ impl State {
         }
         if index == cached.count {
             self.clear_task_result();
-            return Ok([0, 0, cached.count as u64, 0, 0, 0, 0, 0]);
+            return Ok(cached
+                .preview
+                .map_or([0, 0, cached.count as u64, 0, 0, 0, 0, 0], |p| {
+                    [
+                        0,
+                        0,
+                        p.count as u64,
+                        p.version,
+                        p.task_id as u64,
+                        p.changed as u64,
+                        0,
+                        0,
+                    ]
+                }));
         }
         Ok(rustic_tasks_contract::wire::row_words(&cached.rows[index]))
     }

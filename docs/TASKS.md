@@ -27,9 +27,24 @@ The initial implementation accepts at most 16 tasks, titles of 1–24 printable 
 
 These bounds describe the first application slice, not target OS capacity. The application uses the existing file service and process/channel budgets. It is a separate ELF in the trusted embedded catalog; independently installing executables remains [#52](https://github.com/alseif0x/rustic-os/issues/52).
 
+## Edit previews
+
+The native application can calculate an edit without applying it:
+
+```text
+tasks preview add todo "Ship Rust"
+tasks preview done todo 7
+```
+
+Both commands show the complete candidate list, the affected task ID, whether the bytes would change, and the source version used. The final line says `not applied`. Repeated previews read the current document afresh; they do not reserve a request identity or authorize a later commit.
+
+Adding chooses one greater than the largest existing ID (1 for an empty document), preserves existing IDs/order and rejects ID exhaustion or capacity overflow. Completing a task changes only its state; a missing ID fails, and an already completed task produces an unchanged candidate. The app-owned pure planner retains immutable candidate bytes; the native path reads one version-pinned, hash-verified snapshot and returns validated candidate rows. The supervisor grants only READ for the selected file, and the shell owns syntax/presentation. Result cleanup and expiry are shared with listing.
+
 ## Remaining work
 
-Only `list` is implemented. `add` and `done` need immutable mutation intent, expected-version conflict handling, retained retry identity and exact effect verification before they can be advertised. General capability discovery and the complete mission acceptance remain open in [#22](https://github.com/alseif0x/rustic-os/issues/22). MCP is an optional later adapter.
+`list` and read-only edit previews are implemented. Applying `add` and `done` still needs retained request identity, expected-version conflict handling, exact effect verification and recovery after response loss. General capability discovery and the complete mission acceptance remain open in [#22](https://github.com/alseif0x/rustic-os/issues/22). MCP is an optional later adapter.
+
+The write gate is concrete: the direct replacement SDK accepts a caller-supplied 64-bit retry key, while its historical service instance is allocated lazily at the first commit. PID, clock and transport correlation cannot provide durable request identity across restart. The existing admission API can persist the candidate and allocate an admission identity before execution, but initial-key allocation, a scoped trusted mutation subject, retained ownership across a failed child connection, and explicit profile activation must be decided before using it here. Neither a preview nor a post-commit receipt solves those pre-submit requirements. Do not hide this gap by generating fixed keys or rebuilding an uncertain candidate from newer file contents.
 
 The native terminal acceptance covers ordinary/empty/maximal lists, malformed documents, duplicate IDs, capacity errors, policy denial, occupied process slots, repeated resource reuse and a second boot. It compares the committed disk bytes before and after each query using an independent host reader. Pure Rust tests cover parsing and wire validation.
 

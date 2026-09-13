@@ -2,8 +2,10 @@
 #![no_std]
 #![no_main]
 
+mod preview;
 mod read;
 mod session;
+mod snapshot;
 
 rustic_sdk::entry!(run);
 

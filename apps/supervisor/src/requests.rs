@@ -28,6 +28,7 @@ impl State {
             | s::TASKS_LIST
             | s::TASKS_ABORT => 2,
             s::TASKS_ROW => 3,
+            s::TASKS_PREVIEW => 8,
             s::HOLD_IO => 3,
             s::RUN => 6,
             // The seventh word carries the deliberate discard flag for a live stop.
@@ -116,6 +117,11 @@ impl State {
             s::ACT_STATUS => self.actor_status(w[1]),
             s::JOB_STATUS => self.work.status(w[1], self.files),
             s::TASKS_LIST => self.task_list(u32::try_from(w[1]).map_err(|_| 1u64)?),
+            s::TASKS_PREVIEW => self.task_preview(
+                u32::try_from(w[1]).map_err(|_| 1u64)?,
+                rustic_tasks_contract::preview::Edit::decode(w[2..].try_into().map_err(|_| 1u64)?)
+                    .ok_or(1u64)?,
+            ),
             s::TASKS_ROW => self.task_row(w[1], w[2]),
             s::TASKS_ABORT => self.abort_task_list(w[1]),
             #[cfg(feature = "tasks-acceptance")]
