@@ -29,3 +29,7 @@ Run configured formatting, lints and tests appropriate to the change. Use the co
 Consult `docs/requirements-v0.1.md`, `docs/architecture/ADR-0001-kernel-and-boot.md` and the active issue. Preserve traceability when revising decisions. Do not claim capabilities are implemented or close tests merely because documentation exists. Follow `CONTRIBUTING.md` and `docs/LICENSING.md` for provenance and notices.
 
 Write maintained documentation and contribution templates in English. Preserve protocol identifiers, commands, source references and historical evidence when translating.
+
+## Development orchestration
+
+For nontrivial work, use the project rustic-orchestrator skill and delegate bounded implementation or independent evidence/review when useful. Start with docs/WORK-STATE.md and the active issue instead of replaying the full history. Root: Astra medium; explorer/worker/tester/researcher: Luna max; reviewer: Astra low. Preserve these user-selected efforts. Use at most two concurrent children, minimal context, one writer per area and one owner for shared build/VM tests. Do not spawn every role mechanically. Simple edits and questions may stay with the root. See docs/ORCHESTRATION.md for loading, evidence and continuation rules; explicit user instructions take precedence.

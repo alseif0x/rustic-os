@@ -40,6 +40,11 @@ The kernel library validates arithmetic on memory ranges supplied during boot. I
 
 ## Organization
 
+Project-scoped Codex roles and the bounded delegation workflow are documented in
+[Development orchestration](ORCHESTRATION.md). Start continuation work from
+[Current work state](WORK-STATE.md). This optional host configuration adds no
+requirement to build, boot, CI or run RusticOS manually.
+
 - kernel/src/lib.rs: entry and composition for the no_std library.
 - kernel/src/boot/mod.rs: boot-data module facade.
 - kernel/src/boot/region.rs: range validation; no Limine dependency or memory allocation.

@@ -37,6 +37,10 @@ External component review sources: LICENSE from the hash-verified Limine archive
 
 The original `rustic-sdk` and `rustic-sdk-probe` packages added for #11 also use Apache-2.0. They add only path dependencies on the shared ABI/SDK, without external crates. The test kernel embeds the separately linked application ELF; the existing Rust runtime notice also covers that application.
 
+## Development orchestration configuration — 2026-09-13
+
+The project-local Codex configuration and instructions are original Apache-2.0 material, using the owner-selected topology inspired by donvito/codex-astra-luna-orchestrator at 575e74ebcf9b199513151a8996665a71cf64ce50. No upstream code, installer, skill or usage script is distributed. Codex CLI 0.154.0 was used to verify effective project settings and skill discovery; it remains an optional external development tool, with no guest or build dependency. [Workflow and source reference](ORCHESTRATION.md).
+
 ## Block storage implementation
 
 #35 adds original Apache-2.0 driver/DMA code, following the [VirtIO specification](https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html) legacy PCI contract. The [virtio-drivers README](https://github.com/rcore-os/virtio-drivers) was reviewed as a reuse option; the crate was not incorporated and no source was copied. The [transport decision](BLOCK.md) records the tradeoff. Existing QEMU/OVMF packages and Cargo dependencies remain unchanged. Sparse test disks contain only generated fixtures.
