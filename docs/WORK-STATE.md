@@ -2,43 +2,46 @@
 
 # Current work state
 
-Updated 2026-09-13. Keep this file compact; replace current state rather than appending a conversation log.
+Updated 2026-09-13. Replace this checkpoint rather than appending conversation history.
 
-## Baseline and direction
+## Direction and current increment
 
-- Orchestration baseline: a9f187f3dea9907c55972dbaab962902a564d27c (Astra medium coordination, Luna max execution, Astra low review). Prior runtime baseline: 0859e9b.
-- Own modular monolithic Rust OS; isolated native product services, human and agent clients sharing authority and semantics. MCP is an optional adapter.
-- Multiple preempted processes on one executing CPU. SMP, independent application installation and physical-machine support remain unimplemented.
-- Current execution order: [issue #1](https://github.com/alseif0x/rustic-os/issues/1) and [systems roadmap](architecture/systems-roadmap.md). Historical issue updates are evidence for their revisions, not current next-step instructions.
+Own modular Rust OS; isolated native applications, human and agent clients sharing authority and semantics. MCP is optional. Multiple preempted processes currently execute on one CPU; SMP, independent application installation and physical-machine support remain unimplemented. [Issue #1](https://github.com/alseif0x/rustic-os/issues/1) and the [systems roadmap](architecture/systems-roadmap.md) own sequencing.
 
-## Next implementation
+Current increment over `72dbc8c`: **ordinary `tasks add PATH TITLE` and `tasks done PATH ID` now apply immutable native plans**. Listing and read-only previews remain available. `tasks enable` explicitly activates existing persistent format 3; no new file-service profile is introduced. [Tasks](TASKS.md) describes usage, recovery and bounds.
 
-[#22](https://github.com/alseif0x/rustic-os/issues/22): a parameterized native tasks application with ordinary add/done/list, stable task IDs, scoped authority and application-owned semantics using existing file services. Define one small acceptance slice before editing; this file is not a substitute for the current issue contract.
+The tasks ELF owns document parsing and edit planning and retains READ-only scope. Its independent contract crate carries canonical bounded chunks; the supervisor owns asynchronous collection, authorization and result cleanup. The shell's owner client owns a separate intent codec, journal, mutation/recovery flow and presentation. No kernel, SDK, unsafe, heap or quota expansion. The shell directly reuses the already reviewed SHA-256 workspace dependency.
 
-Read-only `tasks list PATH` was published in e8c065d, following the prior f522583 help increment. See [Tasks](TASKS.md) for format, bounds and current acceptance. The task app owns parsing/version-pinned reads; its independent contract crate owns wire/data validation; supervisor owns scoped provisioning and bounded results; shell owns syntax/presentation. The trusted catalog still embeds executables; this does not complete #52.
+## Retention and recovery boundary
 
-The three native lifecycle gaps were closed in 8886f00: pending-grant cancellation, concurrent utility reservation and abandoned-result expiry before the next owner request. Their acceptance instrumentation is absent from ordinary builds. Local source-regression probes rejected lost reservation and request-only expiry.
+- Reserve `/config/tasks-intent` for one owner-controlled immutable record. Atomic ordinary replacement and exact pinned readback precede target submission. The committed journal version supplies the durable initial retry key under owner subject `1`.
+- Apply through existing `replace_file`. Require exact receipt correspondence, receipt version greater than the journal key, then pinned target bytes before version-checked journal cleanup. An empty journal represents idle state; it occupies one file slot.
+- One unresolved intent blocks new mutations. `tasks recover` only queries the original identity; it never rebases or resubmits. `restart files` supplies a fresh owner binding after disconnection and revokes utility sessions.
+- Lost initial journal acknowledgement, absent/expired outcomes, collisions and later human changes preserve explicit uncertainty. `tasks forget KEY` deliberately discards recovery evidence and does not cancel or undo an effect. The journal is not protected against its owner erasing or rolling back storage.
+- Two retained outcomes remain a real global limit. Tasks report `Full`; they do not rotate receipts automatically. Already-done is an exact no-op without journal or receipt writes.
 
-Current bounded consumer: `tasks preview add PATH TITLE` and `tasks preview done PATH ID` run app-owned edit planning inside the native tasks ELF. They return the complete candidate, affected ID, changed flag and pinned source version, explicitly without writing. A preview is temporary and does not reserve a durable mutation identity. The shared file protocol and READ-only grant remain unchanged.
+This resolves the previous initial-key gate using application-owned durable state rather than a new admission profile or a post-commit service instance. It does not complete the general catalog or M1.
 
-Next implementation gate for actual add/done: define durable initial retry-key allocation, a scoped trusted mutation subject, and retained intent/result ownership across a lost/poisoned child connection. Existing `admit_file` can persist exact candidate bytes and allocate an admission ID before execution, but requires explicit format/profile activation and a retained initial key. Direct `replace_file` only obtains its historical service instance after commitment; PID/ticks/static keys cannot satisfy pre-submit durable identity. Prefer using the existing admission/recovery mechanisms after resolving these application-owned choices. Do not silently reread/rebase a retry or call process-death uncertainty success. Preserve process/channel/client budgets; do not add an optional file-service profile to hide the gap. See [Tasks](TASKS.md).
+## Next acceptance
 
-Preserve immutable retry intent, human conflicts, exact effect verification and explicit uncertainty. Keep remaining #47/#43 correctness work finite; do not add optional file protocol profiles without a real consumer or demonstrated defect.
+Keep [#22](https://github.com/alseif0x/rustic-os/issues/22) open. Establish a second native semantic client's parity and its scoped/revoked recovery evidence using this concrete consumer. Share the client mechanism at a real reuse boundary; preserve app-owned planning, exact intent and owner authority. Do not treat the shell's failure-cut fixture as a separately implemented semantic client. General discovery and complete mission acceptance remain open.
 
-## Other work and constraints
+Keep #47/#43 correctness work finite. Optional file-service semantic/profile expansion remains frozen without a demonstrated consumer need or defect. #48–#52 own memory/allocation, bulk data, workspace capacity and independent delivery; this demo does not replace them. Review #53 concurrency ownership before expanding runtime assumptions. #54/#37 and #55 remain bounded physical/diagnostic probes; #56 research does not change the adopted kernel model.
 
-- #48–#52 own RAM, allocation, bulk data, workspace capacity and independent application delivery. Proceed on real dependencies, without an MCP gate.
-- Review #53 concurrency ownership before expanding mapping/runtime assumptions.
-- One bounded probe alongside main implementation: #54 physical-profile preparation / #37 visible diagnostics; #55 PCI matching is separately bounded. #56 driver-boundary research does not change the adopted kernel model.
-- No physical reference machine has yet been selected in these planning changes.
-- Never use artifacts/terminal/data.raw for experiments. LICENSE has an existing owner modification; do not stage or alter it incidentally.
+## Verified evidence
 
-## Evidence and handoff
+`cargo xtask check` passed: 259 workspace Rust tests plus 13 acceptance-feature tests, formatting, Clippy and normal/acceptance native builds. All 189 runner tests passed.
 
-Current increment over 8886f00: app-owned immutable edit planner, bounded preview wire, version-pinned native snapshot, scoped read-only supervisor relay and shell presentation. No new file-service profile, quota, heap, unsafe boundary or dependency. #22 remains open; applying add/done, general discovery and full M1 remain unimplemented.
+The separate task-write suite passed **two VM boots**: add/done/no-op, maximum 672-byte document, Full, human version conflict, prepared-but-unsubmitted intent, lost journal acknowledgement, actual effect-reply discard, service restart, reboot, an actual older numeric-key collision, later human edits, expired history and policy denial. Independent disk assertions verify exact bytes/receipts and no replay during refused recovery. Resource counters return to 52,081 free frames, 3 processes, 4 channels and zero pending I/O. Both guests stopped and reclaimed resources.
 
-Validation: `cargo xtask check` passed (253 workspace Rust tests plus 9 tests with the acceptance feature, formatting, Clippy and native builds); 189 runner tests passed. `python3 tools/terminal_test.py` passed two boots / 2,527 phase-one commands, including 17 preview cases plus a post-reboot preview, the 22 ordinary task cases and three lifecycle cases. All four terminal contract validators passed. Tested acceptance build f93ab6d5ad161df1, kernel SHA-256 71dadde9d6f838b75389e5465b8d70a3f1b227eb3edba3dace1619b94af21849; tasks ELF SHA-256 d98475ad668250257be7699379df1e0b11be515e3a3221489df438df84010859. Local evidence: artifacts/tasks-preview-check.log, artifacts/tasks-preview-runner-tests.log, artifacts/tasks-preview-terminal.log, artifacts/tasks-preview-*-conformance.json and artifacts/terminal-test/terminal.json (54,203 bytes). Command counts vary with polling. Full CI and a new isolated-container run are not claimed here.
+The full terminal regression also passed two boots / 2,327 phase-one commands, including 22 ordinary task cases, three lifecycle cases and 17 previews plus reboot checks. All four native contract validators passed. The command count varies with polling; terminal JSON is 54,205 bytes within its 64 KiB bound.
 
-Preview assertions compare exact candidate rows and the source version against the independent disk oracle, require unchanged committed bytes and restored resources, and cover repeated add previews, done/no-op, missing/invalid IDs, malformed data/titles, empty/full documents, ID exhaustion, occupied child slots, policy denial and reboot. Read-only listing still returns the original document afterward.
+A separate normal-image boot passed ordinary add/done/list with restored resources and rejected both acceptance commands. Normal build `2db61cc45e79820d`, kernel SHA-256 `736ceee6c6c2d5c8cc789c011778b3492b053e034e2a2f5371b6bcdd5946d794`; local evidence is `artifacts/tasks-write-normal/evidence.json` and its serial log.
 
-Luna max explored the mutation/recovery boundary and implemented the pure planner. Root integrated native snapshot/preview transport, shell, host acceptance and compiler fixes, and owned all builds/VMs. Astra low reviewed the actual changes with no material static findings. All test processes completed and both guests reported stopped/reclaimed. Replace this checkpoint at the next handoff rather than appending history.
+Acceptance build `96a8478f31182d9c`; kernel SHA-256 `9640e9a8985df89cdf8458c70e1df2c4531a30f623a50d72db46da58ae080566`; tasks ELF SHA-256 `61033f5274e3100c7d8049727f3ba4f619bfa5608819a8f273d06c00e2d5efe0`. Evidence: `artifacts/tasks-write-check.log`, `tasks-write-runner-tests.log`, `tasks-write-native.log`, `tasks-write-terminal.log`, `tasks-write-*-conformance.json`, `tasks-write-test/tasks-write.json` and `terminal-test/terminal.json`. Full remote CI and a fresh isolated-container run are not claimed.
+
+Luna max investigated durable identity and implemented candidate transport; root integrated persistence, tests and compiler fixes and owned all shared builds/VMs. Astra low reviewed the actual diff and final failure cuts/evidence with no material findings. Runtime maximum-document execution passed; static compiled stack headroom is not independently certified by that review.
+
+## Workspace constraints
+
+Never experiment on `artifacts/terminal/data.raw`. Preserve the existing owner modification of `LICENSE`; do not stage it incidentally. Maintained docs remain English. Continue using the project orchestration skill: Luna max bounded workers, Astra low review, at most two concurrent children and one owner for shared build/VM tests.

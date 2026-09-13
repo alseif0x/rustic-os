@@ -62,6 +62,9 @@ pub fn run(files: u64, control: u64, peer: u64) -> u64 {
             Some(rustic_tasks_contract::wire::Request::Preview(edit)) => {
                 state.preview(&mut client, scope, edit)
             }
+            Some(rustic_tasks_contract::wire::Request::Bytes(offset)) => {
+                state.candidate_bytes(offset)
+            }
             None => rustic_tasks_contract::wire::service(4),
         };
         let Ok(reply) = Message::new(message.correlation(), &k::encode(response)) else {

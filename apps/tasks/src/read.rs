@@ -9,6 +9,7 @@ pub struct State {
     pub(super) next: usize,
     pub(super) failure: Option<[u64; 8]>,
     pub(super) preview: Option<rustic_tasks_contract::preview::Summary>,
+    pub(super) candidate: Option<rustic_tasks::Planned>,
 }
 
 impl State {
@@ -18,6 +19,7 @@ impl State {
             next: 0,
             failure: None,
             preview: None,
+            candidate: None,
         }
     }
 
@@ -69,6 +71,19 @@ impl State {
                 rustic_tasks_contract::wire::preview_end,
             )
         }
+    }
+
+    pub(super) fn candidate_bytes(&self, offset: usize) -> [u64; 8] {
+        if let Some(result) = self.failure {
+            return result;
+        }
+        let Some(candidate) = self.candidate.as_ref() else {
+            return rustic_tasks_contract::wire::service(4);
+        };
+        rustic_tasks_contract::candidate::chunk(candidate.bytes(), offset).map_or_else(
+            || rustic_tasks_contract::wire::service(4),
+            |chunk| rustic_tasks_contract::candidate::response_words(&chunk),
+        )
     }
 }
 

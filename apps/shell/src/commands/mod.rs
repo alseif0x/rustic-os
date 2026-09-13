@@ -25,6 +25,9 @@ pub enum Error {
     Pending(u64),
     TaskDocument,
     TaskCapacity,
+    TaskEnable,
+    TaskJournal,
+    TaskPending(u64),
 }
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -34,6 +37,13 @@ impl core::fmt::Display for Error {
             Self::File(e) => write!(f, "{e:?}"),
             Self::TaskDocument => f.write_str("invalid tasks document"),
             Self::TaskCapacity => f.write_str("tasks capacity exceeded"),
+            Self::TaskEnable => f.write_str("task writes require explicit setup: tasks enable"),
+            Self::TaskJournal => {
+                f.write_str("invalid or changed /config/tasks-intent; target not resubmitted")
+            }
+            Self::TaskPending(key) => {
+                write!(f, "task intent={key} remains unresolved; use tasks recover")
+            }
             Self::Pending(id) => write!(
                 f,
                 "wait interrupted; job={id} remains queryable with job-status {id}"
@@ -74,6 +84,8 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
     match argument(a, 0)? {
         "help" => help::execute(a)?,
         "tasks" => tasks::execute(s, a)?,
+        #[cfg(feature = "tasks-acceptance")]
+        "tasks-write-acceptance" => tasks::write_acceptance(s, a)?,
         #[cfg(feature = "tasks-acceptance")]
         "tasks-acceptance" => super::acceptance::execute(s, a)?,
         "echo" => {

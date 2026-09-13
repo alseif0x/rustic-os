@@ -109,6 +109,8 @@ jobs:
         run: python3 tools/boot.py test --timeout 45
       - name: Verify delayed device completion and recovery
         run: python3 tools/latency_test.py --image artifacts/boot/recovery-test/rustic-os.img --output artifacts/boot/latency-test
+      - name: Verify native task writes and retained recovery
+        run: python3 tools/tasks_write_test.py --image artifacts/boot/terminal-test/rustic-os.img --output artifacts/boot/tasks-write-test
       - name: Check native service contract evidence
         shell: bash
         run: |

@@ -74,6 +74,8 @@ The original rustic-fs, rustic-file-service, rustic-file-server, rustic-supervis
 
 ## Native file range hashing — 2026-09-10
 
+The retained task-intent client added on 2026-09-13 also uses this exact workspace dependency directly in `rustic-shell`, with no new external package or feature. Its hash checks immutable candidate integrity and receipt correspondence; it does not authenticate an owner-controlled journal.
+
 The native `files.read` binding uses RustCrypto's SHA-256 implementation in `rustic-file-service` and `rustic-sdk`. The workspace pins `sha2 = "=0.11.0"` with default features disabled; Cargo.lock fixes all transitive versions and archive checksums. Hashing belongs to the service and client implementation; `rustic-abi` and the kernel retain no hashing dependency. A range hash covers returned bytes and detects corruption or response mismatch; it does not authenticate a publisher or confer file authority.
 
 The implementing dependency-review agent checked the official [sha2 manifest](https://docs.rs/crate/sha2/0.11.0/source/Cargo.toml), [backend selection](https://docs.rs/sha2/0.11.0/sha2/), resolved Cargo metadata and the complete notices in registry archives verified against Cargo.lock. This is a dependency/provenance review, not a cryptographic audit. Reusing the maintained implementation avoids introducing an original cryptographic primitive; the existing filesystem CRC is not SHA-256. No third-party source was copied into first-party Rust modules.

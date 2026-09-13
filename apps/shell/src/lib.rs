@@ -4,3 +4,4 @@
 pub mod editor;
 pub mod input;
 pub mod parser;
+pub mod task_intent;

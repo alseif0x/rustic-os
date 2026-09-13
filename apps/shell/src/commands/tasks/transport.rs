@@ -1,54 +1,47 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Task command syntax and presentation; document semantics belong to the app.
-use super::{Error, Session, argument, exact, output};
+//! Complete bounded native app results before presenting or retaining them.
+use super::{Error, Session, output};
 use rustic_sdk::{abi::supervisor as s, files, rpc::Progress, runtime};
-use rustic_shell::parser::Args;
-use rustic_tasks_contract::{MAX_TASKS, State, wire};
+use rustic_tasks_contract::{
+    MAX_TASKS, State,
+    preview::{Edit, Summary},
+    wire,
+};
 
-pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Error> {
-    let preview = argument(args, 1)? == "preview";
-    let (path, mut request) = if preview {
-        exact(args, 5)?;
-        let edit = match argument(args, 2)? {
-            "add" => rustic_tasks_contract::preview::Edit::add(argument(args, 4)?.as_bytes())
-                .ok_or(Error::Usage)?,
-            "done" => {
-                let value = argument(args, 4)?;
-                let id = value.parse::<u32>().map_err(|_| Error::Usage)?;
-                if id == 0 || value.starts_with('0') || !value.bytes().all(|b| b.is_ascii_digit()) {
-                    return Err(Error::Usage);
-                }
-                rustic_tasks_contract::preview::Edit::Done { id }
-            }
-            _ => return Err(Error::Usage),
-        };
-        let mut words = [0; 8];
-        words[0] = s::TASKS_PREVIEW;
-        words[2..].copy_from_slice(&edit.words());
-        (argument(args, 3)?, words)
-    } else {
-        exact(args, 3)?;
-        if argument(args, 1)? != "list" {
-            return Err(Error::Usage);
-        }
-        (argument(args, 2)?, [s::TASKS_LIST, 0, 0, 0, 0, 0, 0, 0])
-    };
-    request[1] = session.files.resolve(session.cwd, path)?.into();
+pub(super) struct Candidate {
+    pub bytes: [u8; 1024],
+    pub length: usize,
+    pub summary: Summary,
+}
+
+pub(super) fn run(
+    session: &mut Session,
+    scope: u32,
+    edit: Option<Edit>,
+    retain: bool,
+) -> Result<Option<Candidate>, Error> {
+    let mut request = [s::TASKS_LIST, scope.into(), 0, 0, 0, 0, 0, 0];
+    if let Some(edit) = edit {
+        request[0] = s::TASKS_PREVIEW;
+        request[2..].copy_from_slice(&edit.words());
+    }
     let started = session.request(request)?;
     if started[0] != 5 || started[1] == 0 || started[2] != s::TASKS_LIST {
         return Err(Error::Service(4));
     }
-    let job = started[1];
-    let result = list(session, job, preview);
+    let result = collect(session, started[1], edit.is_some(), retain);
     if result.is_err() {
-        // This command is read-only. Cancel provisioning/results, including an
-        // interrupted wait before the child PID became known to this frontend.
-        let _ = session.request([s::TASKS_ABORT, job, 0, 0, 0, 0, 0, 0]);
+        let _ = session.request([s::TASKS_ABORT, started[1], 0, 0, 0, 0, 0, 0]);
     }
     result.map_err(task_error)
 }
 
-fn list(session: &mut Session, job: u64, preview: bool) -> Result<(), Error> {
+fn collect(
+    session: &mut Session,
+    job: u64,
+    preview: bool,
+    retain: bool,
+) -> Result<Option<Candidate>, Error> {
     let deadline = runtime::clock().saturating_add(1100);
     let complete = loop {
         let result = session.request([s::JOB_STATUS, job, 0, 0, 0, 0, 0, 0])?;
@@ -83,6 +76,28 @@ fn list(session: &mut Session, job: u64, preview: bool) -> Result<(), Error> {
         }
         rows[index] = Some(row);
     }
+    let mut candidate_bytes = [0; 1024];
+    let mut length: usize = 0;
+    let mut total = None;
+    if retain {
+        loop {
+            let words = session.request([s::TASKS_CANDIDATE, job, length as u64, 0, 0, 0, 0, 0])?;
+            // Owner success framing carries the same canonical metadata/payload
+            // as the child chunk. The codec validates bounds and zero padding.
+            let part = rustic_tasks_contract::candidate::Chunk::decode_owner(words)
+                .ok_or(Error::Service(4))?;
+            if part.offset != length as u64 || total.is_some_and(|value| value != part.total) {
+                return Err(Error::Service(4));
+            }
+            total = Some(part.total);
+            let end = length + part.length as usize;
+            candidate_bytes[length..end].copy_from_slice(&part.bytes[..part.length as usize]);
+            length = end;
+            if length as u64 == part.total {
+                break;
+            }
+        }
+    }
     // Complete and release the result before printing, so interrupted/malformed
     // transport cannot present a partial list as a successful command.
     progress(session)?;
@@ -103,6 +118,28 @@ fn list(session: &mut Session, job: u64, preview: bool) -> Result<(), Error> {
         }
         None
     };
+    if retain {
+        let summary = summary.ok_or(Error::Service(4))?;
+        let document = rustic_tasks_contract::Document::parse(&candidate_bytes[..length])
+            .map_err(|_| Error::Service(4))?;
+        if document.len() != count {
+            return Err(Error::Service(4));
+        }
+        for (index, row) in rows[..count].iter().flatten().enumerate() {
+            let task = document.get(index).ok_or(Error::Service(4))?;
+            if task.id != row.id
+                || task.state != row.state
+                || task.title() != &row.title[..row.title_len as usize]
+            {
+                return Err(Error::Service(4));
+            }
+        }
+        return Ok(Some(Candidate {
+            bytes: candidate_bytes,
+            length,
+            summary,
+        }));
+    }
     for row in rows[..count].iter().flatten() {
         let state = match row.state {
             State::Open => "open",
@@ -121,7 +158,7 @@ fn list(session: &mut Session, job: u64, preview: bool) -> Result<(), Error> {
             summary.version
         ));
     }
-    Ok(())
+    Ok(None)
 }
 
 fn progress(session: &mut Session) -> Result<(), Error> {

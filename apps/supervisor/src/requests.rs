@@ -28,6 +28,7 @@ impl State {
             | s::TASKS_LIST
             | s::TASKS_ABORT => 2,
             s::TASKS_ROW => 3,
+            s::TASKS_CANDIDATE => 3,
             s::TASKS_PREVIEW => 8,
             s::HOLD_IO => 3,
             s::RUN => 6,
@@ -123,6 +124,7 @@ impl State {
                     .ok_or(1u64)?,
             ),
             s::TASKS_ROW => self.task_row(w[1], w[2]),
+            s::TASKS_CANDIDATE => self.task_candidate(w[1], w[2]),
             s::TASKS_ABORT => self.abort_task_list(w[1]),
             #[cfg(feature = "tasks-acceptance")]
             tasks_acceptance::ARM

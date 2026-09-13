@@ -35,6 +35,8 @@ pub const TASKS_ROW: u64 = 27;
 pub const TASKS_ABORT: u64 = 28;
 /// Read-only candidate rows for a task edit; does not submit a mutation.
 pub const TASKS_PREVIEW: u64 = 29;
+/// Retrieve one bounded byte chunk from a completed task edit candidate.
+pub const TASKS_CANDIDATE: u64 = 30;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Separate native tasks application; it never receives console authority.

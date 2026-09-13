@@ -6,7 +6,9 @@ use crate::{MAX_TITLE, State, Task};
 pub const LIST: u64 = 1;
 pub const NEXT: u64 = 2;
 pub const PREVIEW: u64 = 3;
+pub const BYTES: u64 = crate::candidate::BYTES;
 pub const PREVIEW_END: u64 = 5;
+pub const CANDIDATE: u64 = crate::candidate::CHUNK;
 
 pub const ROW: u64 = 0;
 pub const END: u64 = 1;
@@ -19,6 +21,7 @@ pub enum Request {
     List,
     Next,
     Preview(crate::preview::Edit),
+    Bytes(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -34,6 +37,7 @@ pub enum Response {
     Row(Row),
     End { count: u32 },
     PreviewEnd(crate::preview::Summary),
+    Candidate(crate::candidate::Chunk),
     Invalid,
     Capacity,
     Service { code: u64 },
@@ -45,6 +49,9 @@ pub fn decode_request(words: [u64; 8]) -> Option<Request> {
     }
     if words[2..].iter().any(|word| *word != 0) {
         return None;
+    }
+    if words[0] == BYTES {
+        return crate::candidate::decode_request(words).map(Request::Bytes);
     }
     match words[0] {
         LIST => (words[1] == 0).then_some(Request::List),
@@ -62,6 +69,7 @@ pub fn request_words(request: Request) -> [u64; 8] {
             words[1..7].copy_from_slice(&edit.words());
             PREVIEW
         }
+        Request::Bytes(offset) => return crate::candidate::request_words(offset),
     };
     words
 }
@@ -115,6 +123,9 @@ pub fn decode_response(words: [u64; 8]) -> Option<Response> {
     match words[0] {
         PREVIEW_END => {
             crate::preview::Summary::decode(words[1..].try_into().ok()?).map(Response::PreviewEnd)
+        }
+        crate::candidate::CHUNK => {
+            crate::candidate::decode_response(words).map(Response::Candidate)
         }
         ROW => {
             let title_len = usize::try_from(words[3]).ok()?;
@@ -201,5 +212,17 @@ mod tests {
         let mut bad = end(1);
         bad[7] = 1;
         assert_eq!(decode_response(bad), None);
+    }
+
+    #[test]
+    fn bytes_requests_and_candidate_responses_use_the_private_wire() {
+        let request = Request::Bytes(32);
+        assert_eq!(decode_request(request_words(request)), Some(request));
+        let source = [b'x'; 33];
+        let chunk = crate::candidate::chunk(&source, 32).unwrap();
+        assert_eq!(
+            decode_response(crate::candidate::response_words(&chunk)),
+            Some(Response::Candidate(chunk))
+        );
     }
 }

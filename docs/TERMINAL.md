@@ -55,6 +55,10 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `cat PATH`, `stat PATH`, `rm PATH` | Read, inspect metadata, remove a file or empty directory |
 | `tasks list PATH` | List a validated task document through a separate native application with read authority for that file; see [Tasks](TASKS.md) |
 | `tasks preview add PATH TITLE`, `tasks preview done PATH ID` | Show a complete candidate and source version without applying the edit; previews receive read authority only |
+| `tasks enable` | Explicit one-time persistent storage upgrade for task writes |
+| `tasks add PATH TITLE`, `tasks done PATH ID` | Apply an immutable native plan with retained identity and expected-version checks |
+| `tasks recover` | Query the original retained intent and verify exact bytes; never automatically replay |
+| `tasks forget INTENT_KEY` | Explicitly discard recovery evidence; does not cancel or undo an effect |
 | `ref WORKSPACE_PATH FILE_PATH` | Resolve authorized native objects to stable workspace/resource references |
 | `read-ref WORKSPACE RESOURCE VERSION\|- OFFSET LENGTH` | Read a bounded range through the shared SDK; print pinned version, range hash, epoch and exact bytes as hex |
 | `echo TEXT...`, `status` | Print arguments; show the previous command's status |

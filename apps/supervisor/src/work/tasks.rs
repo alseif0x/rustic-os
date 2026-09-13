@@ -28,6 +28,8 @@ pub(in super::super) struct Cached {
     pub(super) rows: [wire::Row; MAX_TASKS],
     pub(super) deadline: u64,
     pub(super) preview: Option<rustic_tasks_contract::preview::Summary>,
+    pub(super) candidate: [u8; rustic_tasks_contract::MAX_BYTES],
+    pub(super) candidate_len: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -37,6 +39,8 @@ enum Phase {
     WaitList,
     SendNext,
     WaitNext,
+    SendBytes,
+    WaitBytes,
     Ready,
 }
 
@@ -53,6 +57,9 @@ pub(super) struct TaskList {
     deadline: u64,
     request: wire::Request,
     preview: Option<rustic_tasks_contract::preview::Summary>,
+    candidate: [u8; rustic_tasks_contract::MAX_BYTES],
+    candidate_len: usize,
+    candidate_total: usize,
 }
 
 impl TaskList {
@@ -80,6 +87,9 @@ impl TaskList {
             deadline: 0,
             request: wire::Request::List,
             preview: None,
+            candidate: [0; rustic_tasks_contract::MAX_BYTES],
+            candidate_len: 0,
+            candidate_total: 0,
         }
     }
 
@@ -117,6 +127,15 @@ impl TaskList {
                 Ok(None)
             }
             Phase::WaitNext => self.receive(state),
+            Phase::SendBytes => {
+                self.begin(
+                    state,
+                    rustic_tasks_contract::candidate::request_words(self.candidate_len),
+                )?;
+                self.phase = Phase::WaitBytes;
+                Ok(None)
+            }
+            Phase::WaitBytes => self.receive(state),
             Phase::Ready => Ok(Some([0, self.pid, self.count as u64, 0, 0, 0, 0, 0])),
         }
     }
@@ -157,6 +176,8 @@ impl TaskList {
             rows: self.rows,
             deadline: self.deadline,
             preview: self.preview,
+            candidate: self.candidate,
+            candidate_len: self.candidate_len,
         })
     }
 
@@ -182,7 +203,9 @@ impl TaskList {
         let words = k::decode(message.payload()).map_err(|_| 4u64)?;
         match wire::decode_response(words).ok_or(4u64)? {
             wire::Response::Row(row) => {
-                if self.count == MAX_TASKS {
+                if !matches!(self.phase, Phase::WaitList | Phase::WaitNext)
+                    || self.count == MAX_TASKS
+                {
                     return Err(4);
                 }
                 self.rows[self.count] = row;
@@ -191,7 +214,8 @@ impl TaskList {
                 Ok(None)
             }
             wire::Response::End { count } => {
-                if self.request != wire::Request::List
+                if !matches!(self.phase, Phase::WaitList | Phase::WaitNext)
+                    || self.request != wire::Request::List
                     || usize::try_from(count).ok() != Some(self.count)
                 {
                     return Err(4);
@@ -201,15 +225,61 @@ impl TaskList {
                 Ok(Some([0, self.pid, self.count as u64, 0, 0, 0, 0, 0]))
             }
             wire::Response::PreviewEnd(summary) => {
-                if !matches!(self.request, wire::Request::Preview(_))
+                if !matches!(self.phase, Phase::WaitList | Phase::WaitNext)
+                    || !matches!(self.request, wire::Request::Preview(_))
                     || summary.count as usize != self.count
                 {
                     return Err(4);
                 }
                 self.preview = Some(summary);
-                self.deadline = runtime::clock().saturating_add(RESULT_TICKS);
-                self.phase = Phase::Ready;
-                Ok(Some([0, self.pid, self.count as u64, 0, 0, 0, 0, 0]))
+                self.candidate = [0; rustic_tasks_contract::MAX_BYTES];
+                self.candidate_len = 0;
+                self.candidate_total = 0;
+                self.phase = Phase::SendBytes;
+                Ok(None)
+            }
+            wire::Response::Candidate(chunk) => {
+                if !matches!(self.phase, Phase::WaitBytes)
+                    || !matches!(self.request, wire::Request::Preview(_))
+                {
+                    return Err(4);
+                }
+                let offset = usize::try_from(chunk.offset).map_err(|_| 4u64)?;
+                let total = usize::try_from(chunk.total).map_err(|_| 4u64)?;
+                let length = usize::try_from(chunk.length).map_err(|_| 4u64)?;
+                if offset != self.candidate_len
+                    || total == 0
+                    || total > rustic_tasks_contract::MAX_BYTES
+                    || self.candidate_len > total
+                {
+                    return Err(4);
+                }
+                if self.candidate_total == 0 {
+                    self.candidate_total = total;
+                } else if self.candidate_total != total {
+                    return Err(4);
+                }
+                let expected = core::cmp::min(
+                    rustic_tasks_contract::candidate::MAX_CHUNK,
+                    total - self.candidate_len,
+                );
+                if length == 0
+                    || length != expected
+                    || self.candidate_len.checked_add(length).is_none()
+                {
+                    return Err(4);
+                }
+                let end = self.candidate_len + length;
+                self.candidate[self.candidate_len..end].copy_from_slice(&chunk.bytes[..length]);
+                self.candidate_len = end;
+                if self.candidate_len == self.candidate_total {
+                    self.deadline = runtime::clock().saturating_add(RESULT_TICKS);
+                    self.phase = Phase::Ready;
+                    Ok(Some([0, self.pid, self.count as u64, 0, 0, 0, 0, 0]))
+                } else {
+                    self.phase = Phase::SendBytes;
+                    Ok(None)
+                }
             }
             wire::Response::Invalid => Err(s::tasks::INVALID_DOCUMENT),
             wire::Response::Capacity => Err(s::tasks::CAPACITY_EXCEEDED),
@@ -287,6 +357,27 @@ impl State {
                 }));
         }
         Ok(rustic_tasks_contract::wire::row_words(&cached.rows[index]))
+    }
+
+    pub(in super::super) fn task_candidate(
+        &mut self,
+        job: u64,
+        offset: u64,
+    ) -> Result<[u64; 8], u64> {
+        let Some(cached) = self.task_result.as_ref().copied() else {
+            return Err(2);
+        };
+        if cached.job != job || !self.task_authorized(&cached) {
+            self.clear_task_result();
+            return Err(2);
+        }
+        if cached.preview.is_none() {
+            return Err(1);
+        }
+        let offset = usize::try_from(offset).map_err(|_| 1u64)?;
+        let candidate = &cached.candidate[..cached.candidate_len];
+        let chunk = rustic_tasks_contract::candidate::chunk(candidate, offset).ok_or(1u64)?;
+        Ok(rustic_tasks_contract::candidate::owner_words(&chunk))
     }
 
     pub(in super::super) fn abort_task_list(&mut self, job: u64) -> Result<[u64; 8], u64> {

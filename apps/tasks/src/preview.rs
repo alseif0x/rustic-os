@@ -33,6 +33,7 @@ impl super::read::State {
                 task_id: plan.task_id(),
                 changed: plan.changed(),
             });
+            self.candidate = Some(plan);
             self.document = Some(document);
             self.next = 0;
             Ok::<(), [u64; 8]>(())

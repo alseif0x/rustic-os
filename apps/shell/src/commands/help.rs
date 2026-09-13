@@ -16,12 +16,18 @@ pub(super) fn execute(args: &Args<'_>) -> Result<(), Error> {
     } else {
         output::text(DEFAULT);
         output::text("tasks list PATH\r\n");
+        output::text("tasks add PATH TITLE | tasks done PATH ID | tasks recover\r\n");
+        output::text("tasks enable (one-time persistent storage upgrade for task writes)\r\n");
         output::text("tasks preview add PATH TITLE | tasks preview done PATH ID (no writes)\r\n");
     }
     Ok(())
 }
 
 fn advanced_help() {
+    output::text(
+        "tasks forget INTENT_KEY (discard recovery evidence; does not cancel or undo an effect)\r\n",
+    );
+    output::text("tasks add PATH TITLE | tasks done PATH ID | tasks recover | tasks enable\r\n");
     output::text("tasks list PATH (read-only native task document)\r\n");
     output::text(
         "tasks preview add PATH TITLE | tasks preview done PATH ID (read-only candidate)\r\n",

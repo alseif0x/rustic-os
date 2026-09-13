@@ -12,6 +12,7 @@ extern crate std;
 
 #[cfg(feature = "tasks-acceptance")]
 pub mod acceptance;
+pub mod candidate;
 mod document;
 pub mod preview;
 pub mod wire;

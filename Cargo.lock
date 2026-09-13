@@ -139,6 +139,7 @@ version = "0.1.0"
 dependencies = [
  "rustic-sdk",
  "rustic-tasks-contract",
+ "sha2",
 ]
 
 [[package]]

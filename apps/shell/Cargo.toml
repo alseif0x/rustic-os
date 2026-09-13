@@ -15,6 +15,7 @@ tasks-acceptance = ["native", "rustic-tasks-contract/tasks-acceptance"]
 [dependencies]
 rustic-sdk = { path = "../../crates/sdk" }
 rustic-tasks-contract = { path = "../../crates/tasks-contract" }
+sha2.workspace = true
 [[bin]]
 name = "shell"
 path = "src/main.rs"
