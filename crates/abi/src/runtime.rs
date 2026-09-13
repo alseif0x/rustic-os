@@ -26,6 +26,7 @@ pub const OBSERVATION_STATUS: u64 = 15;
 pub const FILES: u64 = 1;
 pub const SHELL: u64 = 2;
 pub const UTILITY: u64 = 3;
+pub const TASKS: u64 = 4;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Error {

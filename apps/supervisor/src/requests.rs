@@ -22,7 +22,10 @@ impl State {
             | s::REVOCATION
             | s::ACT_STATUS
             | s::STALL_FILES
-            | s::JOB_STATUS => 2,
+            | s::JOB_STATUS
+            | s::TASKS_LIST
+            | s::TASKS_ABORT => 2,
+            s::TASKS_ROW => 3,
             s::HOLD_IO => 3,
             s::RUN => 6,
             // The seventh word carries the deliberate discard flag for a live stop.
@@ -34,6 +37,7 @@ impl State {
         if w[end..].iter().any(|v| *v != 0) {
             return Err(1);
         }
+        self.expire_task_result();
         match w[0] {
             s::INFO => {
                 let r = call([k::INFO, 0, 0, 0, 0, 0, 0, 0]).map_err(|_| 4u64)?;
@@ -104,6 +108,9 @@ impl State {
             s::REVOCATION => self.takeover.status(w[1]),
             s::ACT_STATUS => self.actor_status(w[1]),
             s::JOB_STATUS => self.work.status(w[1], self.files),
+            s::TASKS_LIST => self.task_list(u32::try_from(w[1]).map_err(|_| 1u64)?),
+            s::TASKS_ROW => self.task_row(w[1], w[2]),
+            s::TASKS_ABORT => self.abort_task_list(w[1]),
             s::STALL_FILES => {
                 if w[1] > 1000 {
                     return Err(1);

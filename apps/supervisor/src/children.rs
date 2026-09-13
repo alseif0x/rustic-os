@@ -46,6 +46,11 @@ impl State {
                 }
                 continue;
             }
+            // Task rows are correlated with the finite relay state machine;
+            // generic child collection must never consume its responses.
+            if child.role == s::TASKS {
+                continue;
+            }
             // Idle native actors must not send unsolicited control messages. Closed
             // endpoints also reveal root death after a file endpoint has moved.
             match child.control.endpoint.receive() {

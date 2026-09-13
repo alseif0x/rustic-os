@@ -13,6 +13,7 @@ workspace = true
 native = []
 [dependencies]
 rustic-sdk = { path = "../../crates/sdk" }
+rustic-tasks-contract = { path = "../../crates/tasks-contract" }
 [[bin]]
 name = "shell"
 path = "src/main.rs"

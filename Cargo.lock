@@ -138,6 +138,7 @@ name = "rustic-shell"
 version = "0.1.0"
 dependencies = [
  "rustic-sdk",
+ "rustic-tasks-contract",
 ]
 
 [[package]]
@@ -145,7 +146,20 @@ name = "rustic-supervisor"
 version = "0.1.0"
 dependencies = [
  "rustic-sdk",
+ "rustic-tasks-contract",
 ]
+
+[[package]]
+name = "rustic-tasks"
+version = "0.1.0"
+dependencies = [
+ "rustic-sdk",
+ "rustic-tasks-contract",
+]
+
+[[package]]
+name = "rustic-tasks-contract"
+version = "0.1.0"
 
 [[package]]
 name = "rustic-utility"

@@ -76,7 +76,7 @@ The image builder compiles the application first, then builds the kernel with `s
 
 The app linker script emits a static ET_EXEC with separate PT_LOAD segments at 0x400000. No ELF parser relaxation was required. The observed release executable is 20,184 bytes; this is a measurement with Rust 1.98.1, not a fixed format requirement. The loader continues to enforce its 1 MiB file, 256-page process and W^X limits.
 
-To create another native utility, follow the example's Cargo package, linker script, entry function and panic handler. Add it to the workspace and explicitly extend the host build/launcher to select it. The builder selects six applications: two probes, supervisor, file server, shell and utility. The shell launches fixed utility roles through the supervisor. Arbitrary discovery, installation and executable-file launch remain later work.
+To create another native application, follow the example's Cargo package, linker script, entry function and panic handler. Add it to the workspace and explicitly extend the host build/launcher to select it. The builder selects seven applications: two probes, supervisor, file server, shell, utility and [tasks](TASKS.md). The shell launches fixed utility roles and the tasks application through the supervisor. Arbitrary discovery, installation and executable-file launch remain later work.
 
 The example runs two instances with opposite roles. They verify identity, reject an oversized payload and invalid handle, exchange four correlated requests/replies with authenticated sender IDs, close their endpoints and report completion. Malformed example roles or peer identities return a nonzero exit code.
 

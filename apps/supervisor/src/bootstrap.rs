@@ -13,6 +13,8 @@ pub fn start(initialize: bool) -> Result<State, ()> {
         owner: Client::new(0, 0, 0),
         control: Endpoint::from_bootstrap(control[0]),
         children: [None, None],
+        task_result: None,
+        admin_drain: false,
         policy: 0,
         takeover: super::takeover::Takeover::new(),
         degraded: true,

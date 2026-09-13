@@ -53,6 +53,7 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `mkdir PATH`, `touch PATH` | Create a directory or empty file; existing objects are errors |
 | `write PATH TEXT...` | Create if absent, then replace with text using the observed file version |
 | `cat PATH`, `stat PATH`, `rm PATH` | Read, inspect metadata, remove a file or empty directory |
+| `tasks list PATH` | List a validated task document through a separate native application with read authority for that file; see [Tasks](TASKS.md) |
 | `ref WORKSPACE_PATH FILE_PATH` | Resolve authorized native objects to stable workspace/resource references |
 | `read-ref WORKSPACE RESOURCE VERSION\|- OFFSET LENGTH` | Read a bounded range through the shared SDK; print pinned version, range hash, epoch and exact bytes as hex |
 | `echo TEXT...`, `status` | Print arguments; show the previous command's status |

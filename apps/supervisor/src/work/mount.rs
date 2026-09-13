@@ -59,6 +59,7 @@ impl Mount {
                     return Err(4);
                 }
                 state.admin = Rpc::new(self.admin[0], state.files);
+                state.admin_drain = false;
                 self.phase = 2;
             }
             2 => {

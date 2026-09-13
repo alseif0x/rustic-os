@@ -143,5 +143,6 @@ impl State {
             && !self.takeover.pending()
             && !self.admin.pending()
             && !self.admin.failed()
+            && !self.admin_drain
     }
 }

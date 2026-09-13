@@ -8,12 +8,17 @@ use rustic_sdk::{
 };
 impl State {
     pub(in super::super) fn start_launch(&mut self, d: Draft) -> Result<[u64; 8], u64> {
+        if !self.work.can_start() {
+            d.cancel(self);
+            return Err(3);
+        }
         self.work.start(s::RUN, Task::Launch(d))
     }
     pub(in super::super) fn start_restart(&mut self, initialize: bool) -> Result<[u64; 8], u64> {
         if let Some(active) = self.work.active.take() {
             match active.task {
                 Task::Launch(d) => d.cancel(self),
+                Task::TasksList(task) => task.cancel(self),
                 Task::Restart(r) => r.cancel(self),
                 Task::Admin { .. } => {}
             }
@@ -21,6 +26,7 @@ impl State {
                 .history
                 .finish(active.ticket.id, [6, 0, 0, 0, 0, 0, 0, 0]);
         }
+        self.clear_task_result();
         self.degraded = true;
         self.stopping = true;
         let roots = self.children.each_ref().map(|c| {
@@ -50,6 +56,9 @@ impl State {
         if !self.administrative_ready() {
             return Err(3);
         }
+        if !self.work.can_start() {
+            return Err(3);
+        }
         self.work.start(kind, Task::Admin { words, sent: false })
     }
     pub(in super::super) fn poll_work(&mut self) {
@@ -62,6 +71,7 @@ impl State {
         } else {
             match &mut active.task {
                 Task::Launch(d) => d.poll(self),
+                Task::TasksList(task) => task.poll(self),
                 Task::Restart(r) => r.poll(self),
                 Task::Admin { words, sent } => poll_admin(self, words, sent),
             }
@@ -69,6 +79,29 @@ impl State {
         match result {
             Ok(None) => self.work.active = Some(active),
             Ok(Some(words)) => {
+                if active.ticket.kind == s::TASKS_LIST {
+                    let ticket = active.ticket;
+                    let Task::TasksList(task) = active.task else {
+                        self.work
+                            .history
+                            .finish(ticket.id, [4, 0, 0, 0, 0, 0, 0, 0]);
+                        self.work.phase = 0;
+                        self.work.io = 0;
+                        return;
+                    };
+                    if let Some(result) = task.cache(ticket.id, self) {
+                        self.task_result = Some(result);
+                        self.work.history.finish(ticket.id, words);
+                    } else {
+                        task.cancel(self);
+                        self.work
+                            .history
+                            .finish(ticket.id, [4, 0, 0, 0, 0, 0, 0, 0]);
+                    }
+                    self.work.phase = 0;
+                    self.work.io = 0;
+                    return;
+                }
                 if active.ticket.kind == s::RESTART {
                     self.degraded = false;
                     self.stopping = false;
@@ -81,6 +114,7 @@ impl State {
             Err(error) => {
                 match active.task {
                     Task::Launch(d) => d.cancel(self),
+                    Task::TasksList(task) => task.cancel(self),
                     Task::Restart(r) => r.cancel(self),
                     Task::Admin { .. } => {}
                 }

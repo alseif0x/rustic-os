@@ -126,7 +126,7 @@ See [boot commands and expected results](docs/BOOT.md) and the [isolated executo
 | [`crates/abi/`](crates/abi/) | Shared `no_std` binary contracts, independent of kernel implementation |
 | [`crates/sdk/`](crates/sdk/) | Native entry, runtime/console, IPC/block and file-service clients |
 | [`crates/fs/`](crates/fs/) · [`crates/file-service/`](crates/file-service/) | Pure volume format and bounded file authority/staging, independent of kernel and SDK |
-| [`apps/`](apps/) | Independent supervisor, file server, shell and utility applications, plus acceptance probes |
+| [`apps/`](apps/) | Independent supervisor, file server, shell, utility and tasks applications, plus acceptance probes |
 | [`contracts/`](contracts/services/v1/catalog.json) | Versioned logical service schemas, descriptor metadata and positive/negative examples |
 | [`tools/`](tools/) | Host-side checks, image construction, QEMU execution and sandbox orchestration |
 | [`docs/`](docs/README.md) | Requirements, architecture decisions, subsystem contracts and evidence guides |

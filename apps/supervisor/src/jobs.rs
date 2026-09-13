@@ -19,8 +19,12 @@ pub struct History {
     cursor: usize,
 }
 impl History {
+    pub fn can_start(&self) -> bool {
+        self.active.is_none() && self.next != u64::MAX
+    }
+
     pub fn start(&mut self, kind: u64) -> Option<Ticket> {
-        if self.active.is_some() {
+        if !self.can_start() {
             return None;
         }
         self.next = self.next.checked_add(1)?;

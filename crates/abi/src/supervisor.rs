@@ -27,8 +27,16 @@ pub const ENABLE_OPERATIONS: u64 = 22;
 pub const ENABLE_ADMISSIONS: u64 = 23;
 pub const ACT_ADMISSION: u64 = 24;
 pub const ENABLE_PREVENTION_REASONS: u64 = 25;
+/// Start one bounded read-only tasks listing over a private native child.
+pub const TASKS_LIST: u64 = 26;
+/// Fetch one cached row from a completed tasks listing.
+pub const TASKS_ROW: u64 = 27;
+/// Abort a pending or cached tasks listing and reclaim its child.
+pub const TASKS_ABORT: u64 = 28;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
+/// Separate native tasks application; it never receives console authority.
+pub const TASKS: u64 = 14;
 /// Deterministic native actor commands; the owner supplies no arbitrary program.
 pub mod actor {
     pub const READ: u64 = 1;
@@ -69,6 +77,22 @@ pub mod actor {
         /// Use a profile already selected on this same client, without discovery.
         pub const SELECTED: u64 = 5;
     }
+}
+/// Private requests and responses used only by the native tasks application.
+pub mod tasks {
+    pub const LIST: u64 = 1;
+    pub const NEXT: u64 = 2;
+    pub const ROW: u64 = 0;
+    pub const END: u64 = 1;
+    pub const INVALID: u64 = 2;
+    pub const CAPACITY: u64 = 3;
+    pub const SERVICE: u64 = 4;
+    /// Supervisor status for a fully read but invalid task document.
+    pub const INVALID_DOCUMENT: u64 = 7;
+    /// Supervisor status for a document outside the bounded task contract.
+    pub const CAPACITY_EXCEEDED: u64 = 8;
+    /// File-service errors are preserved after this offset in owner job results.
+    pub const FILE_ERROR_BASE: u64 = 32;
 }
 pub const SPIN: u64 = 1;
 pub const FAULT: u64 = 2;

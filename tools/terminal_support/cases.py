@@ -23,7 +23,7 @@ def counters(uart):
 def help_checks(uart):
     default = uart.command("help")
     assert "help advanced" in default, default
-    for marker in ("pwd", "ls [PATH]", "write PATH TEXT", "cat PATH", "ps | kill PID", "exit"):
+    for marker in ("pwd", "ls [PATH]", "write PATH TEXT", "cat PATH", "ps | kill PID", "tasks list PATH", "exit"):
         assert marker in default, default
     assert "run spin|fault|exit" not in default, default
     uart.command("status", "0")

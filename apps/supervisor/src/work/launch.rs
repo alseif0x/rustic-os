@@ -22,6 +22,26 @@ pub(in super::super) struct Draft {
     sent: bool,
 }
 impl Draft {
+    pub(super) fn slot(&self) -> usize {
+        self.slot
+    }
+    pub(super) fn pid(&self) -> u64 {
+        self.pid
+    }
+    pub(super) fn scope(&self) -> u32 {
+        self.scope
+    }
+    pub(super) fn rights(&self) -> u8 {
+        self.rights
+    }
+    pub(super) fn expires(&self) -> u64 {
+        self.expires
+    }
+
+    pub(super) fn grant_pending(&self) -> bool {
+        self.sent
+    }
+
     pub(super) fn words(&self) -> [u64; 8] {
         if self.parent != 0 {
             [
@@ -71,6 +91,10 @@ impl Draft {
         let Some(message) = state.admin.poll().map_err(|_| 4u64)? else {
             return Ok(None);
         };
+        // The exchange has been consumed even when its payload fails
+        // validation; cancellation must not try to drain a nonexistent
+        // reply or leave the next grant associated with this request.
+        self.sent = false;
         let r = k::decode(message.payload()).map_err(|_| 4u64)?;
         if r[0] != 0 {
             return Err(2);
@@ -166,6 +190,7 @@ impl State {
                 | s::PRIVATE_ADMISSION_SESSION
                 | s::SESSION
                 | s::HELPER
+                | s::TASKS
         ) || lease > 360000
         {
             return Err(1);
@@ -182,6 +207,7 @@ impl State {
                 | s::PRIVATE_ADMISSION_SESSION
                 | s::SESSION
                 | s::HELPER
+                | s::TASKS
         );
         if file_access {
             if !self.administrative_ready() {
@@ -237,7 +263,12 @@ impl State {
             .position(|(i, c)| c.is_none() && Some(i) != reserved)
             .ok_or(3u64)?;
         let me = process::id().map_err(|_| 4u64)?;
-        let pid = spawn(k::UTILITY).map_err(|_| 3u64)?;
+        let program = if role == s::TASKS {
+            k::TASKS
+        } else {
+            k::UTILITY
+        };
+        let pid = spawn(program).map_err(|_| 3u64)?;
         let mut d = Draft {
             slot,
             pid,
@@ -263,7 +294,11 @@ impl State {
             return Err(error);
         }
         if file_access {
-            self.start_launch(d)
+            if role == s::TASKS {
+                self.start_tasks(d)
+            } else {
+                self.start_launch(d)
+            }
         } else {
             match d.activate(self, 0) {
                 Ok(()) => Ok([0, pid, 0, 0, 0, 0, 0, 0]),

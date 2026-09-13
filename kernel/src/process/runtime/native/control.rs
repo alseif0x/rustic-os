@@ -59,7 +59,7 @@ impl Manager {
                 ]
             }
             SPAWN => {
-                if !matches!(w[1], FILES | SHELL | UTILITY) {
+                if !matches!(w[1], FILES | SHELL | UTILITY | TASKS) {
                     return Err(Error::Invalid);
                 }
                 let child = catalog::launch(self, memory, w[1])?;

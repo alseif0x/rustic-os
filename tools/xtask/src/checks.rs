@@ -82,6 +82,8 @@ pub(super) fn run() -> Result<(), String> {
             "rustic-shell",
             "-p",
             "rustic-utility",
+            "-p",
+            "rustic-tasks",
             "--features",
             "native",
             "--target",

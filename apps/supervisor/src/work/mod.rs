@@ -5,10 +5,18 @@ pub(super) mod launch;
 mod mount;
 mod policy;
 mod restart;
+pub(super) mod tasks;
 use rustic_sdk::runtime;
 use rustic_supervisor::jobs::{History, Ticket};
+// Exactly one job owns its inline, bounded task snapshot. The native supervisor
+// has no heap; keeping these <=16 rows here avoids shared/global scratch state.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one bounded inline job; no native heap"
+)]
 enum Task {
     Launch(launch::Draft),
+    TasksList(tasks::TaskList),
     Restart(restart::Restart),
     Admin { words: [u64; 8], sent: bool },
 }
@@ -35,6 +43,10 @@ impl Work {
     pub fn pending(&self) -> bool {
         self.active.is_some()
     }
+
+    pub fn can_start(&self) -> bool {
+        self.active.is_none() && self.history.can_start()
+    }
     pub fn pending_helper(&self, root: u32) -> Option<(usize, u64)> {
         match self.active.as_ref().map(|a| &a.task) {
             Some(Task::Launch(d)) if d.parent == root && root != 0 => Some((d.slot, d.pid)),
@@ -44,6 +56,7 @@ impl Work {
     pub fn reserved(&self) -> Option<usize> {
         match self.active.as_ref().map(|a| &a.task) {
             Some(Task::Launch(d)) => Some(d.slot),
+            Some(Task::TasksList(task)) => Some(task.slot()),
             _ => None,
         }
     }

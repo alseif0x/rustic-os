@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::children::Child;
+use super::work::tasks::Cached;
 use rustic_sdk::{
     files::Client,
     ipc::Endpoint,
@@ -13,6 +14,8 @@ pub struct State {
     pub owner: Client,
     pub control: Endpoint,
     pub children: [Option<Child>; 2],
+    pub(super) task_result: Option<Cached>,
+    pub(super) admin_drain: bool,
     pub policy: u32,
     pub(super) takeover: super::takeover::Takeover,
     pub(super) degraded: bool,
@@ -45,7 +48,9 @@ pub fn stop(pid: u64) {
 impl State {
     pub fn serve(&mut self) -> u64 {
         loop {
+            self.expire_task_result();
             self.collect();
+            self.poll_admin_drain();
             self.poll_takeover();
             self.poll_work();
             match self.control.receive() {

@@ -136,7 +136,7 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
                 state["artifacts"].append(collect(container, "/work/target/x86_64-unknown-none/release/rustic-os",
                                                   directory / "kernel.elf", 16 * 1024 * 1024))
                 exports=[("sdk-probe.elf", 1024 * 1024), ("app.manifest", 128), ("block-probe.elf", 1024 * 1024), ("block-probe.manifest", 128)]
-                exports += [(name+suffix, maximum) for name in ("file-server", "supervisor", "shell", "utility") for suffix,maximum in ((".elf",1024*1024),(".manifest",128))]
+                exports += [(name+suffix, maximum) for name in ("file-server", "supervisor", "shell", "utility", "tasks") for suffix,maximum in ((".elf",1024*1024),(".manifest",128))]
                 for name, maximum in exports:
                     state["artifacts"].append(collect(container, "/work/target/native/" + name,
                                                       directory / name, maximum))

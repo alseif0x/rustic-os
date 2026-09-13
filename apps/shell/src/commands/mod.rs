@@ -13,6 +13,7 @@ mod processes;
 mod read;
 mod recovery;
 mod takeover;
+mod tasks;
 use super::{output, session::Session};
 use rustic_shell::parser::Args;
 #[derive(Debug)]
@@ -22,6 +23,8 @@ pub enum Error {
     File(rustic_sdk::files::Error),
     Service(u64),
     Pending(u64),
+    TaskDocument,
+    TaskCapacity,
 }
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -29,6 +32,8 @@ impl core::fmt::Display for Error {
             Self::Usage => f.write_str("invalid arguments; type help"),
             Self::Unknown => f.write_str("unknown command; type help"),
             Self::File(e) => write!(f, "{e:?}"),
+            Self::TaskDocument => f.write_str("invalid tasks document"),
+            Self::TaskCapacity => f.write_str("tasks capacity exceeded"),
             Self::Pending(id) => write!(
                 f,
                 "wait interrupted; job={id} remains queryable with job-status {id}"
@@ -68,6 +73,7 @@ pub fn exact(args: &Args<'_>, n: usize) -> Result<(), Error> {
 pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
     match argument(a, 0)? {
         "help" => help::execute(a)?,
+        "tasks" => tasks::execute(s, a)?,
         "echo" => {
             for i in 1..a.len() {
                 if i > 1 {

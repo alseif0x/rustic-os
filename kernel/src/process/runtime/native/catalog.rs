@@ -40,6 +40,11 @@ pub(super) fn launch(
             "utility.elf",
             image!("utility", ".elf"),
         ),
+        rustic_abi::runtime::TASKS => (
+            image!("tasks", ".manifest"),
+            "tasks.elf",
+            image!("tasks", ".elf"),
+        ),
         _ => return Err(Error::Invalid),
     };
     application::launch(

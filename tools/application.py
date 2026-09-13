@@ -65,7 +65,7 @@ def build_one(root, env, offline, name, manifest_name):
 def build(root=ROOT, env=None, offline=False):
     output = build_one(root, env, offline, "sdk-probe", "app.manifest")
     build_one(root, env, offline, "block-probe", "block-probe.manifest")
-    for name in ("file-server", "supervisor", "shell", "utility"):
+    for name in ("file-server", "supervisor", "shell", "utility", "tasks"):
         build_one(root, env, offline, name, name + ".manifest")
     return output
 
