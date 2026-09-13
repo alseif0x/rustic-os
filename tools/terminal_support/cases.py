@@ -20,7 +20,43 @@ def exited(uart, child, kind, code):
 def counters(uart):
     return {k:int(v) for k,v in re.findall(r"(free_frames|processes|channels|pending_io)=(\d+)",uart.command("mem"))}
 
+def help_checks(uart):
+    default = uart.command("help")
+    assert "help advanced" in default, default
+    for marker in ("pwd", "ls [PATH]", "write PATH TEXT", "cat PATH", "ps | kill PID", "exit"):
+        assert marker in default, default
+    assert "run spin|fault|exit" not in default, default
+    uart.command("status", "0")
+    advanced_markers = (
+        "select-lifecycle operations.get|operations.cancel",
+        "lifecycle-profile operations.get|operations.cancel",
+        "inspect-operation ADMISSION_ID",
+        "enable-prevention-reasons",
+        "observe-admission ADMISSION_ID",
+        "retry-key PATH KEY",
+        "session FILE OTHER [TICKS]",
+        "stall files TICKS",
+        "hold-io SKIP TICKS",
+        "capabilities (implemented methods; availability is not permission)",
+        "ref WORKSPACE PATH",
+        "enable-operations",
+        "enable-admissions",
+        "act PID api-read|read-open|read-next|fill|capabilities",
+    )
+    assert all(marker not in default for marker in advanced_markers), default
+    advanced = uart.command("help advanced")
+    assert all(marker in advanced for marker in advanced_markers), advanced
+    assert "run spin|fault|exit" in advanced, advanced
+    uart.command("status", "0")
+    for command in ("help unknown", "help advanced extra", "help extra args"):
+        invalid = uart.command(command, "invalid arguments; type help")
+        assert all(marker not in invalid for marker in advanced_markers), invalid
+        assert "help | pwd" not in invalid, invalid
+        uart.command("status", "1")
+    uart.command("pwd", "/workspaces")
+
 def exercise(uart):
+    help_checks(uart)
     uart.command("pwd", "/workspaces")
     uart.command("ls /", "workspaces")
     uart.command('write hello "Hello from native Rust"', "written 22 bytes")

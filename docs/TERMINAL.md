@@ -20,6 +20,12 @@ Type `exit` to stop cleanly. Ctrl-C cancels the current input line or interrupts
 
 ## Commands
 
+`help` shows the everyday file, navigation, process and system commands first.
+Use `help advanced` for the complete command reference, including service
+protocol diagnostics and fault-injection controls. Invalid help arguments return
+a usage error without printing a partial reference. The command table below
+includes both everyday and advanced operations.
+
 ```text
 help
 pwd
