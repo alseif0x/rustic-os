@@ -9,6 +9,7 @@ from .machine import machine, disk
 from .connection import Connection
 from .cases import exercise
 from .tasks_cases import exercise as tasks_exercise, after_reboot as tasks_after_reboot
+from .tasks_lifecycle import exercise as tasks_lifecycle_exercise
 from .storage_cases import exercise as storage_exercise
 from .failure import preserve_failure
 from .authority_cases import exercise as authority_exercise
@@ -29,6 +30,8 @@ def verify(image, timeout=60, output=None):
     output = Path(output or image.parent)
     output.mkdir(parents=True, exist_ok=True)
     metadata = json.loads((image.parent / "image.json").read_text())
+    if metadata.get("tasks_acceptance") is not True:
+        raise ValueError("terminal acceptance requires the explicit tasks-acceptance build profile")
     # This second boot reuses the exact ELF; it never invokes candidate host code.
     mount = package(image.parent / "kernel.elf", "terminal", metadata["build_id"], {})
     cases, serials, logs = 0, [], []
@@ -49,7 +52,10 @@ def verify(image, timeout=60, output=None):
                             if phase == 1:
                                 cases = exercise(uart)
                                 tasks = tasks_exercise(uart, data)
-                                tasks['application'] = metadata['native_applications']['tasks']
+                                tasks['lifecycle'] = tasks_lifecycle_exercise(uart, data)
+                                # Isolated boot receives only the reviewed kernel ELF.
+                                # Per-app hashes are separate build artifacts there.
+                                tasks['application'] = metadata.get('native_applications', {}).get('tasks')
                                 storage = storage_exercise(uart, data)
                                 authority = authority_exercise(uart, data)
                                 takeover = takeover_exercise(uart, data)
@@ -86,7 +92,7 @@ def verify(image, timeout=60, output=None):
         verify_negotiation(negotiation)
         verify_selection(negotiation['selection'])
         evidence = {"verified":True,"boots":2,"commands_phase_one":cases,"oracle":oracle,"allocated_bytes":allocation,
-                    "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"tasks":tasks,"authority":authority,"takeover":takeover,"management":management,"read_contract":read_contract,"storage":storage,"discovery":discovery,"prevention":prevention,"negotiation":negotiation}
+                    "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"tasks_acceptance":True,"tasks":tasks,"authority":authority,"takeover":takeover,"management":management,"read_contract":read_contract,"storage":storage,"discovery":discovery,"prevention":prevention,"negotiation":negotiation}
         # Machine artifacts retain every field without redundant indentation.
         # The collector still enforces the existing 64 KiB per-file limit.
         (output / "terminal.json").write_text(json.dumps(evidence,separators=(',', ':'))+"\n")

@@ -80,12 +80,22 @@ impl Draft {
     pub(super) fn poll(&mut self, state: &mut State) -> Result<Option<[u64; 8]>, u64> {
         if !self.sent {
             match state.admin.begin(&k::encode(self.words())) {
-                Ok(()) => self.sent = true,
+                Ok(()) => {
+                    self.sent = true;
+                    #[cfg(feature = "tasks-acceptance")]
+                    if self.role == s::TASKS {
+                        state.acceptance.hold_if_armed(self.slot, self.pid);
+                    }
+                }
                 Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {
                     return Ok(None);
                 }
                 Err(_) => return Err(4),
             }
+            return Ok(None);
+        }
+        #[cfg(feature = "tasks-acceptance")]
+        if state.acceptance.holds(self.slot, self.pid) {
             return Ok(None);
         }
         let Some(message) = state.admin.poll().map_err(|_| 4u64)? else {

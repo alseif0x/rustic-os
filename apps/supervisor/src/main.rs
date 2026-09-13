@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #![no_std]
 #![no_main]
+#[cfg(feature = "tasks-acceptance")]
+mod acceptance;
 mod bootstrap;
 mod children;
 

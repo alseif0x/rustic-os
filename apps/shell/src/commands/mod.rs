@@ -74,6 +74,8 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
     match argument(a, 0)? {
         "help" => help::execute(a)?,
         "tasks" => tasks::execute(s, a)?,
+        #[cfg(feature = "tasks-acceptance")]
+        "tasks-acceptance" => super::acceptance::execute(s, a)?,
         "echo" => {
             for i in 1..a.len() {
                 if i > 1 {

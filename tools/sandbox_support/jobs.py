@@ -109,6 +109,8 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
                       "/opt/controller/worker.py", phase, revision]
             if phase == "boot":
                 worker += [mode, str(boot_timeout)]
+            else:
+                worker += [mode]
             limit = build_timeout if phase == "build" else boot_timeout * (16 if mode == "recovery-test" else 4 if mode == "terminal-test" else 2 if mode in ("block-persist", "block-user") else 1) + 30
             try:
                 with input_path.open("rb") as stream:

@@ -30,7 +30,7 @@ def receive():
     return source
 
 
-def build(revision):
+def build(revision, mode):
     source = receive()
     shutil.copytree("/opt/cargo/registry", WORK / "cargo/registry")
     env = os.environ.copy()
@@ -39,7 +39,7 @@ def build(revision):
     (WORK / "home").mkdir()
     sys.path.insert(0, str(REFERENCE / "tools"))
     import application
-    env["RUSTIC_APPLICATION_DIRECTORY"] = str(application.build(source, env, offline=True))
+    env["RUSTIC_APPLICATION_DIRECTORY"] = str(application.build(source, env, offline=True, tasks_acceptance=mode == "terminal-test"))
     command = ["cargo", "build", "-p", "rustic-kernel", "--bin", "rustic-os",
                "--features", "sdk-test", "--target", "x86_64-unknown-none", "--release", "--locked", "--offline", "-vv"]
     return subprocess.call(command, cwd=source, env=env)
@@ -59,6 +59,7 @@ def boot(revision, mode, timeout):
     image.OUTPUT = WORK / "out"
     path = image.package(kernel, mode, revision[:16], {
         "source_commit": revision, "source_status": "",
+        "tasks_acceptance": mode == "terminal-test",
         "rustc": subprocess.check_output(["rustc", "--version", "--verbose"], text=True),
     })
     result = runner.run(path, timeout)
@@ -69,7 +70,7 @@ def boot(revision, mode, timeout):
 if __name__ == "__main__":
     action, revision, *args = sys.argv[1:]
     if action == "build":
-        raise SystemExit(build(revision))
+        raise SystemExit(build(revision, args[0]))
     if action == "boot":
         raise SystemExit(boot(revision, args[0], int(args[1])))
     raise ValueError("unsupported worker action")

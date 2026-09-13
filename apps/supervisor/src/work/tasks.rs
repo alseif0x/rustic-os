@@ -272,6 +272,8 @@ impl State {
             .is_some_and(|result| runtime::clock() >= result.deadline)
         {
             self.clear_task_result();
+            #[cfg(feature = "tasks-acceptance")]
+            self.acceptance.note_expiry(runtime::clock());
         }
     }
 
@@ -314,7 +316,6 @@ impl State {
             || child.rights == 0
             || child.generation != cached.generation
             || child.expires != cached.expires
-            || child.expires != cached.expires
             || child.closed
             || child.actor_deadline != cached.deadline
             || (child.expires != 0 && runtime::clock() >= child.expires)
@@ -343,7 +344,11 @@ impl State {
             return;
         }
         match self.admin.poll() {
-            Ok(Some(_)) => self.admin_drain = false,
+            Ok(Some(_)) => {
+                self.admin_drain = false;
+                #[cfg(feature = "tasks-acceptance")]
+                self.acceptance.note_admin_drained();
+            }
             Ok(None) => {}
             Err(_) => {
                 self.admin_drain = false;

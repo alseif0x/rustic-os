@@ -17,8 +17,9 @@ ROOT = environment.ROOT
 OUTPUT = ROOT / "artifacts/boot"
 
 
-def source_id():
+def source_id(*, tasks_acceptance=False):
     digest = hashlib.sha256()
+    digest.update(b"tasks-acceptance=1\0" if tasks_acceptance else b"tasks-acceptance=0\0")
     paths = sorted((ROOT / "kernel").rglob("*.rs"))
     paths += sorted((ROOT / "kernel").rglob("*.S"))
     paths += sorted((ROOT / "crates").rglob("*.rs"))
@@ -38,10 +39,11 @@ def build(mode):
         raise ValueError("unsupported fixture")
     environment.verify()
     environment.fetch_bootloader()
-    build_id = source_id()
+    tasks_acceptance = mode == "terminal-test"
+    build_id = source_id(tasks_acceptance=tasks_acceptance)
     env = os.environ.copy()
     env["RUSTIC_BUILD_ID"] = build_id
-    env["RUSTIC_APPLICATION_DIRECTORY"] = str(application.build(ROOT, env))
+    env["RUSTIC_APPLICATION_DIRECTORY"] = str(application.build(ROOT, env, tasks_acceptance=tasks_acceptance))
     subprocess.run(
         ["cargo", "build", "-p", "rustic-kernel", "--bin", "rustic-os", "--features",
          "sdk-test", "--target", "x86_64-unknown-none", "--release", "--locked"],
@@ -49,6 +51,7 @@ def build(mode):
     )
     kernel = ROOT / "target/x86_64-unknown-none/release/rustic-os"
     provenance = {
+        "tasks_acceptance": tasks_acceptance,
         "source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "source_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
         "application_elf_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "sdk-probe.elf"),

@@ -21,6 +21,8 @@ pub struct State {
     pub(super) degraded: bool,
     pub(super) stopping: bool,
     pub(super) work: super::work::Work,
+    #[cfg(feature = "tasks-acceptance")]
+    pub(super) acceptance: super::acceptance::Fixture,
 }
 pub fn call(w: [u64; 8]) -> Result<[u64; 8], ()> {
     runtime::control(w).map_err(|_| ())

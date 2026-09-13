@@ -33,4 +33,14 @@ Only `list` is implemented. `add` and `done` need immutable mutation intent, exp
 
 The native terminal acceptance covers ordinary/empty/maximal lists, malformed documents, duplicate IDs, capacity errors, policy denial, occupied process slots, repeated resource reuse and a second boot. It compares the committed disk bytes before and after each query using an independent host reader. Pure Rust tests cover parsing and wire validation.
 
-Cancellation during permission provisioning, concurrent owner requests during that phase, and expiry of an abandoned result still need direct guest acceptance. Their cleanup paths have received static review; a Ctrl-C test that only interrupts shell path resolution would not establish these behaviors. These are finite follow-up checks before extending the application with mutations.
+## Native lifecycle acceptance
+
+`python3 tools/terminal_test.py` explicitly enables the `tasks-acceptance` build feature in the shell and supervisor. Ordinary application builds and the interactive terminal omit it. The source build ID includes that feature profile, and the evidence records the kernel hash and profile. No kernel or file-service test opcode is added.
+
+The host invokes a deterministic client inside the existing shell, using its authenticated supervisor connection. Three bounded cases exercise the real task process and service exchange:
+
+- Cancel after the permission RPC was sent, while its response is held before consumption. Require the real response to drain, reject the stale result and successfully run a fresh listing. This does not claim cancellation happened before the file service applied the grant.
+- Hold a task in its reserved process slot, launch an ordinary `spin` utility concurrently, then finish the task. Require distinct PIDs and continued supervisor ownership of the utility before killing and reaping it.
+- Retrieve one result row and abandon the remaining result. Wait without sending owner requests, then require the recorded cleanup tick to precede the next owner query. A cleanup triggered only by that query must fail acceptance.
+
+The fixture checks exact task rows and restored frame/process/channel/I/O counters. An independent host reader also requires unchanged committed disk bytes. The three structured records live under `tasks.lifecycle` in `artifacts/terminal-test/terminal.json`; missing or contradictory records fail the suite. Instrumentation only holds a real pending exchange or records a real cleanup transition; it does not fabricate grants, task rows or resource release.

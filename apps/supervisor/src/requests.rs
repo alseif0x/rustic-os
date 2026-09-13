@@ -2,6 +2,8 @@
 //! Owner-only shell requests. Process control never accepts arbitrary catalog/subject authority.
 use super::services::*;
 use rustic_sdk::{abi::supervisor as s, runtime::abi as k};
+#[cfg(feature = "tasks-acceptance")]
+use rustic_tasks_contract::acceptance as tasks_acceptance;
 impl State {
     pub fn request(&mut self, w: [u64; 8]) -> Result<[u64; 8], u64> {
         let end = match w[0] {
@@ -32,6 +34,11 @@ impl State {
             s::ACT_ADMISSION => 7,
             s::HELPER_START => 4,
             s::ACT | s::MOVE_CHECK => 3,
+            #[cfg(feature = "tasks-acceptance")]
+            tasks_acceptance::ARM
+            | tasks_acceptance::STATUS
+            | tasks_acceptance::RELEASE
+            | tasks_acceptance::RESET => 1,
             _ => return Err(1),
         };
         if w[end..].iter().any(|v| *v != 0) {
@@ -111,6 +118,15 @@ impl State {
             s::TASKS_LIST => self.task_list(u32::try_from(w[1]).map_err(|_| 1u64)?),
             s::TASKS_ROW => self.task_row(w[1], w[2]),
             s::TASKS_ABORT => self.abort_task_list(w[1]),
+            #[cfg(feature = "tasks-acceptance")]
+            tasks_acceptance::ARM
+            | tasks_acceptance::STATUS
+            | tasks_acceptance::RELEASE
+            | tasks_acceptance::RESET => {
+                let request = tasks_acceptance::decode_request(w).ok_or(1u64)?;
+                let admin_pending = self.admin.pending();
+                self.acceptance.control(request, admin_pending)
+            }
             s::STALL_FILES => {
                 if w[1] > 1000 {
                     return Err(1);

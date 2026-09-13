@@ -35,14 +35,15 @@ def encode(document):
     return struct.pack("<8sHHIHHHHQ32s32s32s", b"RUSTAPP\0", 1, 128, 65536, 1, *version, bits, identity, executable, bytes(32))
 
 
-def build_one(root, env, offline, name, manifest_name):
+def build_one(root, env, offline, name, manifest_name, tasks_acceptance=False):
     env = (os.environ if env is None else env).copy()
     descriptor = root / ("apps/" + name + "/app.toml")
     if descriptor.stat().st_size > 4096:
         raise ValueError("manifest text exceeds 4096 bytes")
     document = tomllib.loads(descriptor.read_text())
     manifest = encode(document)
-    command = ["cargo", "build", "-p", "rustic-" + name, "--features", "native",
+    features = "native,tasks-acceptance" if tasks_acceptance and name in ("shell", "supervisor") else "native"
+    command = ["cargo", "build", "-p", "rustic-" + name, "--features", features,
                "--target", "x86_64-unknown-none", "--release", "--locked"]
     if offline:
         command.append("--offline")
@@ -62,11 +63,11 @@ def build_one(root, env, offline, name, manifest_name):
     return output.resolve()
 
 
-def build(root=ROOT, env=None, offline=False):
+def build(root=ROOT, env=None, offline=False, *, tasks_acceptance=False):
     output = build_one(root, env, offline, "sdk-probe", "app.manifest")
     build_one(root, env, offline, "block-probe", "block-probe.manifest")
     for name in ("file-server", "supervisor", "shell", "utility", "tasks"):
-        build_one(root, env, offline, name, name + ".manifest")
+        build_one(root, env, offline, name, name + ".manifest", tasks_acceptance)
     return output
 
 

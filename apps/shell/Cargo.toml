@@ -11,6 +11,7 @@ publish.workspace = true
 workspace = true
 [features]
 native = []
+tasks-acceptance = ["native", "rustic-tasks-contract/tasks-acceptance"]
 [dependencies]
 rustic-sdk = { path = "../../crates/sdk" }
 rustic-tasks-contract = { path = "../../crates/tasks-contract" }

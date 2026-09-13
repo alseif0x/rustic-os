@@ -20,6 +20,8 @@ pub fn start(initialize: bool) -> Result<State, ()> {
         degraded: true,
         stopping: true,
         work: super::work::Work::new(),
+        #[cfg(feature = "tasks-acceptance")]
+        acceptance: super::acceptance::Fixture::default(),
     };
     let job = state.begin_restart(initialize).map_err(|_| ())?;
     call([k::CONSOLE_GRANT, shell, 0, 0, 0, 0, 0, 0])?;
