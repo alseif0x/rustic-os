@@ -29,7 +29,47 @@ Messages own 88 bytes of storage and expose at most 64 payload bytes. Outbound s
 
 ## Memory and runtime limits
 
-Rust `core`, stack variables, static data, slices and fixed arrays are available. Image segments retain the loader's R/RX/RW permissions. The SDK has no allocator, allocation/free syscalls, `alloc`, `std`, networking, threads, TLS, floating point or SIMD support. It does not publish placeholders for those functions. The pinned target avoids a red zone and SIMD. Do not add dependencies that require a runtime the OS has not implemented.
+Rust `core`, stack variables, static data, slices and fixed arrays are available. Image segments retain the loader's R/RX/RW permissions. #49 adds the explicit bounded heap described below; the SDK still has no `GlobalAlloc`, `alloc` crate, `std`, networking, threads, TLS, floating point or SIMD support. It does not publish placeholders for those functions. The pinned target avoids a red zone and SIMD. Do not add dependencies that require a runtime the OS has not implemented.
+
+## Bounded dynamic memory
+
+Memory is explicit and owned, never ambient. Three responsibilities stay separate: the kernel owns frames and page tables, `memory::raw` is the typed syscall boundary, and `memory::allocator` is pure block policy inside one byte region. `memory::Heap` is the guest object that owns a run of mapped pages and delegates to both; the bytes in a block belong to the caller.
+
+```rust
+use rustic_sdk::memory::{Heap, raw::{self, Query}};
+let limit = raw::query(Query::PageLimit)?;      // kernel policy, never assumed
+let mut heap = Heap::reserve(1, true)?;         // one MAP of zeroed pages
+let block = heap.alloc(1024, 64)?;              // first fit, 64-byte aligned
+heap.bytes_mut(&block)?.fill(0xa5);
+heap.grow(3)?;                                  // MAP directly after the end
+heap.free(block)?;
+let released = heap.shrink_trailing()?;         // UNMAP whole idle tail pages
+// Dropping the heap unmaps everything it still holds.
+```
+
+`Heap::reserve` performs exactly one `MAP`; `grow` maps at the address right after the current end and returns the kernel's refusal unchanged, because the heap never relocates. `shrink_trailing` unmaps only whole trailing pages that hold no live block. `Drop` releases the rest; process exit remains the backstop. A read-only reservation carries no allocator, since bookkeeping lives inside the region, and answers every allocation call with `ReadOnly`.
+
+A block handle is checked against the allocator on every use and carries no authority of its own. Each block header holds three words: its own total size, the total size of the block before it, and one word packing the free/used marker with the generation of the allocation that occupies the block, taken from a counter that never reissues a value in one region. A handle records that generation, so a copy left over from a released allocation is refused as `Unowned` even after the same address and size have been handed out again; freeing an allocation invalidates every copy of its handle at once.
+
+Window base, window size and the per-process page limit are kernel policy, read with `raw::query` and never hardcoded in the SDK. Pages arrive zeroed and are never executable. There is no swap, no shared or cross-process mapping, no relocation, no implicit growth, no thread safety and no `unsafe`-free access to a block from another process.
+
+| Error | Reported when |
+| --- | --- |
+| `Map(Size)` | `pages` is zero or above the per-process limit |
+| `Map(Address)` | an explicit address is misaligned, outside the window or not free |
+| `Map(Invalid)` | unknown flags, a partial release, or an unknown query selector |
+| `Map(Full)` | the per-process budget or the frame pool is exhausted; nothing was mapped |
+| `Alloc(Request)` | zero size, or an alignment that is not a power of two or exceeds 4096 |
+| `Alloc(Empty)` | the region has no free byte left |
+| `Alloc(Exhausted)` | free bytes remain, but no single run fits the size and alignment |
+| `Alloc(Unowned)` | the address is outside the region, is not the start of a live block, or is a stale handle whose allocation was released and whose address has been reused |
+| `Alloc(DoubleFree)` | the address lies inside a block that is already free |
+| `Alloc(Region)` | the byte range cannot carry the bookkeeping the operation needs |
+| `ReadOnly` | the run was mapped read-only, so it holds no allocator |
+
+`Heap::stats` returns one snapshot: `capacity`, `used`, `free`, `largest_free`, `peak_used` and `blocks`. Accounting is exact and `used + free == capacity` always holds; `used` includes each block's header and its alignment padding, so a caller can see fragmentation instead of guessing it. `Exhausted` with a non-zero `free` is fragmentation and is deliberately distinct from `Empty`.
+
+Host tests in `crates/sdk/tests/memory.rs` drive the same policy code over a plain byte buffer: alignment, reuse, coalescing, fragmentation, double free, foreign and stale handles, region growth and truncation. They demonstrate nothing about mapping, page permissions or reclamation. Guest evidence comes from the kernel probe fixture, below.
 
 A later service adds a cohesive client module when its actual contract exists, conforming to the [versioned service schemas](SERVICE-CONTRACTS.md) from #6. The initial schemas and host descriptors do not add native service calls. #44 supplies the lower-level [block API](BLOCK-ACCESS.md); The [bounded file-service protocol and clients](FILES.md) now support the terminal; [native tracked replacements and result lookup](FILE-RECOVERY.md) now recover retained results after restart; complete service-v1 conformance remains in #12/#22. A 512-byte block is separate from the logical file-operation payload limit. Service versions remain separate from the process/IPC ABI. MCP is an adapter above services and does not block native SDK use.
 
@@ -74,7 +114,7 @@ python3 tools/boot.py run --mode ok
 
 The image builder compiles the application first, then builds the kernel with `sdk-test` and an explicit `RUSTIC_APPLICATION_DIRECTORY`. No nested Cargo invocation runs in the kernel build script. `cargo xtask check` also builds/lints the guest application before checking the test image. A manual `boot-image` build alone omits SDK acceptance and cannot pass the full `ok` suite.
 
-The app linker script emits a static ET_EXEC with separate PT_LOAD segments at 0x400000. No ELF parser relaxation was required. The observed release executable is 20,184 bytes; this is a measurement with Rust 1.98.1, not a fixed format requirement. The loader continues to enforce its 1 MiB file, 256-page process and W^X limits.
+The app linker script emits a static ET_EXEC with separate PT_LOAD segments at 0x400000. No ELF parser relaxation was required. The observed release executable is 25,840 bytes after the #49 memory phase was added, up from 20,184 before it; these are measurements with Rust 1.98.1, not a fixed format requirement. The loader continues to enforce its 1 MiB file, 256-page process and W^X limits.
 
 To create another native application, follow the example's Cargo package, linker script, entry function and panic handler. Add it to the workspace and explicitly extend the host build/launcher to select it. The builder selects seven applications: two probes, supervisor, file server, shell, utility and [tasks](TASKS.md). The shell launches fixed utility roles and the tasks application through the supervisor. Arbitrary discovery, installation and executable-file launch remain later work.
 
@@ -83,6 +123,8 @@ The example runs two instances with opposite roles. They verify identity, reject
 ## Acceptance and provenance
 
 The guest acceptance asserts twelve admission failures: eight corrupted fields, truncated manifest, wrong executable selection, unavailable requests and invalid ELF. None leaks frames. Two independent SDK applications then execute in ring 3, verify four exchanges and four parameter rejections in total, exit successfully and release every process frame, channel and handle. Serial output includes `RUSTIC SDK verified=1`, executable size, peak simultaneously allocated process frames and before/after free frames.
+
+Each application also runs the bounded-memory phase in ring 3: it queries the limits, reserves one page, reuses a released block, grows the run and writes and re-reads every byte of the freshly mapped pages, shrinks the idle tail again, is refused a growth past the per-process limit and keeps working, is refused an unmap of a run it does not own, and finally releases everything. Because the fixture retains only the last integer a process reports, the phase packs its findings into one tagged report word; the layout is documented in `apps/sdk-probe/src/heap.rs` and is a fixture detail, not an ABI. The kernel decodes both words, requires them to agree and adds `heap_limit`, `heap_peak_pages`, `heap_peak_bytes`, `heap_full=1`, `heap_reuse=1`, `heap_zeroed=1`, `heap_guarded=1` and `heap_final_pages=0` to the record. Unchanged `free_before`/`free_after` after both processes exit is the reclamation evidence.
 
 Both direct and isolated suites require the complete SDK summary, in addition to existing process, IPC, memory and interrupt acceptance. Host regression tests reject missing, duplicated or incomplete evidence. At #11 acceptance there were 33 Rust and 22 Python tests, with 13 VM and 17 executor scenarios. SDK checks remain inside `ok`; [block storage](BLOCK.md) expands the current suites.
 

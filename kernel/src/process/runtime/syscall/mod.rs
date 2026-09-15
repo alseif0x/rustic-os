@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 mod block;
 mod ipc;
+mod memory;
 use super::record::Process;
 use crate::arch::memory::Memory;
 use rustic_kernel::{ipc::Broker, process::abi};
@@ -32,6 +33,7 @@ pub(super) fn dispatch(
         abi::REPORT => abi::QUOTA,
         4..=8 => return ipc::dispatch(number, process, broker, owner, memory),
         9..=14 => return block::dispatch(number, process, block_service, owner, memory),
+        21..=23 => return memory::dispatch(number, process, memory),
         _ => abi::NOT_SUPPORTED,
     };
     Action::Return(result)

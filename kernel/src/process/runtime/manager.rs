@@ -9,6 +9,7 @@ use rustic_kernel::{
     ipc::Broker,
     process::{
         elf,
+        heap::Region,
         lifecycle::{CAPACITY, Exit, Pid, State, Table},
     },
 };
@@ -53,6 +54,7 @@ impl Manager {
             #[cfg(feature = "sdk-test")]
             program: 0,
             space: loaded.space,
+            heap: Region::new(),
             frame: Frame::user(loaded.entry, elf::STACK_TOP, args),
             preemptions: 0,
             reports: 0,

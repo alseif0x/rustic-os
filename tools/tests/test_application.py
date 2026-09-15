@@ -37,11 +37,14 @@ class ApplicationTests(unittest.TestCase):
                 encode(bad)
 
     def test_missing_or_incomplete_sdk_evidence_fails(self):
-        good = "RUSTIC SDK verified=1 ring=3 applications=2 exchanges=4 admission_rejected=12 parameters_rejected=4 reports=2 reclaimed=1 free_before=90 free_after=90"
+        good = "RUSTIC SDK verified=1 ring=3 applications=2 exchanges=4 admission_rejected=12 parameters_rejected=4 reports=4 reclaimed=1 heap_limit=64 heap_peak_pages=4 heap_peak_bytes=9052 heap_full=1 heap_reuse=1 heap_zeroed=1 heap_guarded=1 heap_final_pages=0 free_before=90 free_after=90"
         self.assertTrue(verified(good, records))
         for before, after in [("ring=3", "ring=0"), ("applications=2", "applications=1"),
                               ("admission_rejected=12", "admission_rejected=11"),
-                              ("free_after=90", "free_after=89"), ("reports=2", "reports=0")]:
+                              ("free_after=90", "free_after=89"), ("reports=4", "reports=0"),
+                              ("heap_full=1", "heap_full=0"), ("heap_zeroed=1", "heap_zeroed=0"),
+                              ("heap_final_pages=0", "heap_final_pages=1"),
+                              ("heap_peak_pages=4", "heap_peak_pages=1")]:
             self.assertFalse(verified(good.replace(before, after), records))
         for bad in ["", "RUSTIC SDK verified=1", good + "\n" + good]:
             self.assertFalse(verified(bad, records))

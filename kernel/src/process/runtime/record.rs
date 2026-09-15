@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::arch::{interrupts::Frame, memory::UserSpace};
+use rustic_kernel::process::heap::Region;
 #[derive(Clone, Copy)]
 pub(super) enum Pending {
     Ipc(u64),
@@ -22,6 +23,8 @@ pub(super) struct Process {
     #[cfg(feature = "sdk-test")]
     pub(super) program: u64,
     pub(super) space: UserSpace,
+    /// Heap window pages this process owns; dropped with the record on reap.
+    pub(super) heap: Region,
     pub(super) frame: Frame,
     pub(super) preemptions: u64,
     pub(super) reports: u64,

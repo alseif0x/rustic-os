@@ -54,6 +54,48 @@ Secondary spaces share the kernel's upper tables and own their root, lower table
 
 If initial table construction fails, boot ends with diagnostics before the new root is activated. That terminal path does not attempt to continue as a partly initialized kernel. Rollback and resource recovery are checked for ordinary subsequent operations.
 
+## User heap pages
+
+A process obtains pages at runtime through the three calls of the
+[heap extension](PROCESS-ABI.md#dynamic-heap-pages--extension-1). The policy is
+kernel-owned and queryable, not part of the ABI: the window starts at
+`0x1000_0000` and covers 128 pages, and one process may hold 64 pages at once.
+The window lies between the image at `0x40_0000` and the stack guard; the
+largest application image of this revision ends at `0x42_3000`, far below it.
+`process/elf.rs` rejects any segment that reaches into the window, so a loaded
+image and a heap page can never claim the same address.
+
+`process/heap.rs` owns the decision and nothing else: a bitmap over the window
+records the pages of one process, chooses the lowest run that fits, refuses a
+range that is not free and classifies every failure. It performs no mapping and
+holds no pointer, so it is tested on the host. The per-process limit is
+deliberately below the window size, so a request can be refused for lack of a
+contiguous run while budget remains; that case is an address failure, and the
+guest may retry with fewer pages. The architecture layer then maps exactly the
+reserved run with `map_user_pages`, over the same zeroed allocation used for
+loading, with user, non-executable permissions and the writable bit from the
+call. If a frame is missing halfway, every page mapped by that call is unmapped
+and the reservation is returned, so a failed call leaves no partial state.
+
+Reclamation has two paths. `UNMAP` releases an owned run and returns its frames
+through the ordinary unmapping path, which also removes emptied tables. A
+process that exits keeps its pages until it is reaped: reaping destroys the
+whole lower half with `destroy_user` and drops the record that holds the
+bitmap, so both the frames and the accounting return to their baseline. The
+native shutdown checks that the free-frame counter matches the value taken
+before the run.
+
+Word 7 of the native `INFO` operation adds the heap pages of every process
+record that still exists, which includes a process that has exited but has not
+been reaped yet, because its pages stay mapped until reaping. A supervisor
+therefore sees the aggregate without a per-process call.
+
+This remains single-CPU. Validate-then-copy in `arch/x86_64/memory/copy.rs`,
+and equally the reserve-then-map order used here, are safe only because one
+dispatch performs one action on one CPU with no concurrent mapping: no other
+thread can unmap a validated page in between. Adding CPUs requires revisiting
+both, together with TLB shootdown; this is noted for #53.
+
 ## Tests and evidence
 
 ```sh

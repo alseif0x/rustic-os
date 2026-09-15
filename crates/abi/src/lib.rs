@@ -6,6 +6,7 @@ pub mod application;
 pub mod block;
 pub mod files;
 pub mod ipc;
+pub mod memory;
 pub mod process;
 pub mod runtime;
 pub mod services;

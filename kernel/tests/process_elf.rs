@@ -109,6 +109,34 @@ fn supports_non_page_aligned_segments_but_rejects_shared_pages() {
 }
 
 #[test]
+fn rejects_segments_that_reach_into_the_heap_window() {
+    use rustic_kernel::process::heap::{WINDOW_BASE, WINDOW_END};
+    // The second segment is moved onto, before and after the reserved window.
+    for (address, size) in [
+        (WINDOW_BASE, 4096),
+        (WINDOW_END - 4096, 4096),
+        (WINDOW_BASE - 4096, 8192),
+        (WINDOW_BASE - 4096, WINDOW_END - WINDOW_BASE + 8192),
+        (WINDOW_BASE + 4096, 4096),
+    ] {
+        let mut bytes = image();
+        field(&mut bytes, 136, address, 8);
+        field(&mut bytes, 160, size, 8);
+        assert!(
+            matches!(Image::parse(&bytes), Err(Error::Segment)),
+            "accepted segment at {address:#x}+{size:#x}"
+        );
+    }
+    // An image that stops before the window, like every application image, loads.
+    let mut bytes = image();
+    field(&mut bytes, 136, WINDOW_BASE - 4096, 8);
+    assert!(Image::parse(&bytes).is_ok());
+    let mut bytes = image();
+    field(&mut bytes, 136, WINDOW_END, 8);
+    assert!(Image::parse(&bytes).is_ok());
+}
+
+#[test]
 fn arbitrary_header_mutations_never_panic() {
     let original = image();
     for offset in 0..176 {

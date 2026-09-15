@@ -55,7 +55,13 @@ impl Manager {
                     self.processes.iter().flatten().count() as u64,
                     self.broker.counts().0 as u64,
                     self.block.broker.counts().1 as u64,
-                    0,
+                    // Heap pages currently mapped by every process that has not
+                    // been reaped: an exited one keeps its pages until then.
+                    self.processes
+                        .iter()
+                        .flatten()
+                        .map(|process| process.heap.used())
+                        .sum(),
                 ]
             }
             SPAWN => {

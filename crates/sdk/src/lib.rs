@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Allocation-free native SDK. Runtime entry points exist only on the guest target.
+//! Native SDK without a global allocator; explicit bounded memory lives in
+//! [`memory`]. Runtime entry points exist only on the guest target.
 #![no_std]
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 mod arch;
@@ -8,6 +9,7 @@ pub mod error;
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 pub mod files;
 pub mod ipc;
+pub mod memory;
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 pub mod process;
 pub mod rpc;

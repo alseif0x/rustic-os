@@ -8,6 +8,15 @@ pub(crate) struct UserSpace {
     pub(super) inner: AddressSpace,
 }
 
+/// Page `index` of a run starting at `base`, rejecting overflow and policy.
+fn page_of(base: u64, index: u64) -> Result<VirtualPage, Error> {
+    let address = index
+        .checked_mul(PAGE_SIZE)
+        .and_then(|offset| base.checked_add(offset))
+        .ok_or(Error::InvalidAddress)?;
+    VirtualPage::new(address).ok_or(Error::InvalidAddress)
+}
+
 impl Memory {
     pub(crate) fn run_user(&self, space: &UserSpace, frame: &mut Frame) -> UserEvent {
         let _mask = Mask::acquire();
@@ -57,6 +66,60 @@ impl Memory {
             .ok_or(Error::NotMapped)?;
         self.physical
             .initialize_bytes(mapping.physical, offset, data);
+        Ok(())
+    }
+
+    /// Map a run of zeroed, never executable user pages into an inactive space.
+    /// A failure leaves the space exactly as it was: every page mapped by this
+    /// call is unmapped again and its frame returned before reporting.
+    pub(crate) fn map_user_pages(
+        &mut self,
+        space: &mut UserSpace,
+        base: u64,
+        pages: u64,
+        writable: bool,
+    ) -> Result<(), Error> {
+        if space.inner.is_active() {
+            return Err(Error::InvalidAddress);
+        }
+        let permissions = PagePermissions {
+            writable,
+            executable: false,
+            user: true,
+        };
+        let mut mapped = 0;
+        let result = (|| {
+            while mapped < pages {
+                let page = page_of(base, mapped)?;
+                space
+                    .inner
+                    .map_zeroed(&mut self.physical, page, permissions)?;
+                mapped += 1;
+            }
+            Ok(())
+        })();
+        if result.is_err() && mapped > 0 {
+            self.unmap_user_pages(space, base, mapped)
+                .expect("rollback pages mapped by this call");
+        }
+        result
+    }
+
+    /// Unmap a run this kernel previously mapped for the process, returning its
+    /// frames. The caller owns the range; an unmapped page is a kernel error.
+    pub(crate) fn unmap_user_pages(
+        &mut self,
+        space: &mut UserSpace,
+        base: u64,
+        pages: u64,
+    ) -> Result<(), Error> {
+        if space.inner.is_active() {
+            return Err(Error::InvalidAddress);
+        }
+        for index in 0..pages {
+            let page = page_of(base, index)?;
+            space.inner.unmap(&mut self.physical, page)?;
+        }
         Ok(())
     }
 

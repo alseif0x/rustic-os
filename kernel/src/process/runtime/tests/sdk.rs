@@ -62,7 +62,9 @@ pub(super) fn verify(manager: &mut Manager, memory: &mut Memory) {
     let (ha, hb) = manager.connect(a, b).unwrap();
     manager.bootstrap(a, [ha, 0, b.0]);
     manager.bootstrap(b, [hb, 1, a.0]);
-    for _ in 0..256 {
+    // The exchange is followed by an independent bounded-memory phase in each
+    // application, so the event budget covers more than the four exchanges.
+    for _ in 0..1024 {
         if [a, b]
             .iter()
             .all(|pid| matches!(manager.state(*pid).unwrap(), State::Exited(_)))
@@ -71,17 +73,52 @@ pub(super) fn verify(manager: &mut Manager, memory: &mut Memory) {
         }
         assert!(manager.step(memory).unwrap().is_some());
     }
+    let mut summary = None;
     for pid in [a, b] {
         assert_eq!(manager.state(pid).unwrap(), State::Exited(Exit::Code(0)));
         let process = manager.process(pid).unwrap();
-        assert_eq!(process.reports, 1);
-        assert_eq!(process.last_report, 0x53444b);
+        // The exchange marker first, the bounded memory summary last.
+        assert_eq!(process.reports, 2);
+        let heap = memory_summary(process.last_report);
+        assert_eq!(*summary.get_or_insert(heap), heap);
         assert_eq!(manager.wait(memory, pid).unwrap(), Some(Exit::Code(0)));
     }
+    let heap = summary.expect("memory summary from both applications");
     assert_eq!(manager.broker.counts(), (0, 0));
+    // Both applications mapped and released user pages; nothing may remain.
     assert_eq!(memory.free_frames(), before);
     let mut serial = crate::arch::Serial::take().unwrap();
     use core::fmt::Write;
-    writeln!(serial, "RUSTIC SDK verified=1 ring=3 applications=2 exchanges=4 admission_rejected=12 parameters_rejected=4 reports=2 reclaimed=1 elf_bytes={} peak_frames={peak_frames} free_before={before} free_after={}", ELF.len(), memory.free_frames()).unwrap();
+    writeln!(serial, "RUSTIC SDK verified=1 ring=3 applications=2 exchanges=4 admission_rejected=12 parameters_rejected=4 reports=4 reclaimed=1 elf_bytes={} peak_frames={peak_frames} heap_limit={} heap_peak_pages={} heap_peak_bytes={} heap_full=1 heap_reuse=1 heap_zeroed=1 heap_guarded=1 heap_final_pages=0 free_before={before} free_after={}", ELF.len(), heap.limit, heap.peak_pages, heap.peak_bytes, memory.free_frames()).unwrap();
     serial.flush();
+}
+
+/// Bounded dynamic-memory facts the guest observed for itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Summary {
+    limit: u64,
+    peak_pages: u64,
+    peak_bytes: u64,
+}
+
+/// Decodes one packed report word; the layout is documented in
+/// `apps/sdk-probe/src/heap.rs` and is not an ABI.
+fn memory_summary(report: u64) -> Summary {
+    assert_eq!(report >> 56, 0x48, "memory summary tag");
+    assert_eq!(report >> 32 & 0xff, 0, "user pages still mapped at exit");
+    assert_eq!(report & 0xff0, 0, "reserved summary bits");
+    assert_eq!(
+        report & 0xf,
+        0xf,
+        "over-limit growth refused, block reused, fresh pages zeroed, foreign unmap refused"
+    );
+    let summary = Summary {
+        limit: report >> 48 & 0xff,
+        peak_pages: report >> 40 & 0xff,
+        peak_bytes: report >> 12 & 0xf_ffff,
+    };
+    assert!(summary.peak_pages > 1, "the heap never grew");
+    assert!(summary.limit >= summary.peak_pages, "peak above the limit");
+    assert!(summary.peak_bytes > 0, "no bytes were allocated");
+    summary
 }

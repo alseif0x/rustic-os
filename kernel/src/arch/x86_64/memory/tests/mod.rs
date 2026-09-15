@@ -42,6 +42,7 @@ pub(super) fn verify(memory: &mut Memory) {
     allocation::pages(memory);
     splitting::verify(memory);
     spaces::verify(memory);
+    allocation::user_rollback(memory);
     let exhausted = allocation::exhaust(memory);
     assert_eq!(memory.physical.frames.free_count(), before);
     if let Some(mut serial) = Serial::take() {

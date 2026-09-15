@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Bounded static ELF64 subset. Decode bytes without aligned casts or allocation.
 use crate::memory::PAGE_SIZE;
+use crate::process::heap;
 
 pub const MAX_SEGMENTS: usize = 8;
 pub const MAX_PAGES: u64 = 256;
@@ -131,6 +132,10 @@ impl<'a> Image<'a> {
                 writable: flags & 2 != 0,
                 executable: flags & 1 != 0,
             };
+            // The heap window belongs to the runtime allocator, not to the image.
+            if segment.start_page() < heap::WINDOW_END && segment.end_page() > heap::WINDOW_BASE {
+                return Err(Error::Segment);
+            }
             if segment.start_page() < previous_end {
                 return Err(Error::Overlap);
             }
