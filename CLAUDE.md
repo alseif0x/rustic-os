@@ -65,6 +65,10 @@ Host-only contract checks need the pinned validator environment in
 
 ## Working rules for Claude
 
+- For nontrivial work invoke `/rustic-orchestrator` and delegate with the
+  `explorer`, `worker`, `tester`, `researcher` and `reviewer` subagents in
+  `.claude/agents` (Opus high; Fable low for review). Root runs Fable medium.
+  See [docs/ORCHESTRATION.md](docs/ORCHESTRATION.md).
 - Never report a check as passing without running it. Host tests and host
   fixtures do not demonstrate guest behavior — say which one you ran.
 - Do not tick checkboxes, mark an issue done or claim a capability exists

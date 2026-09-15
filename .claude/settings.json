@@ -1,0 +1,9 @@
+{
+  "$comment": "SPDX-License-Identifier: Apache-2.0; Project orchestration profile: Fable medium root. Subagent models/efforts are declared per role in .claude/agents. Permissions and integrations stay in the user's own settings.",
+  "model": "fable",
+  "modelSettings": {
+    "claude-fable-5-1": {
+      "effortLevel": "medium"
+    }
+  }
+}
