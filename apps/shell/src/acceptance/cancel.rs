@@ -47,6 +47,9 @@ pub(super) fn run(session: &mut Session, scope: u32) -> Result<(), Error> {
         || before.processes != after.processes
         || before.channels != after.channels
         || before.pending != after.pending
+        // The aborted listing child is reaped before this point, so its pages
+        // are gone from the aggregate; equality, not zero, is what proves it.
+        || before.heap != after.heap
     {
         return Err(Error::Service(4));
     }

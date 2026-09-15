@@ -46,6 +46,9 @@ pub(super) fn run(session: &mut Session, scope: u32) -> Result<(), Error> {
         || before.processes != after.processes
         || before.channels != after.channels
         || before.pending != after.pending
+        // The expired listing's child is reclaimed by the reset above, so its
+        // pages must have returned to the aggregate as well.
+        || before.heap != after.heap
     {
         return Err(Error::Service(4));
     }

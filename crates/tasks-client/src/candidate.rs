@@ -1,12 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //! One planned replacement document, validated before anything retains it.
 //!
-//! Planning happens in the isolated native application; this type is only the
+//! Planning happens in the isolated native application; this module is only the
 //! bounded result a client may carry. The checks live here so that a client
 //! which collected the plan itself and a client which received it in chunks from
 //! another process reach the submission path under identical rules: the bytes
 //! must parse as a task document, and that document must agree with the summary
 //! and the command the plan claims to implement.
+//!
+//! Storage is the caller's. [`CandidateBuilder`] collects into a buffer the
+//! caller lends it, and the [`Candidate`] its `finish` produces is a validated
+//! view of that same buffer, so a client whose buffer lives on a mapped heap
+//! keeps exactly one copy of the document. A refusal hands the buffer back
+//! ([`Refused`]) instead of consuming it, because a client that owns one buffer
+//! must keep it. [`Plan`] is the one form that carries its own bytes: the
+//! planning transport assembles a document nobody lent it a buffer for, and
+//! lends that document to the same submission path.
 use crate::Error;
 use rustic_tasks_contract::{
     Document, MAX_BYTES, State,
@@ -14,10 +23,10 @@ use rustic_tasks_contract::{
 };
 
 /// An immutable candidate document with the command and summary that identify
-/// the edit it implements.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Candidate {
-    bytes: [u8; MAX_BYTES],
+/// the edit it implements, in storage its owner lends for the plan's lifetime.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Candidate<'a> {
+    bytes: &'a mut [u8],
     length: usize,
     summary: Summary,
     edit: Edit,
@@ -27,46 +36,64 @@ pub struct Candidate {
 ///
 /// The declared total is fixed at the start, so a truncated or overlong stream
 /// is refused as it arrives rather than after a partial document is parsed.
-pub struct CandidateBuilder {
-    bytes: [u8; MAX_BYTES],
+#[derive(Debug, PartialEq, Eq)]
+pub struct CandidateBuilder<'a> {
+    bytes: &'a mut [u8],
     length: usize,
     total: usize,
     summary: Summary,
     edit: Edit,
 }
 
-impl Candidate {
-    /// Accepts complete planned bytes.
+/// A refusal that returns the borrowed storage to its owner.
+///
+/// A client that collects into one buffer for its whole life must still hold
+/// that buffer after a plan is refused, so every refusal of a step that took the
+/// buffer hands it back with the reason.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Refused<'a> {
+    pub error: Error,
+    pub storage: &'a mut [u8],
+}
+
+/// One planned document that carries its own bytes.
+///
+/// The planning transport collects a document into storage of its own and
+/// returns it to a caller that may keep it for as long as it likes. Submission
+/// works on the borrowed [`Candidate`] view, so a plan lends its buffer instead
+/// of duplicating the rules or the submission path.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Plan {
+    bytes: [u8; MAX_BYTES],
+    length: usize,
+    summary: Summary,
+    edit: Edit,
+}
+
+impl<'a> Candidate<'a> {
+    /// Accepts the complete planned bytes already present in `storage`.
     ///
     /// The summary and command are required because the intent records them: an
     /// edit is recovered by the command and task it named, so a document that
     /// does not show that command's effect is not this plan.
-    pub fn new(bytes: &[u8], summary: Summary, edit: Edit) -> Result<Self, Error> {
-        canonical(summary, edit)?;
-        if bytes.len() > MAX_BYTES {
-            return Err(Error::Document);
+    pub(crate) fn over(
+        storage: &'a mut [u8],
+        length: usize,
+        summary: Summary,
+        edit: Edit,
+    ) -> Result<Self, Refused<'a>> {
+        if length > storage.len() {
+            return Err(Refused {
+                error: Error::Document,
+                storage,
+            });
         }
-        agrees(bytes, summary, edit)?;
-        let mut value = Self {
-            bytes: [0; MAX_BYTES],
-            length: bytes.len(),
-            summary,
-            edit,
-        };
-        value.bytes[..bytes.len()].copy_from_slice(bytes);
-        Ok(value)
-    }
-
-    /// Begins assembling a candidate of exactly `total` bytes.
-    pub fn begin(total: usize, summary: Summary, edit: Edit) -> Result<CandidateBuilder, Error> {
-        canonical(summary, edit)?;
-        if total == 0 || total > MAX_BYTES {
-            return Err(Error::Document);
+        if let Err(error) = validated(&storage[..length], summary, edit) {
+            return Err(Refused { error, storage });
         }
-        Ok(CandidateBuilder {
-            bytes: [0; MAX_BYTES],
-            length: 0,
-            total,
+        Ok(Self {
+            bytes: storage,
+            length,
             summary,
             edit,
         })
@@ -86,9 +113,51 @@ impl Candidate {
     pub const fn edit(&self) -> Edit {
         self.edit
     }
+
+    /// Hands the storage back to its owner. The plan is not held any more.
+    pub fn release(self) -> &'a mut [u8] {
+        self.bytes
+    }
 }
 
-impl CandidateBuilder {
+impl<'a> CandidateBuilder<'a> {
+    /// Whether a declaration can be collected into `capacity` bytes at all.
+    ///
+    /// An owner that holds one buffer asks this before taking the buffer away
+    /// from whatever currently holds it, so a declaration that is refused leaves
+    /// the previous plan exactly where it was.
+    pub fn accepts(
+        capacity: usize,
+        total: usize,
+        summary: Summary,
+        edit: Edit,
+    ) -> Result<(), Error> {
+        canonical(summary, edit)?;
+        if total == 0 || total > MAX_BYTES || total > capacity {
+            return Err(Error::Document);
+        }
+        Ok(())
+    }
+
+    /// Begins assembling a candidate of exactly `total` bytes into `storage`.
+    pub fn new(
+        storage: &'a mut [u8],
+        total: usize,
+        summary: Summary,
+        edit: Edit,
+    ) -> Result<Self, Refused<'a>> {
+        if let Err(error) = Self::accepts(storage.len(), total, summary, edit) {
+            return Err(Refused { error, storage });
+        }
+        Ok(Self {
+            bytes: storage,
+            length: 0,
+            total,
+            summary,
+            edit,
+        })
+    }
+
     /// Appends the next chunk at the implicit cursor. Bytes beyond the declared
     /// total, and an empty chunk that would never finish the stream, are refused.
     pub fn push(&mut self, bytes: &[u8]) -> Result<(), Error> {
@@ -115,12 +184,71 @@ impl CandidateBuilder {
     }
 
     /// Validates the assembled bytes. An incomplete stream is never a candidate.
-    pub fn finish(self) -> Result<Candidate, Error> {
+    pub fn finish(self) -> Result<Candidate<'a>, Refused<'a>> {
         if !self.complete() {
-            return Err(Error::Document);
+            return Err(Refused {
+                error: Error::Document,
+                storage: self.bytes,
+            });
         }
-        Candidate::new(&self.bytes[..self.length], self.summary, self.edit)
+        Candidate::over(self.bytes, self.length, self.summary, self.edit)
     }
+
+    /// Hands the storage back to its owner, dropping what was collected.
+    pub fn release(self) -> &'a mut [u8] {
+        self.bytes
+    }
+}
+
+impl Plan {
+    /// Accepts complete planned bytes and copies them into the plan.
+    pub fn new(bytes: &[u8], summary: Summary, edit: Edit) -> Result<Self, Error> {
+        validated(bytes, summary, edit)?;
+        let mut value = Self {
+            bytes: [0; MAX_BYTES],
+            length: bytes.len(),
+            summary,
+            edit,
+        };
+        value.bytes[..bytes.len()].copy_from_slice(bytes);
+        Ok(value)
+    }
+
+    /// The planned bytes, exactly as the application produced them.
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes[..self.length]
+    }
+
+    /// The summary of the edit that produced these bytes.
+    pub const fn summary(&self) -> Summary {
+        self.summary
+    }
+
+    /// The command this plan implements, recorded with the intent.
+    pub const fn edit(&self) -> Edit {
+        self.edit
+    }
+
+    /// Lends the planned bytes as the view every submission takes.
+    ///
+    /// The checks are the ones this plan already passed, so they run once more
+    /// over the same bytes rather than being assumed: one validated constructor
+    /// is the only way a candidate exists.
+    pub fn candidate(&mut self) -> Result<Candidate<'_>, Error> {
+        let length = self.length;
+        let summary = self.summary;
+        let edit = self.edit;
+        Candidate::over(&mut self.bytes, length, summary, edit).map_err(|refused| refused.error)
+    }
+}
+
+/// Every rule a candidate must satisfy, wherever its bytes are stored.
+fn validated(bytes: &[u8], summary: Summary, edit: Edit) -> Result<(), Error> {
+    canonical(summary, edit)?;
+    if bytes.len() > MAX_BYTES {
+        return Err(Error::Document);
+    }
+    agrees(bytes, summary, edit)
 }
 
 /// A summary or command that does not survive its own encoding was not produced
@@ -194,18 +322,37 @@ mod tests {
         Edit::add(b"Second").unwrap()
     }
 
+    /// Collects `bytes` in 32-byte chunks, the size the owner transport uses.
+    fn collect<'a>(
+        storage: &'a mut [u8],
+        bytes: &[u8],
+        summary: Summary,
+        edit: Edit,
+    ) -> Result<Candidate<'a>, Refused<'a>> {
+        let mut builder = CandidateBuilder::new(storage, bytes.len(), summary, edit)?;
+        for chunk in bytes.chunks(32) {
+            if let Err(error) = builder.push(chunk) {
+                return Err(Refused {
+                    error,
+                    storage: builder.release(),
+                });
+            }
+        }
+        builder.finish()
+    }
+
     #[test]
     fn a_candidate_must_show_the_effect_of_the_command_it_claims() {
-        let accepted = Candidate::new(ADDED, summary(2, 8, true), add()).unwrap();
+        let accepted = Plan::new(ADDED, summary(2, 8, true), add()).unwrap();
         assert_eq!(accepted.bytes(), ADDED);
         assert_eq!(accepted.summary(), summary(2, 8, true));
         assert_eq!(accepted.edit(), add());
-        Candidate::new(DONE, summary(1, 7, true), Edit::Done { id: 7 }).unwrap();
+        Plan::new(DONE, summary(1, 7, true), Edit::Done { id: 7 }).unwrap();
         // Repeating a completed task changes nothing but still shows it done.
-        Candidate::new(DONE, summary(1, 7, false), Edit::Done { id: 7 }).unwrap();
+        Plan::new(DONE, summary(1, 7, false), Edit::Done { id: 7 }).unwrap();
         // A task the document still leaves open does not prove this edit.
         assert_eq!(
-            Candidate::new(
+            Plan::new(
                 b"rustic-tasks-v1\n7\topen\tFirst\n",
                 summary(1, 7, true),
                 Edit::Done { id: 7 }
@@ -214,11 +361,11 @@ mod tests {
         );
         // An append must carry the requested title, last, under a new ID.
         assert_eq!(
-            Candidate::new(ADDED, summary(2, 8, true), Edit::add(b"Other").unwrap()),
+            Plan::new(ADDED, summary(2, 8, true), Edit::add(b"Other").unwrap()),
             Err(Error::Document)
         );
         assert_eq!(
-            Candidate::new(
+            Plan::new(
                 b"rustic-tasks-v1\n8\topen\tSecond\n7\tdone\tFirst\n",
                 summary(2, 8, true),
                 add()
@@ -232,30 +379,27 @@ mod tests {
         // Count, affected task and canonical encoding are all checked: a caller
         // can build a summary the application never could.
         assert_eq!(
-            Candidate::new(ADDED, summary(3, 8, true), add()),
+            Plan::new(ADDED, summary(3, 8, true), add()),
             Err(Error::Document)
         );
         assert_eq!(
-            Candidate::new(ADDED, summary(2, 9, true), add()),
+            Plan::new(ADDED, summary(2, 9, true), add()),
             Err(Error::Document)
         );
         assert_eq!(
-            Candidate::new(ADDED, summary(2, 8, false), add()),
+            Plan::new(ADDED, summary(2, 8, false), add()),
             Err(Error::Document)
         );
         assert_eq!(
-            Candidate::new(ADDED, summary(2, 0, true), add()),
+            Plan::new(ADDED, summary(2, 0, true), add()),
             Err(Error::Document)
         );
         let mut unversioned = summary(2, 8, true);
         unversioned.version = 0;
-        assert_eq!(
-            Candidate::new(ADDED, unversioned, add()),
-            Err(Error::Document)
-        );
+        assert_eq!(Plan::new(ADDED, unversioned, add()), Err(Error::Document));
         // Bytes that are not a task document never reach the intent.
         assert_eq!(
-            Candidate::new(
+            Plan::new(
                 b"7\tdone\tFirst\n",
                 summary(1, 7, true),
                 Edit::Done { id: 7 }
@@ -265,50 +409,68 @@ mod tests {
         let mut oversized = [b'x'; MAX_BYTES + 1];
         oversized[..16].copy_from_slice(b"rustic-tasks-v1\n");
         assert_eq!(
-            Candidate::new(&oversized, summary(0, 7, true), Edit::Done { id: 7 }),
+            Plan::new(&oversized, summary(0, 7, true), Edit::Done { id: 7 }),
             Err(Error::Document)
         );
     }
 
     #[test]
     fn chunks_assemble_only_the_declared_total() {
-        let mut builder = Candidate::begin(ADDED.len(), summary(2, 8, true), add()).unwrap();
-        for chunk in ADDED.chunks(32) {
-            assert!(!builder.complete());
-            builder.push(chunk).unwrap();
-        }
-        assert!(builder.complete());
-        assert_eq!(builder.remaining(), 0);
-        assert_eq!(
-            builder.finish().unwrap(),
-            Candidate::new(ADDED, summary(2, 8, true), add()).unwrap()
-        );
+        let mut buffer = [0; MAX_BYTES];
+        let candidate = collect(&mut buffer, ADDED, summary(2, 8, true), add()).unwrap();
+        assert_eq!(candidate.bytes(), ADDED);
+        assert_eq!(candidate.summary(), summary(2, 8, true));
+        assert_eq!(candidate.edit(), add());
+        // A plan collected in chunks is the plan a client that held the whole
+        // document would submit.
+        let mut plan = Plan::new(ADDED, summary(2, 8, true), add()).unwrap();
+        assert_eq!(candidate.bytes(), plan.candidate().unwrap().bytes());
         // Overlong, empty and oversized streams are refused as they arrive.
-        let mut builder = Candidate::begin(ADDED.len(), summary(2, 8, true), add()).unwrap();
+        let mut storage = candidate.release();
+        let mut builder =
+            CandidateBuilder::new(storage, ADDED.len(), summary(2, 8, true), add()).unwrap();
         builder.push(&ADDED[..32]).unwrap();
         assert_eq!(builder.remaining(), ADDED.len() - 32);
+        assert!(!builder.complete());
         assert_eq!(builder.push(ADDED), Err(Error::Document));
         assert_eq!(builder.push(&[]), Err(Error::Document));
-        assert_eq!(
-            Candidate::begin(MAX_BYTES + 1, summary(2, 8, true), add()).err(),
-            Some(Error::Document)
-        );
-        assert_eq!(
-            Candidate::begin(0, summary(2, 8, true), add()).err(),
-            Some(Error::Document)
-        );
+        storage = builder.release();
+        for total in [0, MAX_BYTES + 1] {
+            let refused = CandidateBuilder::new(storage, total, summary(2, 8, true), add())
+                .err()
+                .unwrap();
+            assert_eq!(refused.error, Error::Document);
+            storage = refused.storage;
+        }
+        // A buffer too small for the declared plan is refused before a byte of
+        // it is accepted, and is handed back to its owner.
+        let refused = CandidateBuilder::new(
+            &mut storage[..ADDED.len() - 1],
+            ADDED.len(),
+            summary(2, 8, true),
+            add(),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(refused.error, Error::Document);
+        assert_eq!(refused.storage.len(), ADDED.len() - 1);
     }
 
     #[test]
     fn an_incomplete_or_mismatched_stream_never_becomes_a_candidate() {
-        let mut builder = Candidate::begin(ADDED.len(), summary(2, 8, true), add()).unwrap();
+        let mut buffer = [0; MAX_BYTES];
+        let mut builder =
+            CandidateBuilder::new(&mut buffer, ADDED.len(), summary(2, 8, true), add()).unwrap();
         builder.push(&ADDED[..32]).unwrap();
         assert!(!builder.complete());
-        assert_eq!(builder.finish(), Err(Error::Document));
-        // A complete stream still faces the document checks.
-        let mut builder = Candidate::begin(DONE.len(), summary(1, 7, true), add()).unwrap();
-        builder.push(DONE).unwrap();
-        assert!(builder.complete());
-        assert_eq!(builder.finish(), Err(Error::Document));
+        let refused = builder.finish().err().unwrap();
+        assert_eq!(refused.error, Error::Document);
+        // A complete stream still faces the document checks, and a refusal hands
+        // the storage back so the client can collect the next plan into it.
+        let refused = collect(refused.storage, DONE, summary(1, 7, true), add())
+            .err()
+            .unwrap();
+        assert_eq!(refused.error, Error::Document);
+        collect(refused.storage, ADDED, summary(2, 8, true), add()).unwrap();
     }
 }

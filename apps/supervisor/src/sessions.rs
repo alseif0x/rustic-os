@@ -7,26 +7,13 @@ use rustic_sdk::{
     abi::supervisor as s,
     runtime::{self, abi as k},
 };
+use rustic_supervisor::actor;
 
 /// Window for one owner-stepped action that performs a single exchange.
 const STEP_TICKS: u64 = 200;
 /// Window for a tasks action that performs several file exchanges before it
 /// answers; it matches the owner job-status wait used by the tasks clients.
 const EXCHANGE_TICKS: u64 = 1100;
-
-/// Whether an actor action belongs to the persistent tasks-owner protocol.
-fn tasks_action(action: u64) -> bool {
-    matches!(
-        action,
-        s::actor::TASKS_BEGIN
-            | s::actor::TASKS_EDIT
-            | s::actor::TASKS_CHUNK
-            | s::actor::TASKS_APPLY
-            | s::actor::TASKS_STATUS
-            | s::actor::TASKS_RECOVER
-            | s::actor::TASKS_FORGET
-    )
-}
 
 impl State {
     pub(super) fn helper(&mut self, parent: u64, scope: u32, other: u32) -> Result<[u64; 8], u64> {
@@ -40,33 +27,7 @@ impl State {
         self.launch(s::HELPER, scope, other, 1, 0, root)
     }
     pub(super) fn actor(&mut self, pid: u64, action: u64) -> Result<[u64; 8], u64> {
-        if !matches!(
-            action,
-            s::actor::READ
-                | s::actor::STAGE
-                | s::actor::COMMIT
-                | s::actor::FLOOD
-                | s::actor::DRAIN
-                | s::actor::STALE
-                | s::actor::API_READ
-                | s::actor::READ_OPEN
-                | s::actor::READ_NEXT
-                | s::actor::FILL
-                | s::actor::OPERATION_GET
-                | s::actor::CAPABILITIES
-                | s::actor::PROFILE_GET
-                | s::actor::PROFILE_CANCEL
-                | s::actor::SELECT_GET
-                | s::actor::SELECT_CANCEL
-                | s::actor::MISSION_PREPARE
-                | s::actor::MISSION_VERIFY
-                | s::actor::MISSION_SCHEDULE
-                | s::actor::MISSION_INSPECT
-                | s::actor::MISSION_CANCEL
-                | s::actor::TASKS_APPLY
-                | s::actor::TASKS_STATUS
-                | s::actor::TASKS_RECOVER
-        ) {
+        if !actor::actor_allowed(action) {
             return Err(1);
         }
         // Which of these verbs the addressed child may answer is decided once,
@@ -108,7 +69,6 @@ impl State {
         )
     }
     fn actor_words(&mut self, pid: u64, words: [u64; 8]) -> Result<[u64; 8], u64> {
-        let tasks = tasks_action(words[0]);
         let child = self
             .children
             .iter_mut()
@@ -117,7 +77,7 @@ impl State {
             .ok_or(2u64)?;
         // Single place where action and role are checked together: the tasks
         // owner answers only the tasks protocol, and no other role answers it.
-        if tasks != (child.role == s::TASKS_OWNER) {
+        if !actor::role_admits(child.role, words[0]) {
             return Err(1);
         }
         if child.control.pending() {
@@ -126,8 +86,12 @@ impl State {
         child.control.begin(&k::encode(words)).map_err(|_| 4u64)?;
         child.actor_state = 1;
         let ticks = match words[0] {
-            // These two perform several file exchanges before they answer.
-            s::actor::TASKS_APPLY | s::actor::TASKS_RECOVER => EXCHANGE_TICKS,
+            // These perform several exchanges or syscalls before they answer:
+            // two of them address files, and the stress step walks the whole
+            // per-process page budget one mapping call at a time.
+            s::actor::TASKS_APPLY | s::actor::TASKS_RECOVER | s::actor::TASKS_HEAP_STRESS => {
+                EXCHANGE_TICKS
+            }
             _ => STEP_TICKS,
         };
         child.actor_deadline = runtime::clock().saturating_add(ticks);

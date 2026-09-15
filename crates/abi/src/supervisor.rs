@@ -129,6 +129,18 @@ pub mod actor {
     pub const TASKS_RECOVER: u64 = 29;
     /// Discard the recovery evidence of one intent key: `[30, key, 0, ..]`.
     pub const TASKS_FORGET: u64 = 30;
+    /// Grow the child's own heap to the per-process page budget and release it
+    /// again: `[31, 0, 0, 0, 0, 0, 0, 0]`. Like the other actions above it is
+    /// admitted only for role [`super::TASKS_OWNER`] children.
+    ///
+    /// It carries no candidate and touches no file: the reply is
+    /// `[error, peak_pages, full_observed, pages_after_release, limit]`, where
+    /// `full_observed` is `1` when a growth was refused with the kernel's
+    /// `Full`, `pages_after_release` is the whole process's mapped pages after
+    /// the heap was dropped, and `error` is `0` only when the budget was reached
+    /// and everything mapped for it was released. Otherwise `error` is `106`,
+    /// this client's memory refusal.
+    pub const TASKS_HEAP_STRESS: u64 = 31;
     /// Modifiers for ADMISSION. These are flags, not action values.
     pub mod flags {
         /// Submit a live stop and exit without decoding its reply. A discarded

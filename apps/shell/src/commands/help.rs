@@ -46,6 +46,9 @@ fn advanced_help() {
         "act PID tasks-apply|tasks-status|tasks-recover (owner-stepped tasks child; poll with actor-status PID)\r\n",
     );
     output::text(
+        "act PID tasks-heap-stress (grow a tasks-owner child's heap to its budget and release it)\r\n",
+    );
+    output::text(
         "tasks forget INTENT_KEY (discard recovery evidence; does not cancel or undo an effect)\r\n",
     );
     output::text("tasks add PATH TITLE | tasks done PATH ID | tasks recover | tasks enable\r\n");

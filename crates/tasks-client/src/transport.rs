@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Complete bounded native app results before presenting or retaining them.
-use crate::{Candidate, Error, Listing, Relay};
+use crate::{Error, Listing, Plan, Relay};
 use rustic_sdk::{abi::supervisor as s, files, rpc::Progress, runtime};
 use rustic_tasks_contract::{
     MAX_TASKS,
@@ -12,7 +12,7 @@ use rustic_tasks_contract::{
 /// candidate bytes are present only when the caller asked to retain them.
 pub(crate) struct Complete {
     pub listing: Listing,
-    pub candidate: Option<Candidate>,
+    pub candidate: Option<Plan>,
 }
 
 /// Plans one edit through the relay and returns the validated candidate.
@@ -21,7 +21,7 @@ pub(crate) struct Complete {
 /// reserved and no later commit is authorized. The caller decides what the plan
 /// is for — applying it against its own record, or handing it to another
 /// semantic client that owns one.
-pub fn plan<L: Relay>(relay: &mut L, scope: u32, edit: Edit) -> Result<Candidate, Error> {
+pub fn plan<L: Relay>(relay: &mut L, scope: u32, edit: Edit) -> Result<Plan, Error> {
     run(relay, scope, Some(edit), true)?
         .candidate
         .ok_or(Error::Service(4))
@@ -149,8 +149,8 @@ fn collect<L: Relay>(
         // The collected plan passes the same validation a client that received it
         // over any other transport must pass before it may be retained.
         let edit = edit.ok_or(Error::Service(4))?;
-        let candidate = Candidate::new(&candidate_bytes[..length], summary, edit)
-            .map_err(|_| Error::Service(4))?;
+        let candidate =
+            Plan::new(&candidate_bytes[..length], summary, edit).map_err(|_| Error::Service(4))?;
         return Ok(Complete {
             listing: Listing {
                 rows,

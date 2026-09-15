@@ -90,6 +90,16 @@ record that still exists, which includes a process that has exited but has not
 been reaped yet, because its pages stay mapped until reaping. A supervisor
 therefore sees the aggregate without a per-process call.
 
+The supervisor forwards that word unchanged in its own `INFO` reply, and the
+shell prints it at the end of the `mem` line as `heap_pages=N`, after
+`pending_io`. It is the whole system's total, not one process's: an owner reads
+it before and after an operation to see pages taken and given back. The
+per-process budget itself is observable from the same control path with
+`act PID tasks-heap-stress`, which makes a tasks-owner child grow its own heap
+one page at a time until the kernel refuses with `Full` and then release
+everything; the child's reply reports the peak, the refusal, the pages left
+afterwards and the limit, and the `mem` line must return to its earlier value.
+
 This remains single-CPU. Validate-then-copy in `arch/x86_64/memory/copy.rs`,
 and equally the reserve-then-map order used here, are safe only because one
 dispatch performs one action on one CPU with no concurrent mapping: no other

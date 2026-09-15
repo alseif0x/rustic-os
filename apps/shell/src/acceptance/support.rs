@@ -15,6 +15,11 @@ pub(super) struct Memory {
     pub(super) processes: u64,
     pub(super) channels: u64,
     pub(super) pending: u64,
+    /// Heap pages held by every unreaped process, forwarded from `INFO` word 7.
+    /// The three lifecycle cases compare it like the other counters: a child
+    /// that exits without being reaped still holds its pages, so an unequal
+    /// value is a leak even when the process count already matches again.
+    pub(super) heap: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -57,7 +62,9 @@ pub(super) const EXPECTED_ROWS: [ExpectedRow; 2] = [
 
 pub(super) fn memory(session: &mut Session) -> Result<Memory, Error> {
     let words = session.request([supervisor::INFO, 0, 0, 0, 0, 0, 0, 0])?;
-    if words[7] != 0 || words[3] == 0 {
+    // Word 7 now carries the heap-page total, so only the process-slot count
+    // still proves the reply was produced by a supervisor that answered.
+    if words[3] == 0 {
         return Err(Error::Service(4));
     }
     Ok(Memory {
@@ -65,6 +72,7 @@ pub(super) fn memory(session: &mut Session) -> Result<Memory, Error> {
         processes: words[4],
         channels: words[5],
         pending: words[6],
+        heap: words[7],
     })
 }
 

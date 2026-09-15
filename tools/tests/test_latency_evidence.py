@@ -11,7 +11,8 @@ from terminal_support.latency.evidence import RESUMED, SUSPENDED, validate
 
 def fixture(expired=False):
     before = "id=6 parent=4 kind=file bytes=6 version=5"
-    memory = "ticks=80 free_frames=52362 process_slots=8 processes=3 channels=4 pending_io=0"
+    memory = ("ticks=80 free_frames=52362 process_slots=8 processes=3 channels=4 pending_io=0 "
+              "heap_pages=0")
     failure = ("RUSTIC BLOCK_FAILURE phase=completion request=286 kind=4 reason=Timeout started=86 now=586 "
                "elapsed_ticks=500 polls=2510 stalled_polls=0 expected=285 observed=285 device_status=7 descriptor=None status=None")
     committed = "committed id=6 previous=5 version=8 bytes=5"
@@ -83,7 +84,8 @@ class LatencyEvidence(unittest.TestCase):
 
     def test_resource_leak_pending_io_and_unclean_exit_are_rejected(self):
         for field, value in (("pending_io=0", "pending_io=1"), ("free_frames=52362", "free_frames=52361"),
-                             ("processes=3", "processes=4"), ("channels=4", "channels=5"), ("ticks=610", "ticks=1")):
+                             ("processes=3", "processes=4"), ("channels=4", "channels=5"),
+                             ("heap_pages=0", "heap_pages=2"), ("ticks=610", "ticks=1")):
             with self.subTest(field=field), self.assertRaises(AssertionError):
                 self.accepted(change=lambda values: values[0].update(
                     resources_final=values[0]["resources_final"].replace(field, value)))

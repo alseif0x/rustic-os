@@ -21,6 +21,11 @@
 //! | `TASKS_APPLY` | `[error, task_id, journal_key, applied, committed_version]` |
 //! | `TASKS_STATUS` | `[error, phase, cursor, total, pending_journal_version]` |
 //! | `TASKS_RECOVER` | `[error, recovered, journal_key, task_id, version]` |
+//! | `TASKS_HEAP_STRESS` | `[error, peak_pages, full, pages_after_release, limit]` |
+//!
+//! `TASKS_HEAP_STRESS` is the one step that holds nothing and reads nothing of
+//! the collection, so every phase admits it and none of them changes; its own
+//! layout is documented in [`stress`].
 //!
 //! `TASKS_APPLY` is the one step that reads a request word: word 1 selects the
 //! failure cut the submission must take.
@@ -54,6 +59,17 @@
 //! | 3 | a validated candidate is ready to apply |
 //! | 4 | the last apply concluded and released its candidate |
 //!
+//! # Storage
+//!
+//! The candidate bytes are the only thing this client needs memory for, and it
+//! does not carry them in its image: [`owner`] reserves one page through
+//! `rustic_sdk::memory::Heap` when a hand-off announces an edit, allocates the
+//! bounded document's block inside it, and lets [`state::Collection`] assemble
+//! the plan directly in those bytes. Phases 1..3 are exactly the phases that
+//! hold the buffer; an idle client and a client whose apply concluded hold no
+//! mapped page at all, so one `tasks hand` plus `tasks-apply` takes this
+//! process from no heap to one page and back.
+//!
 //! # Error codes
 //!
 //! `0` is success. A file refusal keeps the numbering the file ABI already uses
@@ -61,14 +77,19 @@
 //! application sends. A service or native-application refusal is `64 + code`.
 //! The remaining owner-client refusals have fixed codes: `100` document, `102`
 //! replacement not enabled, `103` journal, `104` an unresolved intent blocks the
-//! mutation. `105` is this client's own refusal: the step is not one the current
-//! phase accepts. The owner client's `101` capacity is unreachable here: only
-//! its planning relay raises it, and this client never plans. Retention
-//! exhaustion is a file-service refusal and arrives as the file ABI's `Full`.
+//! mutation. `105` and `106` are this client's own refusals: `105` is a step the
+//! current phase does not accept, and `106` is a memory refusal: the page the
+//! candidate bytes need could not be reserved or allocated, or a step that needs
+//! them arrived with nothing lent. Both change nothing and retain nothing. The
+//! owner client's `101` capacity is unreachable here: only its planning relay
+//! raises it, and this client never plans. Retention exhaustion is a
+//! file-service refusal and arrives as the file ABI's `Full`.
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 mod owner;
 pub mod report;
 pub mod state;
+#[cfg(all(target_arch = "x86_64", target_os = "none"))]
+mod stress;
 
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 pub use owner::run;

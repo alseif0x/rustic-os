@@ -45,6 +45,7 @@ pub fn code(fault: Fault) -> u64 {
         Fault::Client(Error::Journal) => 103,
         Fault::Client(Error::Pending(_)) => 104,
         Fault::Sequence => 105,
+        Fault::Memory => 106,
     }
 }
 
@@ -164,6 +165,7 @@ mod tests {
         assert_eq!(code(Fault::Client(Error::Journal)), 103);
         assert_eq!(code(Fault::Client(Error::Pending(9))), 104);
         assert_eq!(code(Fault::Sequence), 105);
+        assert_eq!(code(Fault::Memory), 106);
         // No file refusal can be mistaken for a service or client refusal.
         assert!(code(Fault::Client(Error::File(File::Unavailable))) < 64);
     }
@@ -204,7 +206,8 @@ mod tests {
 
     #[test]
     fn an_unreadable_record_still_reports_the_client_s_own_state() {
-        let mut state = Collection::new();
+        let mut storage = [0; 1024];
+        let mut state = Collection::new(&mut storage);
         state
             .edit(rustic_tasks_contract::preview::Edit::Done { id: 3 }.words())
             .unwrap();

@@ -16,7 +16,14 @@
 //! Planning needs no record at all, which is why [`plan`] is a free function
 //! rather than a method: it retains nothing, submits nothing and reserves no
 //! request identity, so a caller may plan an edit for a record it does not own
-//! and hand the resulting [`Candidate`] to the client that does.
+//! and hand the resulting [`Plan`] to the client that does.
+//!
+//! Where the planned bytes live is the caller's decision. A [`Plan`] carries its
+//! own, because the planning transport assembles a document nobody lent it a
+//! buffer for; a client that collects a plan in chunks lends a
+//! [`CandidateBuilder`] the buffer it wants to use, which may be a block of a
+//! mapped heap, and both reach the one submission path as a [`Candidate`] view
+//! of those same bytes.
 //!
 //! The following invariants are load-bearing and are preserved verbatim from the
 //! first shell implementation:
@@ -71,7 +78,7 @@ mod record;
 #[cfg(all(target_arch = "x86_64", target_os = "none"))]
 mod transport;
 
-pub use candidate::{Candidate, CandidateBuilder};
+pub use candidate::{Candidate, CandidateBuilder, Plan, Refused};
 pub use error::Error;
 pub use outcome::{Applied, Committed, Listing, Note, Pending, Recovery, Report};
 pub use record::Record;

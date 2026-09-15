@@ -68,6 +68,9 @@ pub(super) fn run(session: &mut Session, scope: u32) -> Result<(), Error> {
         || before.processes != after.processes
         || before.channels != after.channels
         || before.pending != after.pending
+        // The killed spin process is explicitly reaped above, which is what
+        // releases its heap pages: an unreaped exit would still be counted.
+        || before.heap != after.heap
     {
         return Err(Error::Service(4));
     }

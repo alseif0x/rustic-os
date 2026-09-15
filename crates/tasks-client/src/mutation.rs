@@ -53,7 +53,10 @@ pub(crate) fn apply_cut<L: Relay, R: Report>(
     distinct(relay, record, scope)?;
     // One planning path: applying an edit plans it exactly as a caller that only
     // wants the plan does.
-    let candidate = transport::plan(relay, scope, edit)?;
+    let mut plan = transport::plan(relay, scope, edit)?;
+    // The plan carries its own bytes; the submission path works on the view of
+    // them, exactly as it does for a plan another process collected.
+    let candidate = plan.candidate()?;
     commit(relay, report, record, scope, &candidate, cut)
 }
 
@@ -68,7 +71,7 @@ pub(crate) fn apply_candidate_cut<A: Authority, R: Report>(
     report: &mut R,
     record: &Record<'_>,
     target: u32,
-    candidate: &Candidate,
+    candidate: &Candidate<'_>,
     cut: Cut,
 ) -> Result<Applied, Error> {
     guard(authority, record)?;
@@ -103,7 +106,7 @@ fn commit<A: Authority, R: Report>(
     report: &mut R,
     record: &Record<'_>,
     scope: u32,
-    candidate: &Candidate,
+    candidate: &Candidate<'_>,
     _cut: Cut,
 ) -> Result<Applied, Error> {
     let summary = candidate.summary();

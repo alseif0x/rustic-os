@@ -85,7 +85,7 @@ impl<'a> Client<'a> {
         authority: &mut A,
         report: &mut R,
         target: u32,
-        candidate: &Candidate,
+        candidate: &Candidate<'_>,
     ) -> Result<Applied, Error> {
         self.apply_candidate_cut(authority, report, target, candidate, Cut::None)
     }
@@ -100,7 +100,7 @@ impl<'a> Client<'a> {
         authority: &mut A,
         report: &mut R,
         target: u32,
-        candidate: &Candidate,
+        candidate: &Candidate<'_>,
         cut: Cut,
     ) -> Result<Applied, Error> {
         mutation::apply_candidate_cut(authority, report, &self.record, target, candidate, cut)

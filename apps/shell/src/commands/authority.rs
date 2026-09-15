@@ -157,6 +157,7 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                         "tasks-apply" => p::actor::TASKS_APPLY,
                         "tasks-status" => p::actor::TASKS_STATUS,
                         "tasks-recover" => p::actor::TASKS_RECOVER,
+                        "tasks-heap-stress" => p::actor::TASKS_HEAP_STRESS,
                         _ => return Err(Error::Usage),
                     },
                 )

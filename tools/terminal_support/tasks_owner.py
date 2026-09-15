@@ -9,6 +9,11 @@ The owner steps, the reply layouts and the phase values are the contract stated
 in docs/TASKS.md ("Second native client (utility)") and implemented in
 apps/utility/src/tasks/{owner,state,report}.rs; every numeric refusal code used
 below is cited at the Rust line that defines it.
+
+The candidate bytes of this child are dynamic memory (docs/TASKS.md:82,
+apps/utility/src/tasks.rs:62-71), so the same steps are also watched as pages:
+the system-wide `heap_pages` field of the shell's `mem` line from outside, and
+the child's own `TASKS_HEAP_STRESS` reply from inside.
 """
 import json
 import re
@@ -36,25 +41,39 @@ MAX_CHUNK = 32
 # Uncertain = 3 (line 59), Full = 11 (line 67), Version = 13 (line 69),
 # Revoked = 18 (line 74), OutcomeUnknown = 27 (line 83), Unavailable = 31 (line 87).
 UNCERTAIN, FULL, VERSION, REVOKED, OUTCOME_UNKNOWN, UNAVAILABLE = 3, 11, 13, 18, 27, 31
-# Failure cut selectors of word 1 of TASKS_APPLY, apps/utility/src/tasks.rs:26-38
-# and apps/utility/src/tasks/owner.rs (`cut`). Only 0 exists outside an explicit
-# acceptance build; the supervisor refuses anything above MAX_CUT = 4
+# Failure cut selectors of word 1 of TASKS_APPLY, apps/utility/src/tasks.rs:30-39
+# and apps/utility/src/tasks/owner.rs (`cut`, 301-320). Only 0 exists outside an
+# explicit acceptance build; the supervisor refuses anything above MAX_CUT = 4
 # (apps/supervisor/src/tasks_owner.rs:14,77).
 NONE, PREPARED, LOST_REPLY, LOST_JOURNAL, CONFLICT, UNIMPLEMENTED = 0, 1, 2, 3, 4, 5
-# The owner-client refusals, apps/utility/src/tasks/report.rs:38-48: journal 103,
-# an unresolved intent 104, and the client's own out-of-phase refusal 105.
+# The owner-client refusals, apps/utility/src/tasks/report.rs:36-50: journal 103
+# (line 45), an unresolved intent 104 (line 46), the client's own out-of-phase
+# refusal 105 (line 47) and its memory refusal 106 (line 48, docs/TASKS.md:97).
 JOURNAL_CODE, PENDING, SEQUENCE = 103, 104, 105
-# Phase values, apps/utility/src/tasks/state.rs:36-45 and docs/TASKS.md:81.
+# Phase values, apps/utility/src/tasks/state.rs:35-54 and docs/TASKS.md:95.
 IDLE, EDIT, COLLECTING, READY, FINISHED = 0, 1, 2, 3, 4
 # The intent record's magic, as the shared client writes it (tasks_write.py:37).
 MAGIC = b'RTSKI001'
+# The whole `mem` line: `heap_pages` is read exactly where the shell appends it,
+# after `pending_io` (apps/shell/src/commands/processes.rs:163-169). `counters()`
+# in cases.py keeps reading its own four fields and is not changed.
+MEM = re.compile(r'ticks=(\d+) free_frames=(\d+) process_slots=(\d+) processes=(\d+) '
+                 r'channels=(\d+) pending_io=(\d+) heap_pages=(\d+)')
+MEM_FIELDS = ('ticks', 'free_frames', 'process_slots', 'processes', 'channels',
+              'pending_io', 'heap_pages')
+# The per-process page budget the kernel enforces (kernel/src/process/heap.rs:19).
+# The stress step reports the limit it was told, so this is a cross-check of the
+# kernel policy and never the source of the expectation.
+PROCESS_PAGES = 64
 
 
 # --- Reply decoding ----------------------------------------------------------
 # `actor-status PID` prints the supervisor phase plus child reply words 0..4 as
-# status,value,other,control_denied,version (apps/supervisor/src/sessions.rs:149
-# and apps/shell/src/commands/takeover.rs:30). Each step names those five words
-# differently, so the four layouts of docs/TASKS.md:74-79 are decoded once here.
+# status,value,other,control_denied,version (apps/supervisor/src/sessions.rs:101-123
+# and apps/shell/src/commands/takeover.rs:30-45). Each step names those five words
+# differently, so the four layouts of docs/TASKS.md:88-93 are decoded once here,
+# plus the fifth layout of the stress step (apps/utility/src/tasks.rs:24,
+# apps/utility/src/tasks/stress.rs:12-24), which docs/TASKS.md does not list.
 
 def reply_step(v):
     return {'error': v['status'], 'cursor': v['value'], 'total': v['other'],
@@ -74,6 +93,17 @@ def reply_status(v):
 def reply_recover(v):
     return {'error': v['status'], 'recovered': v['value'], 'journal': v['other'],
             'task': v['control_denied'], 'version': v['version']}
+
+
+def reply_stress(v):
+    """`[error, peak_pages, full_observed, pages_after_release, limit]`.
+
+    `pages_after_release` is the whole process, not the stress heap: a child that
+    is holding a plan still owns the candidate page when the walk releases
+    everything it mapped (apps/utility/src/tasks/stress.rs:16-24).
+    """
+    return {'error': v['status'], 'peak': v['value'], 'full': v['other'],
+            'after': v['control_denied'], 'limit': v['version']}
 
 
 # --- Guest command helpers ---------------------------------------------------
@@ -106,7 +136,7 @@ def apply_cut(uart, child, cut, error=0):
 
     It is the same child action with the selector added, so it keeps the apply's
     own delivery window and is polled exactly like an ordinary apply
-    (apps/supervisor/src/tasks_owner.rs:71-81).
+    (apps/supervisor/src/tasks_owner.rs:75-81).
     """
     uart.command(f'tasks-owner-apply-cut {child} {cut}', 'actor state=pending')
     return reply_apply(actor_result(uart, child, error))
@@ -131,6 +161,76 @@ def failure(uart, command, expected):
     assert [line for line in output.splitlines() if line.startswith('error:')] == ['error: ' + expected]
     uart.command('status', '1')
     return output
+
+
+def mem(uart):
+    """The complete `mem` line, including the heap total `counters()` ignores.
+
+    The whole line is matched in order, so a `heap_pages` that moved, went
+    missing or stopped being the last field is a failure rather than a silently
+    absent assertion.
+    """
+    output = uart.command('mem')
+    match = MEM.search(output)
+    assert match, ('the mem line does not carry heap_pages after pending_io', output)
+    return dict(zip(MEM_FIELDS, (int(group) for group in match.groups())))
+
+
+def walked(before, reply, after, expected_after):
+    """Everything one completed `tasks-heap-stress` must satisfy.
+
+    The child's reply is checked against what the kernel says from outside: the
+    page total the shell reports is the one the walk started from, and the free
+    frames come back, because unmapping the window also reclaims the tables that
+    window needed (docs/MEMORY.md:80-86,88-101).
+    """
+    assert reply['full'] == 1, ('the per-process budget never refused a growth', reply)
+    assert reply['limit'] == PROCESS_PAGES, ('the kernel page budget moved', reply)
+    # The peak is the whole process, so the candidate page of a held plan counts
+    # towards the same budget: the peak is the limit either way.
+    assert reply['peak'] == reply['limit'], \
+        ('the peak this process held is the whole budget', reply)
+    assert reply['after'] == expected_after, \
+        ('pages still mapped after the walk released its heap', reply, expected_after)
+    # `error` is 0 only when the refusal was observed and everything the walk
+    # mapped was released (apps/utility/src/tasks/stress.rs:49-65).
+    assert reply['error'] == 0, reply
+    assert after['heap_pages'] == before['heap_pages'] == expected_after, (before, after, reply)
+    assert after['free_frames'] == before['free_frames'], \
+        ('frames of the released window did not come back', before, after)
+    return {'reply': reply, 'heap_pages': before['heap_pages'],
+            'free_frames': {'before': before['free_frames'], 'after': after['free_frames']}}
+
+
+def stress(uart, child, expected_after):
+    """One `act PID tasks-heap-stress`, polled to completion and checked."""
+    before = mem(uart)
+    reply = reply_stress(act(uart, child, 'tasks-heap-stress'))
+    return walked(before, reply, mem(uart), expected_after)
+
+
+def stress_responsive(uart, child, expected_after):
+    """The same walk, with the shell used while the child is inside it.
+
+    Catching the pending state is a race this harness does not control: the child
+    walks the whole budget in less time than one UART round trip usually takes.
+    Whether it was caught is recorded either way; what is required is that the
+    shell answers its own commands normally while the child is exhausting its
+    budget, and that the completed reply is still the expected one.
+    """
+    before = mem(uart)
+    uart.command(f'act {child} tasks-heap-stress', 'actor state=pending')
+    caught = 'actor state=pending' in uart.command(f'actor-status {child}')
+    during = mem(uart)
+    listing = uart.command('ps')
+    assert re.search(rf'(?m)^{child} ', listing), ('the stressed child is missing from ps', listing)
+    # One ordinary command; `command` fails the case on any `error:` line.
+    uart.command('pwd')
+    reply = reply_stress(actor_result(uart, child, 0))
+    evidence = walked(before, reply, mem(uart), expected_after)
+    evidence.update(pending_observed=caught, heap_pages_during=during['heap_pages'],
+                    free_frames_during=during['free_frames'])
+    return evidence
 
 
 def stat(uart, path):
@@ -303,7 +403,7 @@ def sequence(uart, child, results):
     chunk = step(uart, child, f'tasks-owner-chunk {child} 41', SEQUENCE)
     assert chunk == {'error': SEQUENCE, 'cursor': 0, 'total': 0, 'phase': FINISHED}, chunk
     # A non-canonical summary (version 0) is refused by the supervisor word
-    # translation, apps/supervisor/src/tasks_owner.rs:30-34; the child never sees it.
+    # translation, apps/supervisor/src/tasks_owner.rs:27-33; the child never sees it.
     before = query(uart, child)
     failure(uart, f'tasks-owner-begin {child} 40 2 0 42 1', 'service invalid request')
     assert query(uart, child) == before, 'a refused owner step changed the child'
@@ -319,7 +419,7 @@ def denied(uart, data, child, document, results):
     fence(uart, child, 'access=fenced')
     before, _ = snapshot(data)
     # The refusal happens in the guard, before anything is retained, so the reply
-    # carries the code alone (apps/utility/src/tasks/report.rs:79-82).
+    # carries the code alone (apps/utility/src/tasks/report.rs:80-83).
     result = apply(uart, child, REVOKED)
     assert result == {'error': REVOKED, 'task': 0, 'journal': 0, 'applied': 0, 'version': 0}, result
     revoked = query(uart, child, REVOKED)
@@ -386,6 +486,10 @@ def cuts(uart, data, ids, document, results):
     # must resolve it: the phase is still ready and the bytes are still held.
     assert query(uart, child) == {'error': 0, 'phase': READY, 'cursor': length,
                                   'total': length, 'pending': key}
+    # Held bytes are a mapped page, so a non-conclusive refusal is visible from
+    # outside as well: this client is still holding its candidate.
+    kept = mem(uart)
+    assert kept['heap_pages'] == 1, ('a kept candidate is a kept page', kept)
     # The unresolved intent blocks the next mutation, even a freshly planned one.
     hand(uart, child, 'add', '"Blocked"', added(document, 'Blocked'))
     blocked = apply(uart, child, PENDING)
@@ -397,8 +501,24 @@ def cuts(uart, data, ids, document, results):
     assert snapshot(data)[0] == before, 'recovery replayed or rebased an absent outcome'
     assert step(uart, child, f'tasks-owner-forget {child} {key}')['error'] == 0
     state(data, document, records=0)
+    # Resolving the intent releases nothing: the plan blocked by it is still
+    # held, so the page is too, and only a concluded apply gives it back.
+    forgotten = mem(uart)
+    assert forgotten['heap_pages'] == 1, ('a forget released the candidate page', forgotten)
+    released = added(document, 'Released')
+    hand(uart, child, 'add', '"Released"', released)
+    assert mem(uart)['heap_pages'] == 1
+    resumed = apply(uart, child)
+    assert resumed['applied'] == 1, ('the client works again once nothing blocks it', resumed)
+    assert query(uart, child)['phase'] == FINISHED
+    concluded = mem(uart)
+    assert concluded['heap_pages'] == 0, ('a concluded apply kept its page', concluded)
+    state(data, released, records=1)
     cleanup(uart, child)
-    observed['prepared'] = {'apply': prepared, 'blocked': blocked, 'recover': unresolved, 'key': key}
+    observed['prepared'] = {'apply': prepared, 'blocked': blocked, 'recover': unresolved, 'key': key,
+                            'heap_pages': {'kept': kept['heap_pages'],
+                                           'after_forget': forgotten['heap_pages'],
+                                           'after_apply': concluded['heap_pages']}}
 
     # Cut 2: the replacement is submitted and its reply is discarded.
     uart.command('rotate-receipts')
@@ -553,7 +673,7 @@ def death(uart, data, ids, document, results):
             # Forgetting is deliberate and exact: the key must be the retained one
             # (crates/tasks-client/src/journal.rs:148-153).
             # An unresolved intent is not conclusive, so the blocked plan is still
-            # held (apps/utility/src/tasks/owner.rs:117-124).
+            # held (apps/utility/src/tasks/owner.rs:287-295).
             wrong = step(uart, successor, f'tasks-owner-forget {successor} {key + 1}', PENDING)
             assert wrong['phase'] == READY, wrong
             state(data, document, pending=True, records=record['receipts'])
@@ -582,7 +702,7 @@ def capacity(uart, data, ids, results):
     hand(uart, child, 'add', '"Gamma"', overflow)
     result = apply(uart, child, FULL)
     # The refusal came from the submission, after the intent was retained, so the
-    # reply still names the key it retained (apps/utility/src/tasks/report.rs:79-82).
+    # reply still names the key it retained (apps/utility/src/tasks/report.rs:80-83).
     assert result['applied'] == 0 and result['journal'] != 0 and result['version'] == 0, result
     # Full is conclusive, so the intent this attempt retained was cleared again.
     full = state(data, document, records=2)
@@ -592,6 +712,80 @@ def capacity(uart, data, ids, results):
     cleanup(uart, child)
     results['capacity'] = result
     return document
+
+
+def heap(uart, data, document, results):
+    """The candidate page over one hand-off: 0 -> 1 -> 0, from both sides.
+
+    `mem` reports the heap pages of the whole system and the stress step reports
+    this process's own, so the same page is counted from outside and from inside.
+    The last plan of the case is deliberately still held when the child is
+    killed, which is what makes reaping the thing that returns the page.
+    """
+    uart.command('rotate-receipts')
+    write_document(uart, DOC, document)
+    # Nothing has been handed to anybody yet, and no other product application
+    # maps a heap page (only apps/utility and apps/sdk-probe use the SDK heap).
+    before_launch = mem(uart)
+    assert before_launch['heap_pages'] == 0, \
+        ('a heap page exists before any hand-off', before_launch)
+    child = launch(uart)
+    launched = mem(uart)
+    assert query(uart, child)['phase'] == IDLE
+    assert launched['heap_pages'] == 0, \
+        ('an idle child maps a page it has no bytes for', launched)
+    # The same claim from the child itself: it releases everything it maps and
+    # ends the walk with nothing of its own.
+    idle_walk = stress(uart, child, 0)
+
+    # One hand-off announces, collects and validates the plan; the page it lives
+    # in is then the only one in the system.
+    candidate = added(document, 'Heap')
+    hand(uart, child, 'add', '"Heap"', candidate)
+    assert query(uart, child)['phase'] == READY
+    held = mem(uart)
+    assert held['heap_pages'] == 1, ('a held plan is exactly one mapped page', held)
+    # Exhaustion while that plan is held: the shell stays usable, the walk still
+    # reaches the budget, and the candidate page is what the process keeps.
+    held_walk = stress_responsive(uart, child, 1)
+    assert mem(uart)['heap_pages'] == held['heap_pages'], 'the stress changed what the plan holds'
+
+    result = apply(uart, child)
+    assert result['applied'] == 1, ('the plan committed after the stress', result)
+    assert query(uart, child)['phase'] == FINISHED
+    concluded = mem(uart)
+    assert concluded['heap_pages'] == 0, \
+        ('the concluded apply kept its candidate page', concluded)
+    state(data, candidate, records=1)
+    # A finished client holds nothing, which its own walk confirms again.
+    finished_walk = stress(uart, child, 0)
+
+    # A plan held at the moment the child dies: its pages stay accounted for
+    # while the process record exists, and reaping is what returns them
+    # (docs/MEMORY.md:80-91).
+    hand(uart, child, 'add', '"Killed"', added(candidate, 'Killed'))
+    assert mem(uart)['heap_pages'] == 1
+    uart.command(f'kill {child}', 'ok')
+    exited(uart, child, 3, 0)
+    killed = mem(uart)
+    assert killed['heap_pages'] == 1, \
+        ('an exited but unreaped process stopped counting its pages', killed)
+    uart.command(f'reap {child}', 'exit_kind=3 code=0')
+    reaped = mem(uart)
+    assert reaped['heap_pages'] == before_launch['heap_pages'] == 0, (before_launch, reaped)
+    # The killed plan was never submitted, so the committed bytes are the ones
+    # the apply above published.
+    state(data, candidate, records=1)
+    results['heap'] = {
+        'sequence': {'before_launch': before_launch['heap_pages'],
+                     'launched': launched['heap_pages'], 'held': held['heap_pages'],
+                     'applied': concluded['heap_pages'], 'exited_unreaped': killed['heap_pages'],
+                     'reaped': reaped['heap_pages']},
+        'idle_walk': idle_walk, 'held_walk': held_walk, 'finished_walk': finished_walk,
+        'free_frames': {'launched': launched['free_frames'], 'held': held['free_frames'],
+                        'applied': concluded['free_frames'], 'reaped': reaped['free_frames']},
+        'apply': result, 'page_limit': idle_walk['reply']['limit']}
+    return candidate
 
 
 def exercise(uart, data):
@@ -614,6 +808,9 @@ def exercise(uart, data):
     # which nothing chose where the client stopped.
     death(uart, data, ids, document, results)
     document = capacity(uart, data, ids, results)
+    # Memory is the last thing exercised: the candidate bytes of this child are
+    # mapped pages, so one hand-off and one apply are also a heap lifecycle.
+    document = heap(uart, data, document, results)
     # Leave the volume as this suite found it: no retained outcome, no fixture.
     uart.command('rotate-receipts')
     for path in (DOC, PEER, JOURNAL, SHELL_RECORD):
@@ -671,13 +868,15 @@ def normal(uart, data):
     """Ordinary image: no cut exists at all, and the hand-off still works.
 
     This is the counterpart of the acceptance run: it proves the failure cuts are
-    absent from an ordinary build rather than merely unused by it.
+    absent from an ordinary build rather than merely unused by it. The heap is
+    the other way around: `heap_pages` and the stress step belong to every build,
+    so the page lifecycle and the budget are required here too.
     """
     startup = ready(uart)
     baseline, ids = setup(uart, data)
     unknown = 'unknown command; type help'
     # Both acceptance commands are compiled in by the `tasks-acceptance` feature
-    # alone (apps/shell/src/commands/mod.rs:101,127), so an ordinary shell does
+    # alone (apps/shell/src/commands/mod.rs:101-102,127-128), so an ordinary shell does
     # not have them: the refusal is "unknown command", not an invalid argument.
     failure(uart, 'tasks-owner-apply-cut 4 1', unknown)
     failure(uart, f'tasks-write-acceptance prepared add {DOC} "Never submitted"', unknown)
@@ -686,7 +885,30 @@ def normal(uart, data):
     document, add = applied_effect(uart, data, ids, child, DOCUMENT, 'add',
                                    '"Ship Rust"', 'Ship Rust', 1)
     document, done = applied_effect(uart, data, ids, child, document, 'done', '7', '7', 2)
+    # The heap is not part of the acceptance profile: the `mem` line carries
+    # `heap_pages` and `TASKS_HEAP_STRESS` is admitted by role alone
+    # (apps/supervisor/src/actor.rs:33,69), so the ordinary image must show the
+    # same lifecycle and the same budget.
+    # Two retained outcomes are already held, and a third tracked write would be
+    # refused with `Full`, so the slots are freed before the apply below.
+    uart.command('rotate-receipts')
+    idle = mem(uart)
+    assert idle['heap_pages'] == 0, ('a concluded client still holds a page', idle)
+    idle_walk = stress(uart, child, 0)
+    candidate = added(document, 'Heap')
+    hand(uart, child, 'add', '"Heap"', candidate)
+    held = mem(uart)
+    assert held['heap_pages'] == 1, ('a held plan is exactly one mapped page', held)
+    held_walk = stress(uart, child, 1)
+    applied = apply(uart, child)
+    assert applied['applied'] == 1, applied
+    assert query(uart, child)['phase'] == FINISHED
+    concluded = mem(uart)
+    assert concluded['heap_pages'] == 0, ('the concluded apply kept its page', concluded)
+    document = candidate
+    state(data, document, records=1)
     cleanup(uart, child)
+    assert mem(uart)['heap_pages'] == 0
     uart.command('rotate-receipts')
     for path in (DOC, PEER, JOURNAL):
         uart.command(f'rm {path}')
@@ -694,7 +916,11 @@ def normal(uart, data):
     return {'verified': True, 'rejected': {'tasks-owner-apply-cut': unknown,
                                            'tasks-write-acceptance': unknown},
             'startup': startup, 'add': add, 'done': done, 'document': document,
-            'baseline': baseline}
+            'baseline': baseline,
+            'heap': {'sequence': {'idle': idle['heap_pages'], 'held': held['heap_pages'],
+                                  'applied': concluded['heap_pages']},
+                     'idle_walk': idle_walk, 'held_walk': held_walk, 'apply': applied,
+                     'page_limit': idle_walk['reply']['limit']}}
 
 
 def verify_normal(image, output):

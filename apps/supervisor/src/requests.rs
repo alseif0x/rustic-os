@@ -52,7 +52,9 @@ impl State {
         match w[0] {
             s::INFO => {
                 let r = call([k::INFO, 0, 0, 0, 0, 0, 0, 0]).map_err(|_| 4u64)?;
-                Ok([0, r[1], r[2], r[3], r[4], r[5], r[6], 0])
+                // Word 7 is the kernel's heap-page total; it is forwarded as
+                // reported, since the shell reply has no word left to shift.
+                Ok([0, r[1], r[2], r[3], r[4], r[5], r[6], r[7]])
             }
             s::PROCESS => {
                 let r = call([k::PROCESS, w[1], 0, 0, 0, 0, 0, 0]).map_err(|_| 1u64)?;

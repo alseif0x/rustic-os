@@ -26,7 +26,10 @@ def stat(text):
 
 
 def _memory(text):
-    keys = ("ticks", "free_frames", "process_slots", "processes", "channels", "pending_io")
+    # `heap_pages` is appended by the shell after `pending_io`; the equality rule
+    # below then covers it like every other non-clock counter.
+    keys = ("ticks", "free_frames", "process_slots", "processes", "channels", "pending_io",
+            "heap_pages")
     values = _line(text, " ".join(f"{key}={NUMBER}" for key in keys))
     return dict(zip(keys, map(int, values)))
 

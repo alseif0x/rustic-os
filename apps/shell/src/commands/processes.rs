@@ -164,8 +164,8 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             exact(a, 1)?;
             let r = s.service([p::INFO, 0, 0, 0, 0, 0, 0, 0])?;
             output::format(format_args!(
-                "ticks={} free_frames={} process_slots={} processes={} channels={} pending_io={}\r\n",
-                r[1], r[2], r[3], r[4], r[5], r[6]
+                "ticks={} free_frames={} process_slots={} processes={} channels={} pending_io={} heap_pages={}\r\n",
+                r[1], r[2], r[3], r[4], r[5], r[6], r[7]
             ));
         }
         _ => return Err(Error::Unknown),
