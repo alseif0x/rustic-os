@@ -29,6 +29,25 @@ pub(super) fn run() -> Result<(), String> {
             "--locked",
         ],
         &[
+            "test",
+            "-p",
+            "rustic-tasks-client",
+            "--features",
+            "tasks-acceptance",
+            "--locked",
+        ],
+        // The acceptance feature implies `native`, whose binary cannot build for
+        // the host, so only the library's gated tests run here.
+        &[
+            "test",
+            "-p",
+            "rustic-supervisor",
+            "--features",
+            "tasks-acceptance",
+            "--lib",
+            "--locked",
+        ],
+        &[
             "build",
             "-p",
             "rustic-kernel",
@@ -102,6 +121,38 @@ pub(super) fn run() -> Result<(), String> {
             "warnings",
         ],
     )?;
+    // The owner-client library has no `native` feature: it is linted for the
+    // guest target on its own, in both of its feature profiles.
+    command::cargo(
+        root,
+        &[
+            "clippy",
+            "-p",
+            "rustic-tasks-client",
+            "--target",
+            "x86_64-unknown-none",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    )?;
+    command::cargo(
+        root,
+        &[
+            "clippy",
+            "-p",
+            "rustic-tasks-client",
+            "--features",
+            "tasks-acceptance",
+            "--target",
+            "x86_64-unknown-none",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    )?;
     command::cargo(
         root,
         &[
@@ -110,6 +161,8 @@ pub(super) fn run() -> Result<(), String> {
             "rustic-shell",
             "-p",
             "rustic-supervisor",
+            "-p",
+            "rustic-utility",
             "--features",
             "native,tasks-acceptance",
             "--target",

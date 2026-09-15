@@ -15,6 +15,7 @@ pub(super) fn grant(s: &mut Server, write: bool) -> Caller {
                 peer: 10,
                 endpoint: 1,
                 scope: 4,
+                second: 0,
                 rights: INSPECT_RIGHT | if write { WRITE_RIGHT } else { 0 },
                 generation: 0,
                 expires: 0,

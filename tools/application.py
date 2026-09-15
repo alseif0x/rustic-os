@@ -10,6 +10,10 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = {"schema", "identity", "executable", "version", "process_abi", "ipc_version", "requests"}
 CAPABILITIES = {"ipc": 1, "diagnostic": 2, "block": 4, "console": 8, "control": 16}
+# The applications whose explicit failure cuts exist in an acceptance build only:
+# the two owner clients' command surface (shell, utility) and the supervisor
+# request that selects a cut for the second one.
+ACCEPTANCE = ("shell", "supervisor", "utility")
 
 
 def encode(document):
@@ -42,7 +46,7 @@ def build_one(root, env, offline, name, manifest_name, tasks_acceptance=False):
         raise ValueError("manifest text exceeds 4096 bytes")
     document = tomllib.loads(descriptor.read_text())
     manifest = encode(document)
-    features = "native,tasks-acceptance" if tasks_acceptance and name in ("shell", "supervisor") else "native"
+    features = "native,tasks-acceptance" if tasks_acceptance and name in ACCEPTANCE else "native"
     command = ["cargo", "build", "-p", "rustic-" + name, "--features", features,
                "--target", "x86_64-unknown-none", "--release", "--locked"]
     if offline:

@@ -1,6 +1,33 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Owner operation waiting and monotonic adoption of fresh file bindings.
 use super::session::Session;
+/// The owner client only fails with a service or file refusal here; the rest of
+/// the shell vocabulary cannot reach it through these two exchanges.
+fn owner(error: super::commands::Error) -> rustic_tasks_client::Error {
+    match error {
+        super::commands::Error::File(error) => rustic_tasks_client::Error::File(error),
+        super::commands::Error::Service(code) => rustic_tasks_client::Error::Service(code),
+        _ => rustic_tasks_client::Error::Service(4),
+    }
+}
+/// The shell lends its authenticated file client to the shared owner client;
+/// binding and rebinding stay the shell's decision.
+impl rustic_tasks_client::Authority for Session {
+    type Progress = super::progress::Console;
+    fn files(&mut self) -> &mut rustic_sdk::files::Client<Self::Progress> {
+        &mut self.files
+    }
+}
+/// Only the shell may address the supervisor, so only the shell lends the relay
+/// that planning an edit needs.
+impl rustic_tasks_client::Relay for Session {
+    fn control(&mut self, words: [u64; 8]) -> Result<[u64; 8], rustic_tasks_client::Error> {
+        self.request(words).map_err(owner)
+    }
+    fn finish(&mut self, reply: [u64; 8]) -> Result<[u64; 8], rustic_tasks_client::Error> {
+        self.finish_job(reply).map_err(owner)
+    }
+}
 impl Session {
     pub fn request(&mut self, w: [u64; 8]) -> Result<[u64; 8], super::commands::Error> {
         let r = self

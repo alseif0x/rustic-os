@@ -42,6 +42,7 @@ fn grant(s: &mut Server, slot: usize, subject: u64, scope: u32, rights: u8) -> C
                 peer,
                 endpoint: 1 + slot as u64,
                 scope,
+                second: 0,
                 rights,
                 generation: 0,
                 expires: 0,

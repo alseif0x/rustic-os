@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Only the private bootstrap channel invokes these administrative operations.
 use rustic_file_service::{Grant, Server};
-use rustic_sdk::abi::files::{Error, GRANT, REVOKE, STATUS};
+use rustic_sdk::abi::files::{Error, GRANT, GRANT_SECOND_SCOPE, REVOKE, STATUS};
 pub fn dispatch(
     server: &mut Server,
     disk: &mut impl rustic_fs::Disk,
@@ -19,11 +19,21 @@ pub fn dispatch(
                         peer: w[2],
                         endpoint: w[3],
                         scope: u32::try_from(w[4]).map_err(|_| Error::Invalid)?,
+                        second: 0,
                         rights: u8::try_from(w[5]).map_err(|_| Error::Invalid)?,
                         generation: 0,
                         expires: w[6],
                         subject: w[7],
                     },
+                )? as u64;
+            }
+            // Applies to the grant just installed in this slot: one added object
+            // scope, no change of subject, peer or rights.
+            x if x == GRANT_SECOND_SCOPE as u64 && w[4..].iter().all(|x| *x == 0) => {
+                r[1] = server.extend(
+                    slot,
+                    u32::try_from(w[2]).map_err(|_| Error::Invalid)?,
+                    u32::try_from(w[3]).map_err(|_| Error::Invalid)?,
                 )? as u64;
             }
             x if x == REVOKE as u64 && w[2..].iter().all(|x| *x == 0) => {
@@ -49,6 +59,7 @@ pub fn dispatch(
                         peer: w[3],
                         endpoint: w[4],
                         scope: u32::try_from(w[5]).map_err(|_| Error::Invalid)?,
+                        second: 0,
                         rights: u8::try_from(w[6]).map_err(|_| Error::Invalid)?,
                         expires: w[7],
                         generation: 0,

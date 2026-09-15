@@ -2,6 +2,19 @@
 //! Two utility slots, explicit scopes and fresh generations, no inherited shell authority.
 use super::services::*;
 use rustic_sdk::{abi::supervisor as s, runtime::abi as k};
+/// Roles whose control endpoint carries owner-stepped actor replies. Those
+/// replies belong to `actor_state`; the idle-endpoint branch must not absorb
+/// them. Any other role has no owner-stepped action at all.
+pub fn actor_role(role: u64) -> bool {
+    matches!(
+        role,
+        s::SESSION
+            | s::HELPER
+            | s::ADMISSION_SESSION
+            | s::PRIVATE_ADMISSION_SESSION
+            | s::TASKS_OWNER
+    )
+}
 pub struct Child {
     pub pid: u64,
     pub control: rustic_sdk::rpc::Rpc,
@@ -25,11 +38,7 @@ impl State {
             if child.closed {
                 continue;
             }
-            if matches!(
-                child.role,
-                s::SESSION | s::HELPER | s::ADMISSION_SESSION | s::PRIVATE_ADMISSION_SESSION
-            ) && child.control.pending()
-            {
+            if actor_role(child.role) && child.control.pending() {
                 match child.control.poll() {
                     Ok(Some(message)) => {
                         if let Ok(w) = k::decode(message.payload()) {

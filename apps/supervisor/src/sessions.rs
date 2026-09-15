@@ -1,10 +1,32 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Owner control of two deterministic actors. File policy remains in the file service.
+//! Owner control of the deterministic actors, including the owner-stepped
+//! tasks child. File policy remains in the file service.
+use super::children::actor_role;
 use super::services::{State, call};
 use rustic_sdk::{
     abi::supervisor as s,
     runtime::{self, abi as k},
 };
+
+/// Window for one owner-stepped action that performs a single exchange.
+const STEP_TICKS: u64 = 200;
+/// Window for a tasks action that performs several file exchanges before it
+/// answers; it matches the owner job-status wait used by the tasks clients.
+const EXCHANGE_TICKS: u64 = 1100;
+
+/// Whether an actor action belongs to the persistent tasks-owner protocol.
+fn tasks_action(action: u64) -> bool {
+    matches!(
+        action,
+        s::actor::TASKS_BEGIN
+            | s::actor::TASKS_EDIT
+            | s::actor::TASKS_CHUNK
+            | s::actor::TASKS_APPLY
+            | s::actor::TASKS_STATUS
+            | s::actor::TASKS_RECOVER
+            | s::actor::TASKS_FORGET
+    )
+}
 
 impl State {
     pub(super) fn helper(&mut self, parent: u64, scope: u32, other: u32) -> Result<[u64; 8], u64> {
@@ -41,10 +63,21 @@ impl State {
                 | s::actor::MISSION_SCHEDULE
                 | s::actor::MISSION_INSPECT
                 | s::actor::MISSION_CANCEL
+                | s::actor::TASKS_APPLY
+                | s::actor::TASKS_STATUS
+                | s::actor::TASKS_RECOVER
         ) {
             return Err(1);
         }
+        // Which of these verbs the addressed child may answer is decided once,
+        // by role, in `actor_words`.
         self.actor_words(pid, [action, 0, 0, 0, 0, 0, 0, 0])
+    }
+    /// Deliver one owner tasks request. The word translation and its shape
+    /// checks belong to the library; this keeps only identity and delivery.
+    pub(super) fn tasks_owner(&mut self, w: [u64; 8]) -> Result<[u64; 8], u64> {
+        let words = rustic_supervisor::tasks_owner::translate(w)?;
+        self.actor_words(w[1], words)
     }
     pub(super) fn admission_actor(&mut self, w: [u64; 8]) -> Result<[u64; 8], u64> {
         use rustic_sdk::abi::files::{admission as a, lifecycle};
@@ -75,27 +108,29 @@ impl State {
         )
     }
     fn actor_words(&mut self, pid: u64, words: [u64; 8]) -> Result<[u64; 8], u64> {
+        let tasks = tasks_action(words[0]);
         let child = self
             .children
             .iter_mut()
             .flatten()
-            .find(|c| {
-                c.pid == pid
-                    && matches!(
-                        c.role,
-                        s::SESSION
-                            | s::HELPER
-                            | s::ADMISSION_SESSION
-                            | s::PRIVATE_ADMISSION_SESSION
-                    )
-            })
+            .find(|c| c.pid == pid && actor_role(c.role))
             .ok_or(2u64)?;
+        // Single place where action and role are checked together: the tasks
+        // owner answers only the tasks protocol, and no other role answers it.
+        if tasks != (child.role == s::TASKS_OWNER) {
+            return Err(1);
+        }
         if child.control.pending() {
             return Err(3);
         }
         child.control.begin(&k::encode(words)).map_err(|_| 4u64)?;
         child.actor_state = 1;
-        child.actor_deadline = runtime::clock().saturating_add(200);
+        let ticks = match words[0] {
+            // These two perform several file exchanges before they answer.
+            s::actor::TASKS_APPLY | s::actor::TASKS_RECOVER => EXCHANGE_TICKS,
+            _ => STEP_TICKS,
+        };
+        child.actor_deadline = runtime::clock().saturating_add(ticks);
         child.report = [0; 7];
         Ok([0, 1, 0, 0, 0, 0, 0, 0])
     }
@@ -104,16 +139,7 @@ impl State {
             .children
             .iter()
             .flatten()
-            .find(|c| {
-                c.pid == pid
-                    && matches!(
-                        c.role,
-                        s::SESSION
-                            | s::HELPER
-                            | s::ADMISSION_SESSION
-                            | s::PRIVATE_ADMISSION_SESSION
-                    )
-            })
+            .find(|c| c.pid == pid && actor_role(c.role))
             .ok_or(2u64)?;
         let phase = if c.actor_state == 1 && runtime::clock() >= c.actor_deadline {
             3

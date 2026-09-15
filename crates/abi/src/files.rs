@@ -42,6 +42,11 @@ pub mod read;
 pub mod recovery;
 pub mod reference;
 pub const GRANT: u8 = 32;
+/// Private administrative follow-up to GRANT: attach the one additional object
+/// scope of the grant just installed, naming its slot and generation. It never
+/// changes subject, peer or rights. Words: [op, slot, generation, object, 0,0,0,0];
+/// the reply echoes the unchanged generation.
+pub const GRANT_SECOND_SCOPE: u8 = 38;
 pub const REVOKE: u8 = 33;
 pub const STATUS: u8 = 34;
 pub const READ_RIGHT: u8 = 1;

@@ -23,6 +23,7 @@ fn authorize(
             peer: slot as u64 + 10,
             endpoint: slot as u64 + 1,
             scope,
+            second: 0,
             rights,
             subject,
             expires,

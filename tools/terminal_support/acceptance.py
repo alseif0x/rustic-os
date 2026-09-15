@@ -10,6 +10,7 @@ from .connection import Connection
 from .cases import exercise
 from .tasks_cases import exercise as tasks_exercise, after_reboot as tasks_after_reboot
 from .tasks_lifecycle import exercise as tasks_lifecycle_exercise
+from .tasks_owner import exercise as tasks_owner_exercise
 from .tasks_preview import exercise as tasks_preview_exercise, after_reboot as tasks_preview_after_reboot
 from .storage_cases import exercise as storage_exercise
 from .failure import preserve_failure
@@ -55,6 +56,11 @@ def verify(image, timeout=60, output=None):
                                 tasks = tasks_exercise(uart, data)
                                 tasks['lifecycle'] = tasks_lifecycle_exercise(uart, data)
                                 tasks['preview'] = tasks_preview_exercise(uart, data)
+                                # The second semantic client mutates, so it runs
+                                # before the storage, prevention and negotiation
+                                # fixtures and returns the volume to them with no
+                                # retained outcome and no file of its own.
+                                tasks['owner'] = tasks_owner_exercise(uart, data)
                                 # Isolated boot receives only the reviewed kernel ELF.
                                 # Per-app hashes are separate build artifacts there.
                                 tasks['application'] = metadata.get('native_applications', {}).get('tasks')

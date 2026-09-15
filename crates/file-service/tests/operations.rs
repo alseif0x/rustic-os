@@ -12,6 +12,7 @@ fn authorize(server: &mut Server, slot: usize, scope: u32, rights: u8, subject: 
                 peer: slot as u64 + 10,
                 endpoint: slot as u64 + 1,
                 scope,
+                second: 0,
                 rights,
                 generation: 0,
                 expires: 0,

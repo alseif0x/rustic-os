@@ -7,6 +7,10 @@ pub struct Grant {
     pub peer: u64,
     pub endpoint: u64,
     pub scope: u32,
+    /// Optional second object scope reachable with the same rights; zero means none.
+    /// It never widens `scope`: both subtrees are checked independently, it must be
+    /// disjoint from `scope`, and derivation always drops it.
+    pub second: u32,
     pub rights: u8,
     pub generation: u32,
     pub expires: u64,
@@ -26,10 +30,19 @@ impl Grant {
         }
         Ok(())
     }
+    /// Reachability through the optional second scope alone. The primary scope is
+    /// checked separately so that neither scope can extend the other. A removed
+    /// second scope reaches nothing; it is not retained like `scope == id`.
+    fn beside(&self, volume: &Volume, id: u32) -> bool {
+        self.second != 0 && volume.within(id, self.second)
+    }
     pub(super) fn inspect(&self, volume: &Volume, id: u32) -> Result<(), Error> {
         if self.subject == 0
             || self.rights & INSPECT_RIGHT == 0
-            || !(self.scope == 0 || self.scope == id || volume.within(id, self.scope))
+            || !(self.scope == 0
+                || self.scope == id
+                || volume.within(id, self.scope)
+                || self.beside(volume, id))
         {
             Err(Error::Denied)
         } else {
@@ -39,7 +52,9 @@ impl Grant {
     pub(super) fn access(&self, volume: &Volume, id: u32, write: bool) -> Result<(), Error> {
         let right = if write { WRITE_RIGHT } else { READ_RIGHT };
         if self.rights & right == 0
-            || !(id == 0 && self.scope == 0 && !write || volume.within(id, self.scope))
+            || !(id == 0 && self.scope == 0 && !write
+                || volume.within(id, self.scope)
+                || self.beside(volume, id))
         {
             Err(Error::Denied)
         } else {

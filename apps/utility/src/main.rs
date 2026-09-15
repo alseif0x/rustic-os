@@ -40,6 +40,17 @@ fn run(files: u64, control: u64, peer: u64) -> u64 {
             words[2] as u32,
         );
     }
+    // The second native tasks client is a role of its own: it answers only the
+    // owner-stepped tasks protocol, over its own persistent loop.
+    if words[0] == rustic_sdk::abi::supervisor::TASKS_OWNER {
+        return rustic_utility::tasks::run(
+            &mut client,
+            &endpoint,
+            message.sender(),
+            words[1] as u32,
+            words[2] as u32,
+        );
+    }
     let report = actions::run(&mut client, words);
     let message =
         rustic_sdk::ipc::Message::new(0, &rustic_sdk::abi::runtime::encode(report)).unwrap();

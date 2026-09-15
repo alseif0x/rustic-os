@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Owner-client recovery record. It stores native app output, not edit policy.
+//!
+//! The encoding is canonical: a decoded record must re-encode to the same bytes,
+//! so a truncated or padded record is invalid rather than interpreted.
 use rustic_sdk::abi::files::{
     Error,
     operation::{Key, Operation, Replacement, Retry},
@@ -20,12 +23,12 @@ const _: () = assert!(
 
 /// The bytes become immutable before submission. The journal's committed
 /// metadata version, allocated by the volume, supplies its instance/key.
-pub struct Intent {
+pub(crate) struct Intent {
     bytes: [u8; 1024],
     length: usize,
 }
 impl Intent {
-    pub fn new(
+    pub(crate) fn new(
         refs: References,
         version: Version,
         epoch: Epoch,
@@ -66,7 +69,7 @@ impl Intent {
         b[HEADER..value.length].copy_from_slice(candidate);
         Ok(value)
     }
-    pub fn decode(bytes: &[u8]) -> Result<Self, Error> {
+    pub(crate) fn decode(bytes: &[u8]) -> Result<Self, Error> {
         if bytes.len() < HEADER
             || bytes.len() > 1024
             || &bytes[..8] != MAGIC
@@ -97,16 +100,16 @@ impl Intent {
         }
         Ok(result)
     }
-    pub fn encoded(&self) -> &[u8] {
+    pub(crate) fn encoded(&self) -> &[u8] {
         &self.bytes[..self.length]
     }
-    pub fn candidate(&self) -> &[u8] {
+    pub(crate) fn candidate(&self) -> &[u8] {
         &self.bytes[HEADER..self.length]
     }
-    pub fn task_id(&self) -> u32 {
+    pub(crate) fn task_id(&self) -> u32 {
         u32::from_le_bytes(self.bytes[96..100].try_into().unwrap())
     }
-    pub fn request(&self, journal_version: u64) -> Result<Replacement, Error> {
+    pub(crate) fn request(&self, journal_version: u64) -> Result<Replacement, Error> {
         let b = &self.bytes;
         let number = |offset| u64::from_le_bytes(b[offset..offset + 8].try_into().unwrap());
         let refs = References::new(
@@ -129,7 +132,7 @@ impl Intent {
     }
     /// An older owner operation that happens to use this numeric key cannot
     /// prove a new journal instance. Content equality alone is insufficient.
-    pub fn matches(&self, key: u64, operation: &Operation) -> bool {
+    pub(crate) fn matches(&self, key: u64, operation: &Operation) -> bool {
         let Ok(request) = self.request(key) else {
             return false;
         };
@@ -165,6 +168,7 @@ mod tests {
         let restored = Intent::decode(original.encoded()).unwrap();
         assert_eq!(restored.request(10).unwrap(), original.request(10).unwrap());
         assert_eq!(restored.candidate(), original.candidate());
+        assert_eq!(restored.task_id(), original.task_id());
         assert!(restored.request(7).is_err());
         for index in 0..original.encoded().len() {
             let mut changed = original.bytes;

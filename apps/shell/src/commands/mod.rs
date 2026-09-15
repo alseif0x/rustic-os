@@ -67,6 +67,20 @@ impl From<rustic_sdk::files::Error> for Error {
         Self::File(e)
     }
 }
+impl From<rustic_tasks_client::Error> for Error {
+    fn from(e: rustic_tasks_client::Error) -> Self {
+        use rustic_tasks_client::Error as Task;
+        match e {
+            Task::File(e) => Self::File(e),
+            Task::Service(code) => Self::Service(code),
+            Task::Document => Self::TaskDocument,
+            Task::Capacity => Self::TaskCapacity,
+            Task::Enable => Self::TaskEnable,
+            Task::Journal => Self::TaskJournal,
+            Task::Pending(key) => Self::TaskPending(key),
+        }
+    }
+}
 pub fn argument<'a>(args: &Args<'a>, n: usize) -> Result<&'a str, Error> {
     args.get(n).ok_or(Error::Usage)
 }
@@ -110,9 +124,11 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         "pwd" | "cd" | "ls" | "mkdir" | "touch" | "write" | "cat" | "stat" | "rm" => {
             files::execute(s, a)?
         }
-        "session" | "helper" | "act" | "actor-status" | "move-check" | "stall" | "revocation" => {
-            authority::execute(s, a)?
-        }
+        #[cfg(feature = "tasks-acceptance")]
+        "tasks-owner-apply-cut" => authority::execute(s, a)?,
+        "session" | "helper" | "act" | "actor-status" | "move-check" | "stall" | "revocation"
+        | "tasks-owner" | "tasks-owner-begin" | "tasks-owner-edit" | "tasks-owner-chunk"
+        | "tasks-owner-forget" => authority::execute(s, a)?,
         "retry-key" | "receipt" | "replace" | "rotate-receipts" => recovery::execute(s, a)?,
         "enable-admissions"
         | "enable-prevention-reasons"

@@ -29,7 +29,9 @@ impl State {
             | s::TASKS_ABORT => 2,
             s::TASKS_ROW => 3,
             s::TASKS_CANDIDATE => 3,
-            s::TASKS_PREVIEW => 8,
+            s::TASKS_OWNER_FORGET | s::TASKS_OWNER_APPLY_CUT => 3,
+            s::TASKS_OWNER_BEGIN | s::TASKS_OWNER_CHUNK => 7,
+            s::TASKS_PREVIEW | s::TASKS_OWNER_EDIT => 8,
             s::HOLD_IO => 3,
             s::RUN => 6,
             // The seventh word carries the deliberate discard flag for a live stop.
@@ -126,6 +128,11 @@ impl State {
             s::TASKS_ROW => self.task_row(w[1], w[2]),
             s::TASKS_CANDIDATE => self.task_candidate(w[1], w[2]),
             s::TASKS_ABORT => self.abort_task_list(w[1]),
+            s::TASKS_OWNER_BEGIN
+            | s::TASKS_OWNER_EDIT
+            | s::TASKS_OWNER_CHUNK
+            | s::TASKS_OWNER_FORGET
+            | s::TASKS_OWNER_APPLY_CUT => self.tasks_owner(w),
             #[cfg(feature = "tasks-acceptance")]
             tasks_acceptance::ARM
             | tasks_acceptance::STATUS

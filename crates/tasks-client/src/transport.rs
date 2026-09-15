@@ -1,60 +1,74 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Complete bounded native app results before presenting or retaining them.
-use super::{Error, Session, output};
+use crate::{Candidate, Error, Listing, Relay};
 use rustic_sdk::{abi::supervisor as s, files, rpc::Progress, runtime};
 use rustic_tasks_contract::{
-    MAX_TASKS, State,
+    MAX_TASKS,
     preview::{Edit, Summary},
     wire,
 };
 
-pub(super) struct Candidate {
-    pub bytes: [u8; 1024],
-    pub length: usize,
-    pub summary: Summary,
+/// A result that was completed and released before the caller sees it. The
+/// candidate bytes are present only when the caller asked to retain them.
+pub(crate) struct Complete {
+    pub listing: Listing,
+    pub candidate: Option<Candidate>,
 }
 
-pub(super) fn run(
-    session: &mut Session,
+/// Plans one edit through the relay and returns the validated candidate.
+///
+/// Planning needs no record: nothing is retained, no request identity is
+/// reserved and no later commit is authorized. The caller decides what the plan
+/// is for — applying it against its own record, or handing it to another
+/// semantic client that owns one.
+pub fn plan<L: Relay>(relay: &mut L, scope: u32, edit: Edit) -> Result<Candidate, Error> {
+    run(relay, scope, Some(edit), true)?
+        .candidate
+        .ok_or(Error::Service(4))
+}
+
+pub(crate) fn run<L: Relay>(
+    owner: &mut L,
     scope: u32,
     edit: Option<Edit>,
     retain: bool,
-) -> Result<Option<Candidate>, Error> {
+) -> Result<Complete, Error> {
     let mut request = [s::TASKS_LIST, scope.into(), 0, 0, 0, 0, 0, 0];
     if let Some(edit) = edit {
         request[0] = s::TASKS_PREVIEW;
         request[2..].copy_from_slice(&edit.words());
     }
-    let started = session.request(request)?;
+    let started = owner.control(request)?;
     if started[0] != 5 || started[1] == 0 || started[2] != s::TASKS_LIST {
         return Err(Error::Service(4));
     }
-    let result = collect(session, started[1], edit.is_some(), retain);
+    let result = collect(owner, started[1], edit, retain);
     if result.is_err() {
-        let _ = session.request([s::TASKS_ABORT, started[1], 0, 0, 0, 0, 0, 0]);
+        let _ = owner.control([s::TASKS_ABORT, started[1], 0, 0, 0, 0, 0, 0]);
     }
     result.map_err(task_error)
 }
 
-fn collect(
-    session: &mut Session,
+fn collect<L: Relay>(
+    owner: &mut L,
     job: u64,
-    preview: bool,
+    edit: Option<Edit>,
     retain: bool,
-) -> Result<Option<Candidate>, Error> {
+) -> Result<Complete, Error> {
+    let preview = edit.is_some();
     let deadline = runtime::clock().saturating_add(1100);
     let complete = loop {
-        let result = session.request([s::JOB_STATUS, job, 0, 0, 0, 0, 0, 0])?;
+        let result = owner.control([s::JOB_STATUS, job, 0, 0, 0, 0, 0, 0])?;
         if result[1] != job || result[2] != s::TASKS_LIST || result[7] != 0 {
             return Err(Error::Service(4));
         }
         if result[0] == 0 {
-            break session.finish_job(result)?;
+            break owner.finish(result)?;
         }
         if runtime::clock() >= deadline {
             return Err(Error::Service(4));
         }
-        progress(session)?;
+        progress(owner)?;
     };
     let count = usize::try_from(complete[2]).map_err(|_| Error::Service(4))?;
     if complete[1] == 0 || count > MAX_TASKS || complete[3..].iter().any(|v| *v != 0) {
@@ -62,8 +76,8 @@ fn collect(
     }
     let mut rows = [None; MAX_TASKS];
     for index in 0..count {
-        progress(session)?;
-        let words = session.request([s::TASKS_ROW, job, index as u64, 0, 0, 0, 0, 0])?;
+        progress(owner)?;
+        let words = owner.control([s::TASKS_ROW, job, index as u64, 0, 0, 0, 0, 0])?;
         let Some(wire::Response::Row(row)) = wire::decode_response(words) else {
             return Err(Error::Service(4));
         };
@@ -81,7 +95,7 @@ fn collect(
     let mut total = None;
     if retain {
         loop {
-            let words = session.request([s::TASKS_CANDIDATE, job, length as u64, 0, 0, 0, 0, 0])?;
+            let words = owner.control([s::TASKS_CANDIDATE, job, length as u64, 0, 0, 0, 0, 0])?;
             // Owner success framing carries the same canonical metadata/payload
             // as the child chunk. The codec validates bounds and zero padding.
             let part = rustic_tasks_contract::candidate::Chunk::decode_owner(words)
@@ -98,19 +112,17 @@ fn collect(
             }
         }
     }
-    // Complete and release the result before printing, so interrupted/malformed
-    // transport cannot present a partial list as a successful command.
-    progress(session)?;
-    let end = session.request([s::TASKS_ROW, job, count as u64, 0, 0, 0, 0, 0])?;
+    // Complete and release the result before returning it, so interrupted or
+    // malformed transport cannot be presented as a successful command.
+    progress(owner)?;
+    let end = owner.control([s::TASKS_ROW, job, count as u64, 0, 0, 0, 0, 0])?;
     let summary = if preview {
         if end[0..3] != [0, 0, count as u64] {
             return Err(Error::Service(4));
         }
         Some(
-            rustic_tasks_contract::preview::Summary::decode([
-                end[2], end[3], end[4], end[5], end[6], end[7], 0,
-            ])
-            .ok_or(Error::Service(4))?,
+            Summary::decode([end[2], end[3], end[4], end[5], end[6], end[7], 0])
+                .ok_or(Error::Service(4))?,
         )
     } else {
         if end != [0, 0, count as u64, 0, 0, 0, 0, 0] {
@@ -134,35 +146,32 @@ fn collect(
                 return Err(Error::Service(4));
             }
         }
-        return Ok(Some(Candidate {
-            bytes: candidate_bytes,
-            length,
+        // The collected plan passes the same validation a client that received it
+        // over any other transport must pass before it may be retained.
+        let edit = edit.ok_or(Error::Service(4))?;
+        let candidate = Candidate::new(&candidate_bytes[..length], summary, edit)
+            .map_err(|_| Error::Service(4))?;
+        return Ok(Complete {
+            listing: Listing {
+                rows,
+                count,
+                summary: Some(summary),
+            },
+            candidate: Some(candidate),
+        });
+    }
+    Ok(Complete {
+        listing: Listing {
+            rows,
+            count,
             summary,
-        }));
-    }
-    for row in rows[..count].iter().flatten() {
-        let state = match row.state {
-            State::Open => "open",
-            State::Done => "done",
-        };
-        output::format(format_args!("{} [{}] ", row.id, state));
-        output::bytes(&row.title[..usize::from(row.title_len)]);
-        output::text("\r\n");
-    }
-    output::format(format_args!("{count} tasks\r\n"));
-    if let Some(summary) = summary {
-        output::format(format_args!(
-            "preview task={} changed={} source_version={}; not applied\r\n",
-            summary.task_id,
-            u8::from(summary.changed),
-            summary.version
-        ));
-    }
-    Ok(None)
+        },
+        candidate: None,
+    })
 }
 
-fn progress(session: &mut Session) -> Result<(), Error> {
-    session.files.progress().wait(0).map_err(|error| {
+fn progress<L: Relay>(owner: &mut L) -> Result<(), Error> {
+    owner.files().progress().wait(0).map_err(|error| {
         Error::File(if matches!(error, rustic_sdk::Error::Interrupted) {
             files::Error::Interrupted
         } else {
@@ -173,8 +182,8 @@ fn progress(session: &mut Session) -> Result<(), Error> {
 
 fn task_error(error: Error) -> Error {
     match error {
-        Error::Service(7) => Error::TaskDocument,
-        Error::Service(8) => Error::TaskCapacity,
+        Error::Service(7) => Error::Document,
+        Error::Service(8) => Error::Capacity,
         Error::Service(code @ 33..=63) => {
             Error::File(files::Error::parse((code - 32) as u8).unwrap_err())
         }

@@ -17,6 +17,9 @@ pub(super) fn execute(args: &Args<'_>) -> Result<(), Error> {
         output::text(DEFAULT);
         output::text("tasks list PATH\r\n");
         output::text("tasks add PATH TITLE | tasks done PATH ID | tasks recover\r\n");
+        output::text(
+            "tasks hand PID add PATH TITLE | tasks hand PID done PATH ID (plan here, apply in a tasks-owner child)\r\n",
+        );
         output::text("tasks enable (one-time persistent storage upgrade for task writes)\r\n");
         output::text("tasks preview add PATH TITLE | tasks preview done PATH ID (no writes)\r\n");
     }
@@ -25,9 +28,30 @@ pub(super) fn execute(args: &Args<'_>) -> Result<(), Error> {
 
 fn advanced_help() {
     output::text(
+        "tasks-owner FILE JOURNAL [TICKS] (persistent owner-stepped tasks child; the journal must be a different object)\r\n",
+    );
+    output::text(
+        "tasks-owner-begin PID TOTAL COUNT VERSION TASK_ID CHANGED (announce the planned candidate and its preview summary)\r\n",
+    );
+    output::text("tasks-owner-edit PID E0 E1 E2 E3 E4 E5 (six preview edit words)\r\n");
+    output::text(
+        "tasks-owner-chunk PID HEX (up to 64 hex digits = 32 candidate bytes, in order)\r\n",
+    );
+    output::text("tasks-owner-forget PID KEY (discard recovery evidence; undoes no effect)\r\n");
+    #[cfg(feature = "tasks-acceptance")]
+    output::text(
+        "tasks-owner-apply-cut PID CUT (acceptance build only; 0 none, 1 prepared, 2 lost-reply, 3 lost-journal, 4 conflict)\r\n",
+    );
+    output::text(
+        "act PID tasks-apply|tasks-status|tasks-recover (owner-stepped tasks child; poll with actor-status PID)\r\n",
+    );
+    output::text(
         "tasks forget INTENT_KEY (discard recovery evidence; does not cancel or undo an effect)\r\n",
     );
     output::text("tasks add PATH TITLE | tasks done PATH ID | tasks recover | tasks enable\r\n");
+    output::text(
+        "tasks hand PID add PATH TITLE | tasks hand PID done PATH ID (plan here, apply in a tasks-owner child)\r\n",
+    );
     output::text("tasks list PATH (read-only native task document)\r\n");
     output::text(
         "tasks preview add PATH TITLE | tasks preview done PATH ID (read-only candidate)\r\n",

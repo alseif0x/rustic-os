@@ -37,10 +37,45 @@ pub const TASKS_ABORT: u64 = 28;
 pub const TASKS_PREVIEW: u64 = 29;
 /// Retrieve one bounded byte chunk from a completed task edit candidate.
 pub const TASKS_CANDIDATE: u64 = 30;
+/// Announce the planned candidate to a persistent tasks-owner child.
+/// Words: `[31, pid, total, count, version, task_id, changed, 0]`, where the
+/// four summary words are those of `rustic_tasks_contract::preview::Summary`.
+pub const TASKS_OWNER_BEGIN: u64 = 31;
+/// Supply the intended edit to a persistent tasks-owner child.
+/// Words: `[32, pid, e0, e1, e2, e3, e4, e5]`, the six `preview::Edit` words.
+pub const TASKS_OWNER_EDIT: u64 = 32;
+/// Feed one bounded candidate chunk to a persistent tasks-owner child.
+/// Words: `[33, pid, length, b0, b1, b2, b3, 0]`; the offset is implicit in the
+/// order the chunks are submitted.
+pub const TASKS_OWNER_CHUNK: u64 = 33;
+/// Discard the recovery evidence recorded under one intent key.
+/// Words: `[34, pid, key, 0, 0, 0, 0, 0]`.
+pub const TASKS_OWNER_FORGET: u64 = 34;
+/// Apply the collected candidate under an explicit failure cut.
+/// Words: `[35, pid, cut, 0, 0, 0, 0, 0]`. The cut selects where the single
+/// submission fails: `0` none, `1` retained but not submitted, `2` submitted
+/// with the reply discarded, `3` retained with the retention acknowledgement
+/// lost, `4` a foreign write over the target before the submission.
+///
+/// The request identifier exists in every build so that its number is never
+/// reused, but only an explicit acceptance build implements the cuts: elsewhere
+/// the supervisor refuses the whole request as invalid, exactly like an unknown
+/// one. An ordinary apply needs no cut and stays the [`ACT`] verb
+/// [`actor::TASKS_APPLY`].
+pub const TASKS_OWNER_APPLY_CUT: u64 = 35;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Separate native tasks application; it never receives console authority.
 pub const TASKS: u64 = 14;
+/// Native tasks client holding owner-equivalent authority over exactly two file
+/// objects: the target task document (`scope`) and its own journal record
+/// (`other`). It is the only role whose grant carries a second object scope.
+///
+/// `other` must be a live file above identifier `1` and outside `scope`. It is
+/// also this client's recovery subject, so its retained operations and receipts
+/// share no namespace with the shell's owner client (subject `1`), and a
+/// relaunch on the same journal recovers under the same identity.
+pub const TASKS_OWNER: u64 = 15;
 /// Deterministic native actor commands; the owner supplies no arbitrary program.
 pub mod actor {
     pub const READ: u64 = 1;
@@ -67,6 +102,33 @@ pub mod actor {
     pub const MISSION_SCHEDULE: u64 = 21;
     pub const MISSION_INSPECT: u64 = 22;
     pub const MISSION_CANCEL: u64 = 23;
+    /// Owner-stepped actions of the persistent tasks-owner child. They are
+    /// accepted only for role [`super::TASKS_OWNER`], and that role answers no
+    /// other action: a tasks child never serves the read or mission verbs.
+    ///
+    /// Announce the planned candidate together with the preview summary it was
+    /// derived from: `[24, total, count, version, task_id, changed, 0, 0]`. The
+    /// four summary words are those of `rustic_tasks_contract::preview::Summary`,
+    /// whose own words 4..6 are always zero and are therefore not carried.
+    pub const TASKS_BEGIN: u64 = 24;
+    /// Supply the intended edit: `[25, e0, e1, e2, e3, e4, e5, 0]`, the six
+    /// words of `rustic_tasks_contract::preview::Edit`.
+    pub const TASKS_EDIT: u64 = 25;
+    /// Supply the next candidate bytes: `[26, length, b0, b1, b2, b3, 0, 0]`,
+    /// up to 32 bytes packed as in `rustic_tasks_contract::candidate`. The
+    /// offset is implicit: chunks are appended in submission order.
+    pub const TASKS_CHUNK: u64 = 26;
+    /// Apply the accumulated candidate: `[27, cut, 0, 0, 0, 0, 0, 0]`. The cut
+    /// is `0` for the ordinary single submission; the other values exist only
+    /// in an acceptance build and are documented on
+    /// [`super::TASKS_OWNER_APPLY_CUT`].
+    pub const TASKS_APPLY: u64 = 27;
+    /// Report the child's own view of the intent: `[28, 0, 0, 0, 0, 0, 0, 0]`.
+    pub const TASKS_STATUS: u64 = 28;
+    /// Resolve a retained intent from its journal: `[29, 0, 0, 0, 0, 0, 0, 0]`.
+    pub const TASKS_RECOVER: u64 = 29;
+    /// Discard the recovery evidence of one intent key: `[30, key, 0, ..]`.
+    pub const TASKS_FORGET: u64 = 30;
     /// Modifiers for ADMISSION. These are flags, not action values.
     pub mod flags {
         /// Submit a live stop and exit without decoding its reply. A discarded

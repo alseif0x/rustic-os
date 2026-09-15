@@ -11,8 +11,11 @@ publish.workspace = true
 workspace = true
 [features]
 native = []
+tasks-acceptance = ["rustic-tasks-client/tasks-acceptance"]
 [dependencies]
 rustic-sdk = { path = "../../crates/sdk" }
+rustic-tasks-client = { path = "../../crates/tasks-client" }
+rustic-tasks-contract = { path = "../../crates/tasks-contract" }
 [[bin]]
 name = "utility"
 path = "src/main.rs"

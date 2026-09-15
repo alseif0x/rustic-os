@@ -81,6 +81,7 @@ fn discovery_rechecks_peer_context_revocation_expiry_and_does_not_grant_inspecti
                 peer: 10,
                 endpoint: 1,
                 scope: file,
+                second: 0,
                 rights: CANCEL_RIGHT,
                 generation: 0,
                 expires: 10,

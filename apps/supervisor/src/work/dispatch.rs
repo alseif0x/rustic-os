@@ -66,6 +66,17 @@ impl State {
             return;
         };
         let expired = runtime::clock() >= active.deadline;
+        if expired
+            && let Task::Launch(d) = &mut active.task
+            && let Some(grace) = d.expire()
+        {
+            // A root the service already installed outlives the dormant child it
+            // was issued for, so an expired launch keeps the job for exactly one
+            // bounded withdrawal exchange. The owner result stays the timeout.
+            active.deadline = runtime::clock().saturating_add(grace);
+            self.work.active = Some(active);
+            return;
+        }
         let result = if expired {
             Err(4)
         } else {
@@ -112,13 +123,20 @@ impl State {
                 self.work.history.finish(active.ticket.id, words);
             }
             Err(error) => {
+                // A launch that outlived its deadline reports a timeout even when
+                // the extension above let it finish withdrawing its root.
+                let timeout = expired
+                    || match &active.task {
+                        Task::Launch(d) => d.timed_out(),
+                        _ => false,
+                    };
                 match active.task {
                     Task::Launch(d) => d.cancel(self),
                     Task::TasksList(task) => task.cancel(self),
                     Task::Restart(r) => r.cancel(self),
                     Task::Admin { .. } => {}
                 }
-                if expired || self.admin.failed() {
+                if timeout || self.admin.failed() {
                     self.degraded = true;
                 }
                 self.work

@@ -53,6 +53,7 @@ fn read_only_helper_gets_identity_epoch_without_directory_or_receipt_authority()
                 peer: 11,
                 endpoint: 2,
                 scope: a,
+                second: 0,
                 rights: READ_RIGHT,
                 generation: 0,
                 expires: 0,

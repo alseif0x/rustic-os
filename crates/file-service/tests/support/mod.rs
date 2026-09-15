@@ -27,19 +27,42 @@ pub fn setup() -> (Server, Memory, u32, u32) {
     (Server::new(v), d, a.id, b.id)
 }
 pub fn grant(s: &mut Server, slot: usize, scope: u32, rights: u8, expires: u64) -> u32 {
+    install(s, slot, scope, 0, rights, expires).unwrap()
+}
+/// Issue a root directly, including the optional second scope, and keep its error.
+pub fn install(
+    s: &mut Server,
+    slot: usize,
+    scope: u32,
+    second: u32,
+    rights: u8,
+    expires: u64,
+) -> Result<u32, Error> {
+    s.grant(slot, binding(slot, scope, second, rights, expires))
+}
+/// A root that carries a recovery identity, as the private administrative channel
+/// installs one for a client that retains its own durable operations.
+pub fn recording(s: &mut Server, slot: usize, scope: u32, subject: u64) -> Result<u32, Error> {
     s.grant(
         slot,
         Grant {
-            peer: slot as u64 + 10,
-            endpoint: slot as u64 + 1,
-            scope,
-            rights,
-            generation: 0,
-            expires,
-            subject: 0,
+            subject,
+            ..binding(slot, scope, 0, READ_RIGHT | WRITE_RIGHT | INSPECT_RIGHT, 0)
         },
     )
-    .unwrap()
+}
+/// A grant request as the owner would submit it for `slot`.
+pub fn binding(slot: usize, scope: u32, second: u32, rights: u8, expires: u64) -> Grant {
+    Grant {
+        peer: slot as u64 + 10,
+        endpoint: slot as u64 + 1,
+        scope,
+        second,
+        rights,
+        generation: 0,
+        expires,
+        subject: 0,
+    }
 }
 pub fn request(op: u8, id: u32, context: u32) -> Packet {
     Packet {

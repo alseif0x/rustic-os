@@ -22,6 +22,7 @@ mod transport {
             peer: 9,
             endpoint: 2,
             scope: 4,
+            second: 0,
             rights: READ_RIGHT,
             generation: 3,
             expires: 20,

@@ -8,6 +8,7 @@ fn helper(scope: u32, rights: u8, expires: u64) -> Grant {
         peer: 11,
         endpoint: 2,
         scope,
+        second: 0,
         rights,
         expires,
         generation: 0,

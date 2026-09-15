@@ -8,6 +8,13 @@ use rustic_sdk::{
     rpc::Rpc,
     runtime::{self, abi as k},
 };
+use rustic_supervisor::grant::{Phase, Request, Sequence, Step};
+
+/// Bounded extension an expired job is given to withdraw an installed root, in
+/// PIT ticks. It is granted once; a channel that does not answer within it leaves
+/// the supervisor degraded instead of waiting further.
+const WITHDRAWAL_TICKS: u64 = 200;
+
 pub(in super::super) struct Draft {
     pub slot: usize,
     pub pid: u64,
@@ -20,6 +27,13 @@ pub(in super::super) struct Draft {
     control: [u64; 2],
     data: [u64; 2],
     sent: bool,
+    /// The outstanding reply belongs to an exchange this draft abandoned; it must
+    /// be consumed before the administrative channel can carry the withdrawal.
+    stale: bool,
+    /// The job deadline passed, whatever the sequence still has to finish.
+    timeout: bool,
+    /// Phase and generation of the private administrative sequence.
+    sequence: Sequence,
 }
 impl Draft {
     pub(super) fn slot(&self) -> usize {
@@ -42,44 +56,70 @@ impl Draft {
         self.sent
     }
 
-    pub(super) fn words(&self) -> [u64; 8] {
-        if self.parent != 0 {
-            [
-                37,
-                (self.slot + 2) as u64,
-                self.parent as u64,
-                self.pid,
-                self.data[0],
-                self.scope as u64,
-                self.rights as u64,
-                self.expires,
-            ]
-        } else {
-            [
-                32,
-                (self.slot + 2) as u64,
-                self.pid,
-                self.data[0],
-                self.scope as u64,
-                self.rights as u64,
-                self.expires,
-                if self.role == s::PRIVATE_ADMISSION_SESSION {
-                    self.pid
-                } else {
-                    u64::from(matches!(
-                        self.role,
-                        s::LOST_REPLY
-                            | s::LOST_OPERATION
-                            | s::LOST_ADMISSION
-                            | s::ADMISSION_SESSION
-                    ))
-                },
-            ]
+    /// The authority this draft asks the service for. The supervisor owns these
+    /// facts; the sequence only orders and formats them.
+    fn request(&self) -> Request {
+        Request {
+            slot: self.slot,
+            role: self.role,
+            peer: self.pid,
+            endpoint: self.data[0],
+            scope: self.scope,
+            other: self.other,
+            rights: self.rights,
+            expires: self.expires,
+            parent: self.parent,
         }
     }
+
+    pub(super) fn words(&self) -> [u64; 8] {
+        self.sequence.words(&self.request())
+    }
+
+    /// The job deadline passed. The owner result stays a timeout; the returned
+    /// grace is the single bounded extension in which an already installed root is
+    /// withdrawn instead of being left bound to a child that will never run.
+    pub(super) fn expire(&mut self) -> Option<u64> {
+        self.timeout = true;
+        if self.sequence.phase() == Phase::Withdraw {
+            return None;
+        }
+        match self.sequence.fail(4) {
+            Step::Again => {
+                self.stale = self.sent;
+                Some(WITHDRAWAL_TICKS)
+            }
+            _ => None,
+        }
+    }
+
+    pub(super) fn timed_out(&self) -> bool {
+        self.timeout
+    }
+
     pub(super) fn poll(&mut self, state: &mut State) -> Result<Option<[u64; 8]>, u64> {
+        if self.stale {
+            if !state.admin.pending() {
+                self.sent = false;
+                self.stale = false;
+                return Ok(None);
+            }
+            // The abandoned exchange still owns the administrative channel: its
+            // reply is consumed and discarded before the withdrawal is sent.
+            let drained = state.admin.poll();
+            return match drained {
+                Ok(Some(_)) => {
+                    self.sent = false;
+                    self.stale = false;
+                    Ok(None)
+                }
+                Ok(None) => Ok(None),
+                Err(_) => Err(self.abandon(state)),
+            };
+        }
         if !self.sent {
-            match state.admin.begin(&k::encode(self.words())) {
+            let begun = state.admin.begin(&k::encode(self.words()));
+            match begun {
                 Ok(()) => {
                     self.sent = true;
                     #[cfg(feature = "tasks-acceptance")]
@@ -90,7 +130,7 @@ impl Draft {
                 Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {
                     return Ok(None);
                 }
-                Err(_) => return Err(4),
+                Err(_) => return Err(self.abandon(state)),
             }
             return Ok(None);
         }
@@ -98,21 +138,41 @@ impl Draft {
         if state.acceptance.holds(self.slot, self.pid) {
             return Ok(None);
         }
-        let Some(message) = state.admin.poll().map_err(|_| 4u64)? else {
-            return Ok(None);
+        let polled = state.admin.poll();
+        let reply = match polled {
+            Ok(Some(message)) => message,
+            Ok(None) => return Ok(None),
+            Err(_) => return Err(self.abandon(state)),
         };
         // The exchange has been consumed even when its payload fails
         // validation; cancellation must not try to drain a nonexistent
         // reply or leave the next grant associated with this request.
         self.sent = false;
-        let r = k::decode(message.payload()).map_err(|_| 4u64)?;
-        if r[0] != 0 {
-            return Err(2);
+        let request = self.request();
+        let mut step = match k::decode(reply.payload()) {
+            Ok(w) => self.sequence.reply(&request, w),
+            Err(_) => self.sequence.fail(4),
+        };
+        if let Step::Ready(generation) = step {
+            step = self.admit(state, generation);
         }
-        let generation = u32::try_from(r[1]).map_err(|_| 4u64)?;
-        if generation == 0 || r[2..].iter().any(|v| *v != 0) {
-            return Err(4);
+        match step {
+            // A refused or malformed answer to an installed root leaves a
+            // withdrawal owed; the job ends only once it has been answered.
+            Step::Again => Ok(None),
+            Step::Ready(_) => Ok(Some([0, self.pid, 0, 0, 0, 0, 0, 0])),
+            Step::Failed(error) => {
+                if self.sequence.leaked() {
+                    state.degraded = true;
+                }
+                Err(error)
+            }
         }
+    }
+
+    /// Check the last precondition and hand the installed root to the child. Every
+    /// refusal here withdraws that root instead of leaving it installed.
+    fn admit(&mut self, state: &mut State, generation: u32) -> Step {
         if self.parent != 0
             && !state.children.iter().flatten().any(|c| {
                 c.generation == self.parent
@@ -122,12 +182,45 @@ impl Draft {
                     && (c.expires == 0 || runtime::clock() < c.expires)
             })
         {
-            return Err(2);
+            return self.sequence.fail(2);
         }
-        self.activate(state, generation)?;
-        Ok(Some([0, self.pid, 0, 0, 0, 0, 0, 0]))
+        match self.activate(state, generation) {
+            Ok(()) => {
+                self.sequence.activated();
+                Step::Ready(generation)
+            }
+            Err(error) => self.sequence.fail(error),
+        }
     }
-    pub(super) fn cancel(&self, state: &State) {
+
+    /// The administrative channel failed. Nothing more can be proven about an
+    /// installed root, so the job ends and the supervisor is degraded.
+    fn abandon(&mut self, state: &mut State) -> u64 {
+        let error = self.sequence.abandon(4);
+        if self.sequence.leaked() {
+            state.degraded = true;
+        }
+        error
+    }
+
+    pub(super) fn cancel(&self, state: &mut State) {
+        if self.sent && state.admin.pending() {
+            // A reply is still owed on the private channel; no later exchange can
+            // use it until that reply has been consumed.
+            state.mark_admin_drain();
+        } else if self.sequence.outstanding()
+            && state
+                .admin
+                .begin(&k::encode(self.sequence.withdrawal(&self.request())))
+                .is_ok()
+        {
+            // Last resort for a cancellation that will never poll again, such as a
+            // service restart: the root is withdrawn without awaiting the answer.
+            state.mark_admin_drain();
+        }
+        if self.sequence.outstanding() {
+            state.degraded = true;
+        }
         stop(self.pid);
         close(process::id().unwrap_or(0), self.control[0]);
         close(state.files, self.data[0]);
@@ -201,6 +294,7 @@ impl State {
                 | s::SESSION
                 | s::HELPER
                 | s::TASKS
+                | s::TASKS_OWNER
         ) || lease > 360000
         {
             return Err(1);
@@ -218,19 +312,27 @@ impl State {
                 | s::SESSION
                 | s::HELPER
                 | s::TASKS
+                | s::TASKS_OWNER
         );
         if file_access {
             if !self.administrative_ready() {
                 return Err(3);
             }
+            // The two-scope role must name a second, distinct object; it is the only
+            // role for which `other` is granted instead of merely forwarded. That
+            // object is also its recovery identity, so it may not be one of the
+            // reserved low identifiers: the owner subject `1` is the shell client's.
             if self.policy == 0
                 || scope == 0
+                || role == s::TASKS_OWNER && (other <= 1 || other == scope)
                 || if matches!(role, s::ADMISSION_SESSION | s::PRIVATE_ADMISSION_SESSION) {
                     rights == 0 || rights & !15 != 0
                 } else {
                     rights
-                        != if matches!(role, s::LOST_REPLY | s::LOST_OPERATION | s::LOST_ADMISSION)
-                        {
+                        != if matches!(
+                            role,
+                            s::LOST_REPLY | s::LOST_OPERATION | s::LOST_ADMISSION | s::TASKS_OWNER
+                        ) {
                             7
                         } else if role == s::SESSION {
                             3
@@ -291,6 +393,9 @@ impl State {
             control: [0; 2],
             data: [0; 2],
             sent: false,
+            stale: false,
+            timeout: false,
+            sequence: Sequence::new(),
         };
         let setup = (|| {
             d.control = connect(me, pid).map_err(|_| 3u64)?;

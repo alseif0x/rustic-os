@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use rustic_sdk::abi::supervisor as p;
+use rustic_shell::tasks_input;
+
 pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
     match argument(a, 0)? {
         "session" => {
@@ -12,6 +14,100 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             let lease = if a.len() == 4 { number(a, 3)? } else { 0 };
             let r = s.service([p::RUN, p::SESSION, id as u64, other as u64, 3, lease, 0, 0])?;
             output::format(format_args!("started pid={}\r\n", r[1]));
+        }
+        "tasks-owner" => {
+            if !(3..=4).contains(&a.len()) {
+                return Err(Error::Usage);
+            }
+            let id = s.files.resolve(s.cwd, argument(a, 1)?)?;
+            let journal = s.files.resolve(s.cwd, argument(a, 2)?)?;
+            // The two scopes are distinct objects by construction: a journal
+            // aliasing the target would record its recovery evidence inside the
+            // document that evidence is supposed to protect. The shell's own
+            // record is refused for the same reason one client owns one record:
+            // two clients sharing it would each treat the other's unresolved
+            // intent as their own.
+            if id == journal || super::tasks::record_object(s)? == Some(journal) {
+                return Err(Error::Usage);
+            }
+            let lease = if a.len() == 4 { number(a, 3)? } else { 0 };
+            let r = s.service([
+                p::RUN,
+                p::TASKS_OWNER,
+                id as u64,
+                journal as u64,
+                7,
+                lease,
+                0,
+                0,
+            ])?;
+            output::format(format_args!("started pid={}\r\n", r[1]));
+        }
+        "tasks-owner-begin" => {
+            exact(a, 7)?;
+            let r = s.service([
+                p::TASKS_OWNER_BEGIN,
+                number(a, 1)?,
+                number(a, 2)?,
+                number(a, 3)?,
+                number(a, 4)?,
+                number(a, 5)?,
+                number(a, 6)?,
+                0,
+            ])?;
+            super::takeover::actor(r);
+        }
+        "tasks-owner-edit" => {
+            exact(a, 8)?;
+            let r = s.service([
+                p::TASKS_OWNER_EDIT,
+                number(a, 1)?,
+                number(a, 2)?,
+                number(a, 3)?,
+                number(a, 4)?,
+                number(a, 5)?,
+                number(a, 6)?,
+                number(a, 7)?,
+            ])?;
+            super::takeover::actor(r);
+        }
+        "tasks-owner-chunk" => {
+            exact(a, 3)?;
+            let pid = number(a, 1)?;
+            let c = tasks_input::chunk_words(argument(a, 2)?).ok_or(Error::Usage)?;
+            let r = s.service([p::TASKS_OWNER_CHUNK, pid, c[0], c[1], c[2], c[3], c[4], 0])?;
+            super::takeover::actor(r);
+        }
+        // An apply under an explicit failure cut; ordinary builds have no cut to
+        // select, so they do not have the command either.
+        #[cfg(feature = "tasks-acceptance")]
+        "tasks-owner-apply-cut" => {
+            exact(a, 3)?;
+            let r = s.service([
+                p::TASKS_OWNER_APPLY_CUT,
+                number(a, 1)?,
+                number(a, 2)?,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ])?;
+            super::takeover::actor(r);
+        }
+        "tasks-owner-forget" => {
+            exact(a, 3)?;
+            let r = s.service([
+                p::TASKS_OWNER_FORGET,
+                number(a, 1)?,
+                number(a, 2)?,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ])?;
+            super::takeover::actor(r);
         }
         "helper" => {
             exact(a, 4)?;
@@ -58,6 +154,9 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                         "mission-schedule" => p::actor::MISSION_SCHEDULE,
                         "mission-inspect" => p::actor::MISSION_INSPECT,
                         "mission-cancel" => p::actor::MISSION_CANCEL,
+                        "tasks-apply" => p::actor::TASKS_APPLY,
+                        "tasks-status" => p::actor::TASKS_STATUS,
+                        "tasks-recover" => p::actor::TASKS_RECOVER,
                         _ => return Err(Error::Usage),
                     },
                 )

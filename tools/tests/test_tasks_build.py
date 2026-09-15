@@ -28,7 +28,7 @@ class TasksBuildTests(unittest.TestCase):
                         application.build_one(root, {}, True, name, name + ".manifest", acceptance)
                     command = run.call_args.args[0]
                     features = command[command.index("--features") + 1]
-                    expected = "native,tasks-acceptance" if acceptance and name in ("shell", "supervisor") else "native"
+                    expected = "native,tasks-acceptance" if acceptance and name in ("shell", "supervisor", "utility") else "native"
                     self.assertEqual(features, expected)
                     self.assertIn("--locked", command)
                     self.assertIn("--offline", command)
@@ -41,3 +41,18 @@ class TasksBuildTests(unittest.TestCase):
 
     def test_serial_build_identity_distinguishes_acceptance_profile(self):
         self.assertNotEqual(source_id(), source_id(tasks_acceptance=True))
+
+    def test_the_owner_cut_command_exists_only_behind_the_feature(self):
+        """An ordinary shell build must not even dispatch the cut command."""
+        gate = '#[cfg(feature = "tasks-acceptance")]'
+        for relative in ("apps/shell/src/commands/mod.rs",
+                         "apps/shell/src/commands/authority.rs",
+                         "apps/shell/src/commands/help.rs"):
+            lines = (application.ROOT / relative).read_text().splitlines()
+            occurrences = [index for index, line in enumerate(lines) if "tasks-owner-apply-cut" in line]
+            with self.subTest(relative=relative):
+                self.assertEqual(len(occurrences), 1, relative)
+                # The gate is the statement or match arm the command belongs to,
+                # so the command is absent from a build without the feature.
+                preceding = [line.strip() for line in lines[:occurrences[0]] if line.strip()]
+                self.assertIn(gate, preceding[-2:], relative)
