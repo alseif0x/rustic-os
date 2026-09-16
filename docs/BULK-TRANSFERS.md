@@ -97,3 +97,14 @@ Candidate B stays open and is not rejected: when a consumer needs multi-megabyte
 - **Target size.** The first step raises the per-operation data area to `MAX_FILE = 1024`, matching the existing storage bound, so a whole legal object moves in one operation instead of 26 and no new storage limit is implied. The next step (4 KiB, matching the read/block validation limit) needs its own `#20`-style budget; with A1 that is `(24 + 4096)` bytes per queue entry, and "every queue entry becomes a page" is explicitly not the default.
 - **Measurements still required before claiming throughput:** bytes per operation, operations per transfer, elapsed time for a bounded bulk transfer, memory cost per slot and queue, and control latency while data flows and while the reader is stopped.
 - **Limits to carry:** the estimate above is arithmetic on a measured round trip; no bulk transfer has been executed yet; the `MAX_FILE = 1024` storage bound is a separate limit from the transport bound and is not changed by this decision.
+
+## Implementation plan for A1 (next increment, not yet executed)
+
+1. `crates/abi/src/ipc.rs`: raise `PAYLOAD` to 1024 so `MAX_MESSAGE` is 1048. The kernel send/receive syscall already takes an explicit length and the broker copies a variable-length message, so no syscall change is expected (`kernel/src/process/runtime/syscall/ipc.rs`).
+2. `crates/abi/src/files.rs`: raise `SIZE` to `24 + 1024` and `DATA` to 1024. Every logical method that carried 40 inline bytes now carries up to 1024, and the `count` field keeps the exact length.
+3. `crates/sdk/src/files/staging.rs`: one chunk per operation replaces `bytes.chunks(DATA)` with 40-byte pieces, so a whole bounded object is one operation.
+4. `crates/file-service/src/{transfer,validation}.rs`: keep `MAX_FILE = 1024` as the storage bound, keep the count/offset/zero-padding checks, and confirm that a 1024-byte chunk is accepted rather than rejected by a stale 40-byte assumption.
+5. `contracts/services/v1/*.json`: update any schema that encodes the old message or inline length, and keep the JSON and the Rust constants checked against each other.
+6. Tests in the owning layers: the file-service rejects a malformed length, a truncated run, a wrong offset and a chunk that exceeds the declared total; the SDK sends one chunk for a 1024-byte object; the kernel IPC tests keep passing with the larger message.
+7. Measurements before any throughput claim: bytes per operation, operations per transfer, elapsed time for a 1024-byte replacement and read, kernel queue storage, and control latency while data flows and while the reader is stopped.
+8. Known risk to bound first: one `Message` is `MAX_MESSAGE` bytes on the SDK's 64 KiB user stack. A 1 KiB message is bounded and fits, but the increment must state the measured stack headroom rather than assume it.
