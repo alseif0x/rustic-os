@@ -7,7 +7,7 @@ import time
 from boot_support.image import package
 from .machine import machine, disk
 from .connection import Connection
-from .cases import exercise
+from .cases import exercise, transfer_measurement
 from .tasks_cases import exercise as tasks_exercise, after_reboot as tasks_after_reboot
 from .tasks_lifecycle import exercise as tasks_lifecycle_exercise
 from .tasks_owner import exercise as tasks_owner_exercise
@@ -48,11 +48,12 @@ def verify(image, timeout=60, output=None):
                     serials.append(transcript)
                     logs.append(log)
                     with machine(boot, data, f"unix:{sock},server=on,wait=off", log) as vm:
-                        uart = Connection(sock, vm, transcript, timeout)
+                        uart = Connection(sock, vm, transcript, timeout, output / f"commands-{phase}.jsonl")
                         try:
                             uart.until()
                             if phase == 1:
                                 cases = exercise(uart)
+                                transfer = transfer_measurement(uart)
                                 tasks = tasks_exercise(uart, data)
                                 tasks['lifecycle'] = tasks_lifecycle_exercise(uart, data)
                                 tasks['preview'] = tasks_preview_exercise(uart, data)
@@ -100,7 +101,7 @@ def verify(image, timeout=60, output=None):
         verify_lifecycle(prevention)
         verify_negotiation(negotiation)
         verify_selection(negotiation['selection'])
-        evidence = {"verified":True,"boots":2,"commands_phase_one":cases,"oracle":oracle,"allocated_bytes":allocation,
+        evidence = {"verified":True,"boots":2,"commands_phase_one":cases,"transfer":transfer,"oracle":oracle,"allocated_bytes":allocation,
                     "kernel_sha256":metadata["kernel_sha256"],"build_id":metadata["build_id"],"tasks_acceptance":True,"tasks":tasks,"authority":authority,"takeover":takeover,"management":management,"read_contract":read_contract,"storage":storage,"discovery":discovery,"prevention":prevention,"negotiation":negotiation}
         # Machine artifacts retain every field without redundant indentation.
         # The collector still enforces the existing 64 KiB per-file limit.
