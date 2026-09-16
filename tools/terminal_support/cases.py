@@ -55,6 +55,27 @@ def help_checks(uart):
         uart.command("status", "1")
     uart.command("pwd", "/workspaces")
 
+def transfer_measurement(uart):
+    """A bounded file transfer timed from the host (#50).
+
+    960 bytes is exactly 24 data-carrying operations of 40 bytes each in the
+    current file protocol, and it fits the shell's 1024-byte line buffer. The
+    timing covers the whole path the host can observe: UART, scheduling and the
+    file service. It is an end-to-end figure, not a transport-only one.
+    """
+    payload = "x" * 960
+    started = time.monotonic()
+    uart.command(f'write transfer "{payload}"', "written 960 bytes")
+    write_seconds = time.monotonic() - started
+    started = time.monotonic()
+    uart.command("cat transfer", payload)
+    read_seconds = time.monotonic() - started
+    # Leave the workspace as the later fixtures expect it.
+    uart.command("rm transfer")
+    return {"bytes": 960, "operations_per_direction": 24, "bytes_per_operation": 40,
+            "write_seconds": round(write_seconds, 3), "read_seconds": round(read_seconds, 3)}
+
+
 def exercise(uart):
     help_checks(uart)
     uart.command("pwd", "/workspaces")
