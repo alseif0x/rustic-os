@@ -174,4 +174,9 @@ impl<'a> FrameAllocator<'a> {
     pub fn total_count(&self) -> usize {
         self.total
     }
+    /// Exclusive physical bound covered by the two bitmaps. The owner sizes its
+    /// storage from this value, so callers must not assume any fixed machine size.
+    pub fn address_limit(&self) -> u64 {
+        self.managed.len() as u64 * 64 * PAGE_SIZE
+    }
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::super::Error;
-use super::{Memory, SCRATCH, page, read, write};
+use super::{Memory, OLD_ADDRESS_LIMIT, SCRATCH, page, read, write};
 use rustic_kernel::memory::{FrameError, PAGE_SIZE, PagePermissions};
 
 pub(crate) fn with_free_frames(
@@ -76,15 +76,24 @@ pub(super) fn pages(memory: &mut Memory) {
 
 /// Store the temporary ownership list in the acquired pages themselves, avoiding
 /// a large stack array or heap while exhausting the actual machine's free pool.
-pub(super) fn exhaust(memory: &mut Memory) -> usize {
+/// It also counts frames above the old 1 GiB address limit, which is the real
+/// machine evidence that the larger profile manages memory there.
+pub(super) fn exhaust(memory: &mut Memory) -> (usize, u64, u64) {
     let initial = memory.physical.frames.free_count();
+    let boundary = OLD_ADDRESS_LIMIT.div_ceil(PAGE_SIZE);
     let mut head = 0;
     let mut count = 0;
+    let mut high_frames = 0;
+    let mut highest = 0;
     loop {
         match memory.physical.frames.allocate() {
             Ok(frame) => {
                 memory.physical.write(frame, 0, head);
                 head = frame;
+                if frame / PAGE_SIZE >= boundary {
+                    high_frames += 1;
+                    highest = highest.max(frame);
+                }
                 count += 1;
             }
             Err(FrameError::Exhausted) => break,
@@ -124,7 +133,31 @@ pub(super) fn exhaust(memory: &mut Memory) -> usize {
         head = next;
     }
     assert_eq!(memory.physical.frames.free_count(), initial);
-    count
+    (count, high_frames, highest)
+}
+
+/// Keep the count and the highest frame of the walk self-consistent. The span
+/// from the old 1 GiB boundary to `highest` can exceed the count whenever the
+/// machine has a hole above that boundary, so the span alone is not a count.
+/// Any profile may legitimately have no high frames; the boot report states the
+/// count it actually took, and the host suite compares it with the machine size.
+pub(super) fn high_frames(taken: u64, highest: u64, limit: u64) -> u64 {
+    let boundary = OLD_ADDRESS_LIMIT.div_ceil(PAGE_SIZE);
+    if taken == 0 {
+        assert_eq!(highest, 0, "a high frame was recorded without a high count");
+    } else {
+        assert!(
+            highest >= OLD_ADDRESS_LIMIT,
+            "counted high frames below 1 GiB"
+        );
+        let span = highest / PAGE_SIZE + 1 - boundary;
+        assert!(
+            span >= taken,
+            "high span {span} is below the {taken} high frames taken"
+        );
+    }
+    assert!(highest / PAGE_SIZE < limit / PAGE_SIZE);
+    taken
 }
 
 /// A user run that runs out of frames halfway leaves nothing behind: the pages

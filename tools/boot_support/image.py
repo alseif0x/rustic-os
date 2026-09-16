@@ -15,11 +15,15 @@ from .scenarios import MODES
 
 ROOT = environment.ROOT
 OUTPUT = ROOT / "artifacts/boot"
+# Guest RAM profiles declared in docs/requirements-v0.1.md and owned by issue #48.
+MEMORY_PROFILES = (256, 512, 2048)
+DEFAULT_MEMORY_MIB = 256
 
 
-def source_id(*, tasks_acceptance=False):
+def source_id(*, tasks_acceptance=False, memory=DEFAULT_MEMORY_MIB):
     digest = hashlib.sha256()
     digest.update(b"tasks-acceptance=1\0" if tasks_acceptance else b"tasks-acceptance=0\0")
+    digest.update(f"memory-mib={memory}\0".encode())
     paths = sorted((ROOT / "kernel").rglob("*.rs"))
     paths += sorted((ROOT / "kernel").rglob("*.S"))
     paths += sorted((ROOT / "crates").rglob("*.rs"))
@@ -34,13 +38,15 @@ def source_id(*, tasks_acceptance=False):
     return digest.hexdigest()[:16]
 
 
-def build(mode):
+def build(mode, memory=DEFAULT_MEMORY_MIB):
     if mode not in MODES:
         raise ValueError("unsupported fixture")
+    if memory not in MEMORY_PROFILES:
+        raise ValueError("unsupported memory profile")
     environment.verify()
     environment.fetch_bootloader()
     tasks_acceptance = mode == "terminal-test"
-    build_id = source_id(tasks_acceptance=tasks_acceptance)
+    build_id = source_id(tasks_acceptance=tasks_acceptance, memory=memory)
     env = os.environ.copy()
     env["RUSTIC_BUILD_ID"] = build_id
     env["RUSTIC_APPLICATION_DIRECTORY"] = str(application.build(ROOT, env, tasks_acceptance=tasks_acceptance))
@@ -60,15 +66,24 @@ def build(mode):
         "block_application_manifest_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "block-probe.manifest"),
         "native_applications": {name: {suffix: environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / (name + suffix)) for suffix in (".elf", ".manifest")} for name in ("file-server", "supervisor", "shell", "utility", "tasks")},
         "rustc": subprocess.check_output(["rustc", "--version", "--verbose"], text=True),
+        "memory_mib": memory,
     }
     return package(kernel, mode, build_id, provenance)
+
+
+def image_directory(mode, memory=DEFAULT_MEMORY_MIB):
+    """One directory per fixture and RAM profile: a non-reference profile never
+    overwrites the reference `artifacts/boot/<mode>/` image and metadata."""
+    name = mode if memory == DEFAULT_MEMORY_MIB else f"{mode}-{memory}"
+    return OUTPUT / name
 
 
 def package(kernel, mode, build_id, provenance):
     """Package a prebuilt ELF using trusted reference files, without compiling."""
     if mode not in MODES:
         raise ValueError("unsupported fixture")
-    directory = OUTPUT / mode
+    memory = provenance.get("memory_mib", DEFAULT_MEMORY_MIB)
+    directory = image_directory(mode, memory)
     directory.mkdir(parents=True, exist_ok=True)
     header = kernel.read_bytes()[:64]
     if header[:6] != b"\x7fELF\x02\x01" or header[16:20] != b"\x02\x00\x3e\x00":

@@ -3,7 +3,11 @@ use super::{BootMemory, Error, bootstrap};
 use core::sync::atomic::{AtomicBool, Ordering};
 use rustic_kernel::memory::{FrameAllocator, PAGE_SIZE, canonical};
 
-pub(super) const LIMIT: u64 = 1 << 30;
+/// Highest physical address a 4 KiB frame may be managed at. It is a storage
+/// budget, not a machine limit: two static bitmaps carry one bit per page, so
+/// the const also fixes the metadata footprint (`2 * LIMIT / PAGE_SIZE / 8`
+/// bytes for both arrays). Raising it is a reviewed change to this budget.
+pub(super) const LIMIT: u64 = 2 << 30;
 const WORDS: usize = (LIMIT / PAGE_SIZE / 64) as usize;
 static TAKEN: AtomicBool = AtomicBool::new(false);
 static mut MANAGED: [u64; WORDS] = [0; WORDS];
@@ -60,7 +64,7 @@ impl Physical {
 
     /// Addresses originate in trusted loader tables or this allocator, never users.
     fn pointer(&self, address: u64) -> *mut u64 {
-        assert!(address < LIMIT && address.is_multiple_of(PAGE_SIZE));
+        assert!(address < self.frames.address_limit() && address.is_multiple_of(PAGE_SIZE));
         (self.hhdm + address) as *mut u64
     }
 

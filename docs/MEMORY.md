@@ -4,7 +4,7 @@
 
 ## R0 scope
 
-The kernel allocates and frees 4 KiB physical frames, builds owned page tables and switches between address spaces with independent data. The baseline remains x86_64, four-level paging, one CPU and QEMU q35/TCG with 256 MiB. LA57, PCID and CPUs without NX are rejected. No new Cargo dependencies or toolchain change are introduced.
+The kernel allocates and frees 4 KiB physical frames, builds owned page tables and switches between address spaces with independent data. The baseline remains x86_64, four-level paging, one CPU and QEMU q35/TCG with 256 MiB. The declared profiles of 256, 512 and 2048 MiB are booted and reported by the own memory fixture; larger or sparse physical maps are not established. LA57, PCID and CPUs without NX are rejected. No new Cargo dependencies or toolchain change are introduced.
 
 The minimal allocator operates at page granularity. There is no `GlobalAlloc`, `Box`, variable-size heap, swapping or NUMA yet. This subsystem's own tests switch CR3 in ring 0; #10 separately adds [processes and scheduling tested in ring 3](PROCESSES.md).
 
@@ -26,7 +26,7 @@ The minimal allocator operates at page granularity. There is no `GlobalAlloc`, `
 
 ## Inventory and reservations
 
-Two static 32 KiB bitmaps track manageable and allocated frames: 64 KiB of metadata for physical addresses below 1 GiB. This is an explicit implementation limit, not a claim of tested support for a 1 GiB machine. A usable region exceeding it is rejected before import, not silently ignored. Raising it requires reviewing metadata, addresses, budgets and tests.
+Two static bitmaps track manageable and allocated frames: one bit per page in each array over a 2 GiB address budget, so 128 KiB of metadata. The budget is a reviewed storage constant (`LIMIT` in `arch/x86_64/memory/physical.rs`), not a claim about one machine; each further doubling of the budget doubles both 64 KiB bitmaps (`4 GiB` costs 256 KiB of metadata) and requires reviewing metadata, addresses, budgets and tests. Every usable region above the budget is rejected before import, not silently ignored. Frames above the old 1 GiB limit are real: on the 2048 MiB profile the fixture exhausts the pool, so it allocates, writes, reads, releases and re-verifies zeroed reuse of frames there, and the boot report names how many and the highest frame index.
 
 The entire map is validated before pages are imported. Only whole pages from `USABLE` regions are included; unknown types, firmware, ACPI, executable/modules and loader memory are excluded. The first MiB and the full ELF physical extent are also reserved, using the executable-address response and linker symbols. Reservations round outward; usable regions round inward. Double frees, unaligned addresses, unmanaged frames and reservation of in-use frames are rejected.
 
@@ -112,13 +112,16 @@ both, together with TLB shootdown; this is noted for #53.
 cargo xtask check
 python3 -m unittest discover -s tools/tests -v
 python3 tools/boot.py test --timeout 15
+python3 tools/memory_profiles_test.py
 python3 tools/sandbox.py prepare
 python3 tools/sandbox.py test --revision "$(git rev-parse HEAD)"
 ```
 
 `ok` requires IRQ and memory tests to finish before SUCCESS. Memory tests run 16 map/write/unmap cycles, reject duplicates and W+X, check code/rodata/aliases/guard, create two spaces with the same virtual address and different frames, alternate CR3 and verify their data, reject destruction of the active space and return resources. A structural test checks 1 GiB → 2 MiB → 4 KiB splitting and PAT.
 
-Next, the guest's real physical inventory is exhausted. The temporary frame list is stored within those frames to avoid a large additional heap or stack allocation. A single frame is freed, reacquired and checked for 4 KiB of zeroes. With only two free frames left, an allocation needing four must fail and return its partial acquisitions. Finally, the exact initial free counter is recovered.
+`python3 tools/memory_profiles_test.py` builds and boots `ok` at 256, 512 and 2048 MiB. Each profile owns its image path (`artifacts/boot/ok`, `ok-512`, `ok-2048`) and its boot output directory, so a non-reference profile never overwrites the reference image and every recorded run keeps its own `image.json` metadata. It reads only guest output and the recorded command: the `RUSTIC MEMORY` line must state the address budget and the metadata cost derived from it, the `RUSTIC MEMORY_FRAMES` line must split usable bytes into managed and reserved while every managed frame is allocated or free, and the QEMU command must ask for the profile's `-m` size with usable memory inside that profile's band. On a profile whose map passes the old 1 GiB limit, `high_frames` must be positive and `high_frame` at or above `high_boundary_frame`; a machine below it must report neither. Evidence lands in `artifacts/memory-profiles/`, and the image metadata in `artifacts/boot/ok*/`.
+
+Next, the guest's real physical inventory is exhausted. The temporary frame list is stored within those frames to avoid a large additional heap or stack allocation. A single frame is freed, reacquired and checked for 4 KiB of zeroes. With only two free frames left, an allocation needing four must fail and return its partial acquisitions. Finally, the exact initial free counter is recovered. On a machine with frames above the old 1 GiB limit the walk counts them and states the highest one; on a smaller machine it requires that count to be zero, so neither profile can pass with the other's answer.
 
 Five fixtures must produce #PF (vector 14), CR2 matching the announced address and the specific error code:
 

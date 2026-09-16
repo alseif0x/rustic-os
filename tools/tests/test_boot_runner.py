@@ -5,7 +5,8 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from boot_support.runner import classify
+from boot_support.image import MEMORY_PROFILES, OUTPUT, image_directory
+from boot_support.runner import classify, guest_memory
 
 
 class OutcomeTests(unittest.TestCase):
@@ -26,3 +27,16 @@ class OutcomeTests(unittest.TestCase):
         self.assertEqual(classify(-11, False, "RUSTIC START", "abc"), "unexpected")
         self.assertEqual(classify(35, False, "", "abc"), "unexpected")
         self.assertEqual(classify(35, False, "RUSTIC PANIC", "abc"), "panic")
+
+    def test_the_declared_profiles_are_the_ones_the_runner_accepts(self):
+        self.assertEqual(MEMORY_PROFILES, (256, 512, 2048))
+        for value in MEMORY_PROFILES:
+            self.assertEqual(guest_memory({"memory_mib": value}), value)
+        # An image built before the profile flag keeps the reference machine.
+        self.assertEqual(guest_memory({}), 256)
+
+    def test_a_non_reference_profile_never_overwrites_the_reference_image(self):
+        self.assertEqual(image_directory("ok"), OUTPUT / "ok")
+        for value in (512, 2048):
+            self.assertEqual(image_directory("ok", value), OUTPUT / f"ok-{value}")
+            self.assertNotEqual(image_directory("ok", value), image_directory("ok"))

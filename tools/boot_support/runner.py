@@ -26,7 +26,13 @@ def classify(returncode, timed_out, serial, build_id):
     return "unexpected"
 
 
-def run(image, timeout):
+def guest_memory(metadata):
+    """Guest RAM in MiB. Every image records its own profile; older fixtures,
+    built before #48, are the reference 256 MiB one."""
+    return metadata.get("memory_mib", 256)
+
+
+def run(image, timeout, memory=None):
     from .block_evidence import MODES
     from . import block_runner
     metadata = json.loads((Path(image).resolve().parent / "image.json").read_text())
@@ -38,16 +44,20 @@ def run(image, timeout):
         return verify(image, timeout)
     if metadata["mode"] in MODES:
         return block_runner.run(image, timeout, run_once)
-    return run_once(image, timeout)
+    return run_once(image, timeout, memory=memory)
 
 
-def run_once(image, timeout, storage=(), output=None, on_start=None):
+def run_once(image, timeout, storage=(), output=None, on_start=None, memory=None):
     image = Path(image).resolve()
     directory = output or image.parent
-    metadata = json.loads((image.parent / "image.json").read_text())
+    metadata_path = image.parent / "image.json"
+    if not metadata_path.is_file():
+        raise RuntimeError(f"no image metadata beside {image}")
+    metadata = json.loads(metadata_path.read_text())
     if environment.digest(image) != metadata["image_sha256"]:
         raise RuntimeError("image changed since construction")
     config = environment.CONFIG
+    memory = memory or guest_memory(metadata)
     serial_path = directory / "serial.log"
     serial_path.write_text("")
     started = time.monotonic()
@@ -57,7 +67,8 @@ def run_once(image, timeout, storage=(), output=None, on_start=None):
         shutil.copyfile("/usr/share/OVMF/OVMF_VARS_4M.fd", variables)
         command = [
             "qemu-system-x86_64", "-machine", config["machine"],
-            "-accel", config["accelerator"], "-cpu", config["cpu"], "-smp", "1", "-m", "256M",
+            "-accel", config["accelerator"], "-cpu", config["cpu"], "-smp", "1",
+            "-m", f"{memory}M",
             "-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd",
             "-drive", f"if=pflash,format=raw,file={variables}",
             "-drive", f"if=virtio,format=raw,readonly=on,file={image}",
@@ -87,6 +98,7 @@ def run_once(image, timeout, storage=(), output=None, on_start=None):
         "elapsed_seconds": round(time.monotonic() - started, 3),
         "timeout_seconds": timeout, "command": command,
         "build_id": metadata["build_id"], "image_sha256": metadata["image_sha256"],
+        "memory_mib": memory,
     }
     (directory / "result.json").write_text(json.dumps(result, indent=2) + "\n")
     print(f"{metadata['mode']}: {outcome} ({result['elapsed_seconds']}s)", flush=True)
