@@ -6,7 +6,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from boot_support.scenarios import frames_verified, memory_verified, reached
 
-MEMORY = ("RUSTIC MEMORY verified=1 page_bytes=4096 limit_bytes=2147483648 metadata_bytes=131072 "
+MEMORY = ("RUSTIC MEMORY verified=1 page_bytes=4096 limit_bytes=17179869184 metadata_bytes=1048576 "
           "managed_frames=100 table_frames=10 free_before=90 free_after=90 exhausted=90 rollback=1 "
           "zero_reuse=1 spaces=2 wx=1 aliases=1 guard=1 high_boundary_frame=262144 high_frame=0 high_frames=0")
 FRAMES = "RUSTIC MEMORY_FRAMES usable_bytes=409600 managed_bytes=409600 reserved_bytes=0 allocated_frames=10 free_frames=90"
@@ -32,24 +32,24 @@ class MemoryEvidence(unittest.TestCase):
     def test_metadata_cost_follows_the_address_budget(self):
         # One bit per page in each of the two bitmaps; a wrong budget or cost fails.
         self.assertTrue(memory_verified(MEMORY))
-        self.assertFalse(memory_verified(MEMORY.replace("limit_bytes=2147483648", "limit_bytes=1073741824")))
-        self.assertFalse(memory_verified(MEMORY.replace("metadata_bytes=131072", "metadata_bytes=65536")))
+        self.assertFalse(memory_verified(MEMORY.replace("limit_bytes=17179869184", "limit_bytes=1073741824")))
+        self.assertFalse(memory_verified(MEMORY.replace("metadata_bytes=1048576", "metadata_bytes=131072")))
 
     def test_high_frames_above_the_old_limit_must_stay_consistent(self):
-        # The recorded 2048 MiB run: 253,073 frames taken, highest frame 515,867,
-        # a boundary-to-highest span of 253,724.
-        high = MEMORY.replace("high_frame=0 high_frames=0", "high_frame=515867 high_frames=253073")
+        # The recorded 2048 MiB run: 252,847 frames taken, highest frame 515,871,
+        # a boundary-to-highest span of 253,728.
+        high = MEMORY.replace("high_frame=0 high_frames=0", "high_frame=515871 high_frames=252847")
         self.assertTrue(memory_verified(high))
         # The span itself is an upper bound, not an impossible count: a kernel
         # that reported it would still pass this generic line check, which is why
-        # tools/memory_profiles_test.py pins the recorded count.
-        self.assertTrue(memory_verified(high.replace("high_frames=253073", "high_frames=253724")))
-        self.assertFalse(memory_verified(high.replace("high_frames=253073", "high_frames=253725")))
-        self.assertFalse(memory_verified(high.replace("high_frames=253073", "high_frames=999999999")))
+        # tools/memory_profiles_test.py also compares the count against the span.
+        self.assertTrue(memory_verified(high.replace("high_frames=252847", "high_frames=253728")))
+        self.assertFalse(memory_verified(high.replace("high_frames=252847", "high_frames=253729")))
+        self.assertFalse(memory_verified(high.replace("high_frames=252847", "high_frames=999999999")))
         # A claimed high frame below the named boundary is not above the old limit.
-        self.assertFalse(memory_verified(high.replace("high_frame=515867", "high_frame=262143")))
+        self.assertFalse(memory_verified(high.replace("high_frame=515871", "high_frame=262143")))
         # A high frame index without at least one high frame taken is inconsistent.
-        self.assertFalse(memory_verified(high.replace("high_frames=253073", "high_frames=0")))
+        self.assertFalse(memory_verified(high.replace("high_frames=252847", "high_frames=0")))
 
     def test_frame_report_must_split_usable_memory_exactly(self):
         serial = MEMORY + "\n" + FRAMES

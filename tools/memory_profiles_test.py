@@ -18,11 +18,16 @@ from boot_support import scenarios
 from boot_support.image import MEMORY_PROFILES, build
 from boot_support.runner import run_once
 
-PROFILES = MEMORY_PROFILES
-# The address budget the larger profiles replaced, and the one they use now
+# The declared profiles plus the smallest profile whose usable map passes 2 GiB,
+# which is what proves frames above the old boundary. Larger sizes (8 GiB and
+# up) need the host to free that much RAM; pass them through --profiles.
+PROFILES = MEMORY_PROFILES + (4096,)
+TEST_PROFILES = MEMORY_PROFILES + (4096, 6144, 8192, 12288, 16384)
+# Boundaries this evidence is stated against: the 1 GiB budget the declared
+# profiles replaced, and the current address budget
 # (kernel/src/arch/x86_64/memory/physical.rs: LIMIT).
 OLD_LIMIT_BYTES = 1 << 30
-LIMIT_BYTES = 2 << 30
+LIMIT_BYTES = 16 << 30
 PAGE_BYTES = 4096
 # One bit per page in each of the two static bitmaps, for the fixed budget.
 METADATA_BYTES = LIMIT_BYTES // PAGE_BYTES // 8 * 2
@@ -56,20 +61,24 @@ def check(mib, result, serial, memory, frames, managed):
     low, high_band = (mib - 64) << 20, mib << 20
     assert low <= frames["usable_bytes"] < high_band, f"{mib} MiB: usable memory outside the profile"
     assert memory["exhausted"] == memory["free_before"] > 0
-    # Only the integrated 2048 MiB profile declares memory above the old limit.
-    # The count must be a count, not the boundary-to-highest span. The map has a
-    # small hole above 1 GiB (firmware/ACPI regions), so the count is the span
-    # minus that hole; a kernel that reported the span would show a zero hole.
-    high = mib >= 2048
+    # A profile whose usable map passes the old 1 GiB boundary must report the
+    # frames it took above it, and the count cannot exceed the frames the highest
+    # reported index allows.
+    high = frames["usable_bytes"] > OLD_LIMIT_BYTES
     if high:
         span = memory["high_frame"] - memory["high_boundary_frame"] + 1
-        hole = span - memory["high_frames"]
         assert memory["high_frame"] >= memory["high_boundary_frame"]
-        assert 0 < hole <= 4096, (
-            f"{mib} MiB: high-frame count {memory['high_frames']} against span {span} "
-            f"leaves a hole of {hole}; the count must exclude the map hole above the "
-            "old boundary, and the span alone is not a count"
-        )
+        assert 0 < memory["high_frames"] <= span, f"{mib} MiB: high-frame count is impossible"
+        # The reference profile carries the recorded regression guard: on this
+        # firmware the map keeps a small unmanaged area above the boundary, so the
+        # count is the span minus that area. A kernel that reported the span as
+        # the count would show a zero (or huge) gap and fail here.
+        if mib == 2048:
+            assert 0 < span - memory["high_frames"] <= 4096, (
+                f"{mib} MiB: high-frame count {memory['high_frames']} against span {span} "
+                "does not exclude the map gap above the old boundary; the span alone "
+                "is not a count"
+            )
     else:
         assert memory["high_frames"] == 0 and memory["high_frame"] == 0
     return high
@@ -95,7 +104,7 @@ def verify(output=DEFAULT_OUTPUT, profiles=PROFILES):
     revision = source()
     boots = {}
     for mib in profiles:
-        if mib not in MEMORY_PROFILES:
+        if mib not in MEMORY_PROFILES and mib not in TEST_PROFILES:
             raise ValueError(f"unsupported memory profile: {mib}")
         # Each profile has its own image directory and its own boot output, so the
         # image is booted from the metadata it was built with and no profile
@@ -105,7 +114,9 @@ def verify(output=DEFAULT_OUTPUT, profiles=PROFILES):
         image = build("ok", memory=mib)
         built = json.loads((Path(image).resolve().parent / "image.json").read_text())
         assert built["memory_mib"] == mib, f"image did not carry the {mib} MiB profile"
-        result = run_once(image, 180, output=directory)
+        # The machine-wide exhaustion walk scales with RAM, so a large profile
+        # needs a correspondingly larger budget than the reference 180 s.
+        result = run_once(image, max(180, mib), output=directory)
         serial = (directory / "serial.log").read_text(errors="replace")
         memory, frames = parse(serial)
         managed = memory["managed_frames"] * PAGE_BYTES

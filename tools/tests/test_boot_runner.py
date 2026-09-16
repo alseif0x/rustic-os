@@ -5,7 +5,13 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from boot_support.image import MEMORY_PROFILES, OUTPUT, image_directory, memory_supported
+from boot_support.image import (
+    MAX_MEMORY_MIB,
+    MEMORY_PROFILES,
+    OUTPUT,
+    image_directory,
+    memory_supported,
+)
 from boot_support.runner import classify, guest_memory
 
 
@@ -46,9 +52,14 @@ class OutcomeTests(unittest.TestCase):
         # builder refuses any other profile for them instead of recording it.
         for mode in ("terminal-test", "recovery-test"):
             self.assertTrue(memory_supported(mode, 256))
-            for value in (512, 2048):
+            for value in (512, 2048, 4096):
                 self.assertFalse(memory_supported(mode, value))
         for mode in ("ok", "block-user"):
             for value in MEMORY_PROFILES:
                 self.assertTrue(memory_supported(mode, value))
-        self.assertFalse(memory_supported("ok", 1024))
+        # The manual action and the profile suite reach up to the bitmap budget.
+        self.assertTrue(memory_supported("ok", 4096))
+        self.assertTrue(memory_supported("ok", 8192))
+        self.assertTrue(memory_supported("ok", MAX_MEMORY_MIB))
+        self.assertFalse(memory_supported("ok", MAX_MEMORY_MIB + 256))
+        self.assertFalse(memory_supported("ok", 1024 + 128))  # not a 256 MiB step

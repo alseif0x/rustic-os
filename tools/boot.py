@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Build and test the R0 UEFI image from the repository root."""
 import argparse
-from boot_support.image import DEFAULT_MEMORY_MIB, MEMORY_PROFILES, build, memory_supported
+from boot_support.image import DEFAULT_MEMORY_MIB, MAX_MEMORY_MIB, MEMORY_PROFILES, build, memory_supported
 from boot_support.runner import run, suite
 from boot_support.scenarios import MODES
 
@@ -9,9 +9,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["image", "run", "test"])
     parser.add_argument("--mode", choices=MODES, default="ok")
-    parser.add_argument("--memory", type=int, choices=MEMORY_PROFILES, default=DEFAULT_MEMORY_MIB,
-                        help="guest RAM profile in MiB (#48); the reference `test` suite and the "
-                             "terminal/recovery harnesses remain 256 MiB")
+    parser.add_argument("--memory", type=int, default=DEFAULT_MEMORY_MIB,
+                        help=f"guest RAM in MiB, 256..{MAX_MEMORY_MIB} in 256 MiB steps (#48); the "
+                             "reference `test` suite and the terminal/recovery harnesses remain "
+                             f"{DEFAULT_MEMORY_MIB} MiB")
     parser.add_argument("--timeout", type=float, default=30)
     args = parser.parse_args()
     if not 1 <= args.timeout <= 120:

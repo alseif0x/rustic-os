@@ -15,9 +15,13 @@ from .scenarios import MODES
 
 ROOT = environment.ROOT
 OUTPUT = ROOT / "artifacts/boot"
-# Guest RAM profiles declared in docs/requirements-v0.1.md and owned by issue #48.
+# RAM profile sizes the reference suite and the `--memory` flag accept. The
+# address budget in kernel/src/arch/x86_64/memory/physical.rs is larger, and the
+# manual `run` action plus the memory profile suite can use anything up to it.
 MEMORY_PROFILES = (256, 512, 2048)
 DEFAULT_MEMORY_MIB = 256
+# The bitmap budget is 16 GiB (64 KiB of metadata per GiB).
+MAX_MEMORY_MIB = 16384
 # Fixtures whose harness owns its own QEMU invocation and pins the reference
 # size. A profile other than the reference cannot be honored for these, so the
 # builder refuses it instead of recording a memory_mib the boot never used.
@@ -25,9 +29,11 @@ PINNED_MEMORY_MODES = ("terminal-test", "recovery-test")
 
 
 def memory_supported(mode, memory):
-    return memory in MEMORY_PROFILES and (
-        memory == DEFAULT_MEMORY_MIB or mode not in PINNED_MEMORY_MODES
+    """MiB profiles from the reference up to the bitmap budget, in 256 MiB steps."""
+    declared = memory in MEMORY_PROFILES or (
+        DEFAULT_MEMORY_MIB < memory <= MAX_MEMORY_MIB and memory % DEFAULT_MEMORY_MIB == 0
     )
+    return declared and (memory == DEFAULT_MEMORY_MIB or mode not in PINNED_MEMORY_MODES)
 
 
 def source_id(*, tasks_acceptance=False, memory=DEFAULT_MEMORY_MIB):
