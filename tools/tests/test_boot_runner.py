@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from boot_support.image import MEMORY_PROFILES, OUTPUT, image_directory
+from boot_support.image import MEMORY_PROFILES, OUTPUT, image_directory, memory_supported
 from boot_support.runner import classify, guest_memory
 
 
@@ -40,3 +40,15 @@ class OutcomeTests(unittest.TestCase):
         for value in (512, 2048):
             self.assertEqual(image_directory("ok", value), OUTPUT / f"ok-{value}")
             self.assertNotEqual(image_directory("ok", value), image_directory("ok"))
+
+    def test_a_pinned_harness_refuses_a_profile_it_cannot_boot(self):
+        # These harnesses own QEMU and hardcode the reference size, so the image
+        # builder refuses any other profile for them instead of recording it.
+        for mode in ("terminal-test", "recovery-test"):
+            self.assertTrue(memory_supported(mode, 256))
+            for value in (512, 2048):
+                self.assertFalse(memory_supported(mode, value))
+        for mode in ("ok", "block-user"):
+            for value in MEMORY_PROFILES:
+                self.assertTrue(memory_supported(mode, value))
+        self.assertFalse(memory_supported("ok", 1024))

@@ -36,12 +36,20 @@ class MemoryEvidence(unittest.TestCase):
         self.assertFalse(memory_verified(MEMORY.replace("metadata_bytes=131072", "metadata_bytes=65536")))
 
     def test_high_frames_above_the_old_limit_must_stay_consistent(self):
-        high = MEMORY.replace("high_frame=0 high_frames=0", "high_frame=515867 high_frames=253724")
+        # The recorded 2048 MiB run: 253,073 frames taken, highest frame 515,867,
+        # a boundary-to-highest span of 253,724.
+        high = MEMORY.replace("high_frame=0 high_frames=0", "high_frame=515867 high_frames=253073")
         self.assertTrue(memory_verified(high))
+        # The span itself is an upper bound, not an impossible count: a kernel
+        # that reported it would still pass this generic line check, which is why
+        # tools/memory_profiles_test.py pins the recorded count.
+        self.assertTrue(memory_verified(high.replace("high_frames=253073", "high_frames=253724")))
+        self.assertFalse(memory_verified(high.replace("high_frames=253073", "high_frames=253725")))
+        self.assertFalse(memory_verified(high.replace("high_frames=253073", "high_frames=999999999")))
         # A claimed high frame below the named boundary is not above the old limit.
         self.assertFalse(memory_verified(high.replace("high_frame=515867", "high_frame=262143")))
         # A high frame index without at least one high frame taken is inconsistent.
-        self.assertFalse(memory_verified(high.replace("high_frames=253724", "high_frames=0")))
+        self.assertFalse(memory_verified(high.replace("high_frames=253073", "high_frames=0")))
 
     def test_frame_report_must_split_usable_memory_exactly(self):
         serial = MEMORY + "\n" + FRAMES

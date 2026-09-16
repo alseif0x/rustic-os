@@ -157,8 +157,7 @@ Closing evidence links the commit, CI, versions and artifacts in #10.
 Configuration: one-CPU, 256 MiB R0, QEMU 8.2.2 q35/qemu64/TCG, OVMF 2024.02 and
 Rust 1.98.1. Diagnostics record preemptions, contained faults, repetitions and
 free memory before/after. Timings include self-tests and are not product-boot
-latency. The future integrated scenario's 2 GiB budget still requires raising
-the #9 physical limit; this test does not establish it.
+latency. This test does not establish the integrated 2048 MiB scenario; #48 raises the physical limit and records that profile separately in [Memory](MEMORY.md).
 
 `PROCESS_MEMORY` records maximum frames used when all eight slots are filled,
 including page tables and user stacks, the actual `Manager` size and the

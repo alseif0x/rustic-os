@@ -18,6 +18,16 @@ OUTPUT = ROOT / "artifacts/boot"
 # Guest RAM profiles declared in docs/requirements-v0.1.md and owned by issue #48.
 MEMORY_PROFILES = (256, 512, 2048)
 DEFAULT_MEMORY_MIB = 256
+# Fixtures whose harness owns its own QEMU invocation and pins the reference
+# size. A profile other than the reference cannot be honored for these, so the
+# builder refuses it instead of recording a memory_mib the boot never used.
+PINNED_MEMORY_MODES = ("terminal-test", "recovery-test")
+
+
+def memory_supported(mode, memory):
+    return memory in MEMORY_PROFILES and (
+        memory == DEFAULT_MEMORY_MIB or mode not in PINNED_MEMORY_MODES
+    )
 
 
 def source_id(*, tasks_acceptance=False, memory=DEFAULT_MEMORY_MIB):
@@ -41,8 +51,11 @@ def source_id(*, tasks_acceptance=False, memory=DEFAULT_MEMORY_MIB):
 def build(mode, memory=DEFAULT_MEMORY_MIB):
     if mode not in MODES:
         raise ValueError("unsupported fixture")
-    if memory not in MEMORY_PROFILES:
-        raise ValueError("unsupported memory profile")
+    if not memory_supported(mode, memory):
+        raise ValueError(
+            f"{mode} pins the {DEFAULT_MEMORY_MIB} MiB reference size; "
+            f"the {memory} MiB profile is not available for it"
+        )
     environment.verify()
     environment.fetch_bootloader()
     tasks_acceptance = mode == "terminal-test"

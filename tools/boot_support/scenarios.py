@@ -90,10 +90,15 @@ def memory_verified(serial):
 
 def high_frames_consistent(values):
     """A machine below the boundary reports neither value; above it, the highest
-    frame index taken must lie at or past the boundary."""
+    frame index taken must lie at or past the boundary and the count cannot
+    exceed the frames that index allows. The upper bound is what stops a kernel
+    from reporting the boundary-to-highest span as if it were the count."""
     if values["high_frames"] == 0:
         return values["high_frame"] == 0
-    return values["high_frame"] >= values["high_boundary_frame"]
+    if values["high_frame"] < values["high_boundary_frame"]:
+        return False
+    span = values["high_frame"] - values["high_boundary_frame"] + 1
+    return values["high_frames"] <= span
 
 
 def frames_verified(serial):

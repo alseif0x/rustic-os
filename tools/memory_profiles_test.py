@@ -57,10 +57,19 @@ def check(mib, result, serial, memory, frames, managed):
     assert low <= frames["usable_bytes"] < high_band, f"{mib} MiB: usable memory outside the profile"
     assert memory["exhausted"] == memory["free_before"] > 0
     # Only the integrated 2048 MiB profile declares memory above the old limit.
+    # The count must be a count, not the boundary-to-highest span. The map has a
+    # small hole above 1 GiB (firmware/ACPI regions), so the count is the span
+    # minus that hole; a kernel that reported the span would show a zero hole.
     high = mib >= 2048
     if high:
-        assert memory["high_frames"] > 0, f"{mib} MiB: no frame above the old limit"
+        span = memory["high_frame"] - memory["high_boundary_frame"] + 1
+        hole = span - memory["high_frames"]
         assert memory["high_frame"] >= memory["high_boundary_frame"]
+        assert 0 < hole <= 4096, (
+            f"{mib} MiB: high-frame count {memory['high_frames']} against span {span} "
+            f"leaves a hole of {hole}; the count must exclude the map hole above the "
+            "old boundary, and the span alone is not a count"
+        )
     else:
         assert memory["high_frames"] == 0 and memory["high_frame"] == 0
     return high

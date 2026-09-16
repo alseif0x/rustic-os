@@ -8,7 +8,7 @@ import tempfile
 import time
 
 import environment
-from .image import build, OUTPUT
+from .image import build, memory_supported, OUTPUT
 from .scenarios import EXPECTED, reached
 
 
@@ -36,6 +36,11 @@ def run(image, timeout, memory=None):
     from .block_evidence import MODES
     from . import block_runner
     metadata = json.loads((Path(image).resolve().parent / "image.json").read_text())
+    # The pinned harnesses below own their own QEMU invocation and never read the
+    # profile, so refuse a request that would not be honored.
+    if memory is not None and (not memory_supported(metadata["mode"], memory)
+                               or memory != guest_memory(metadata)):
+        raise RuntimeError(f"{metadata['mode']} cannot run the {memory} MiB profile")
     if metadata["mode"] == "recovery-test":
         from terminal_support.recovery_acceptance import verify
         return verify(image, timeout)

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Build and test the R0 UEFI image from the repository root."""
 import argparse
-from boot_support.image import DEFAULT_MEMORY_MIB, MEMORY_PROFILES, build
+from boot_support.image import DEFAULT_MEMORY_MIB, MEMORY_PROFILES, build, memory_supported
 from boot_support.runner import run, suite
 from boot_support.scenarios import MODES
 
@@ -18,8 +18,9 @@ if __name__ == "__main__":
         parser.error("timeout must be between 1 and 120 seconds")
     # The terminal and recovery harnesses own their own QEMU invocation and stay
     # at the reference size. Refuse a profile those paths cannot honor instead of
-    # writing a memory_mib that the boot never used.
-    fixed = args.action == "test" or args.mode in ("terminal-test", "recovery-test")
+    # writing a memory_mib that the boot never used. `image.build` enforces the
+    # same rule for any caller.
+    fixed = args.action == "test" or not memory_supported(args.mode, args.memory)
     if args.memory != DEFAULT_MEMORY_MIB and fixed:
         parser.error(f"--memory {args.memory} is not available for `{args.action} --mode {args.mode}`; "
                      "use tools/memory_profiles_test.py or `run --mode ok|block-*`")

@@ -16,7 +16,7 @@ pub(crate) fn panic(info: &PanicInfo<'_>) -> ! {
         // The failing fixture still holds the token. A lost panic message hides
         // which assertion failed, so emit the reason on the raw port instead;
         // this is the terminal path and no owner can use the line afterwards.
-        arch::panic_bytes(b"RUSTIC PANIC_UNSERIALIZED component=kernel\n");
+        arch::panic_bytes(b"RUSTIC PANIC_UNSERIALIZED component=kernel\r\n");
         let mut text = [0u8; 512];
         let mut writer = RawText::new(&mut text);
         let _ = write!(writer, "{info}");
@@ -50,17 +50,22 @@ impl<'a> RawText<'a> {
 
 impl core::fmt::Write for RawText<'_> {
     fn write_str(&mut self, text: &str) -> core::fmt::Result {
-        // Keep whole characters: drop trailing continuation bytes that would be
-        // split by the remaining capacity.
-        let mut end = text.len().min(self.buffer.len() - self.len);
-        while end > 0 && !text.is_char_boundary(end) {
-            end -= 1;
-        }
-        for byte in text.as_bytes()[..end].iter().copied() {
-            if byte == b'\n' {
+        // Copy whole characters only. A newline expands to CRLF, so the room
+        // required is the encoded character plus one; a character that does not
+        // fit is dropped rather than split, and the rest of the line is lost.
+        for character in text.chars() {
+            let encoded = character.len_utf8();
+            let required = encoded + usize::from(character == '\n');
+            if self.buffer.len() - self.len < required {
+                break;
+            }
+            if character == '\n' {
                 self.push(b'\r');
             }
-            self.push(byte);
+            let mut bytes = [0u8; 4];
+            self.buffer[self.len..self.len + encoded]
+                .copy_from_slice(character.encode_utf8(&mut bytes).as_bytes());
+            self.len += encoded;
         }
         Ok(())
     }
