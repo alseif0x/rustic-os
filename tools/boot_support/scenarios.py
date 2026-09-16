@@ -38,7 +38,8 @@ def reached(mode, serial):
         return block_verified(mode, serial, records)
     if mode == "ok":
         return ("RUSTIC IRQ verified=1 breakpoint=1 spurious=2 waits=3 cancelled=1 race_waits=100" in serial
-                and memory_verified(serial) and process_verified(serial, records) and ipc_verified(serial, records)
+                and memory_verified(serial) and frames_verified(serial)
+                and process_verified(serial, records) and ipc_verified(serial, records)
                 and sdk_verified(serial, records))
     if mode == "hang":
         return "RUSTIC HANG deliberate=1" in serial
@@ -61,18 +62,61 @@ def records(serial, prefix):
 
 
 def memory_verified(serial):
+    """The whole memory fixture: accounting, exhaustion and the frame budget.
+
+    `limit_bytes` is the bitmap address budget from the owner, and
+    `metadata_bytes` must be exactly one bit per page in each of the two bitmaps.
+    `high_frame` is the highest frame index taken above `high_boundary_frame` and
+    `high_frames` is how many were taken; both must agree, and zero on a machine
+    with no memory there. The machine size, not this line, decides which case is
+    expected, so `frames_verified` and the profile suite check that separately.
+    """
     try:
         for raw in records(serial, "RUSTIC MEMORY "):
             values = {key: int(value) for key, value in raw.items()}
-            expected = {"verified": 1, "page_bytes": 4096, "metadata_bytes": 65536,
+            expected = {"verified": 1, "page_bytes": 4096,
                         "rollback": 1, "zero_reuse": 1, "spaces": 2, "wx": 1, "aliases": 1, "guard": 1}
             if (all(values.get(key) == value for key, value in expected.items())
+                    and values["limit_bytes"] > 0
+                    and values["metadata_bytes"] == values["limit_bytes"] // 4096 // 8 * 2
                     and values["free_before"] == values["free_after"] == values["exhausted"] > 0
-                    and values["managed_frames"] - values["free_before"] == values["table_frames"] > 0):
+                    and values["managed_frames"] - values["free_before"] == values["table_frames"] > 0
+                    and high_frames_consistent(values)):
                 return True
     except (KeyError, ValueError):
         pass
     return False
+
+
+def high_frames_consistent(values):
+    """A machine below the boundary reports neither value; above it, the highest
+    frame index taken must lie at or past the boundary and the count cannot
+    exceed the frames that index allows. The upper bound is what stops a kernel
+    from reporting the boundary-to-highest span as if it were the count."""
+    if values["high_frames"] == 0:
+        return values["high_frame"] == 0
+    if values["high_frame"] < values["high_boundary_frame"]:
+        return False
+    span = values["high_frame"] - values["high_boundary_frame"] + 1
+    return values["high_frames"] <= span
+
+
+def frames_verified(serial):
+    """The boot frame report must add up: usable memory splits into managed
+    frames plus what the loader and reservations keep out, and every managed
+    frame is either allocated or free."""
+    try:
+        frames, = records(serial, "RUSTIC MEMORY_FRAMES ")
+        memory, = records(serial, "RUSTIC MEMORY ")
+        values = {key: int(value) for key, value in frames.items()}
+        managed = int(memory["managed_frames"])
+        return (values["usable_bytes"] >= values["managed_bytes"] > 0
+                and values["reserved_bytes"] == values["usable_bytes"] - values["managed_bytes"]
+                and values["managed_bytes"] == managed * 4096
+                and values["free_frames"] > 0
+                and values["allocated_frames"] + values["free_frames"] == managed)
+    except (KeyError, ValueError):
+        return False
 
 
 def memory_fault(mode, serial):

@@ -15,11 +15,31 @@ from .scenarios import MODES
 
 ROOT = environment.ROOT
 OUTPUT = ROOT / "artifacts/boot"
+# RAM profile sizes the reference suite and the `--memory` flag accept. The
+# address budget in kernel/src/arch/x86_64/memory/physical.rs is larger, and the
+# manual `run` action plus the memory profile suite can use anything up to it.
+MEMORY_PROFILES = (256, 512, 2048)
+DEFAULT_MEMORY_MIB = 256
+# The bitmap budget is 16 GiB (64 KiB of metadata per GiB).
+MAX_MEMORY_MIB = 16384
+# Fixtures whose harness owns its own QEMU invocation and pins the reference
+# size. A profile other than the reference cannot be honored for these, so the
+# builder refuses it instead of recording a memory_mib the boot never used.
+PINNED_MEMORY_MODES = ("terminal-test", "recovery-test")
 
 
-def source_id(*, tasks_acceptance=False):
+def memory_supported(mode, memory):
+    """MiB profiles from the reference up to the bitmap budget, in 256 MiB steps."""
+    declared = memory in MEMORY_PROFILES or (
+        DEFAULT_MEMORY_MIB < memory <= MAX_MEMORY_MIB and memory % DEFAULT_MEMORY_MIB == 0
+    )
+    return declared and (memory == DEFAULT_MEMORY_MIB or mode not in PINNED_MEMORY_MODES)
+
+
+def source_id(*, tasks_acceptance=False, memory=DEFAULT_MEMORY_MIB):
     digest = hashlib.sha256()
     digest.update(b"tasks-acceptance=1\0" if tasks_acceptance else b"tasks-acceptance=0\0")
+    digest.update(f"memory-mib={memory}\0".encode())
     paths = sorted((ROOT / "kernel").rglob("*.rs"))
     paths += sorted((ROOT / "kernel").rglob("*.S"))
     paths += sorted((ROOT / "crates").rglob("*.rs"))
@@ -34,13 +54,18 @@ def source_id(*, tasks_acceptance=False):
     return digest.hexdigest()[:16]
 
 
-def build(mode):
+def build(mode, memory=DEFAULT_MEMORY_MIB):
     if mode not in MODES:
         raise ValueError("unsupported fixture")
+    if not memory_supported(mode, memory):
+        raise ValueError(
+            f"{mode} pins the {DEFAULT_MEMORY_MIB} MiB reference size; "
+            f"the {memory} MiB profile is not available for it"
+        )
     environment.verify()
     environment.fetch_bootloader()
     tasks_acceptance = mode == "terminal-test"
-    build_id = source_id(tasks_acceptance=tasks_acceptance)
+    build_id = source_id(tasks_acceptance=tasks_acceptance, memory=memory)
     env = os.environ.copy()
     env["RUSTIC_BUILD_ID"] = build_id
     env["RUSTIC_APPLICATION_DIRECTORY"] = str(application.build(ROOT, env, tasks_acceptance=tasks_acceptance))
@@ -60,15 +85,24 @@ def build(mode):
         "block_application_manifest_sha256": environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / "block-probe.manifest"),
         "native_applications": {name: {suffix: environment.digest(Path(env["RUSTIC_APPLICATION_DIRECTORY"]) / (name + suffix)) for suffix in (".elf", ".manifest")} for name in ("file-server", "supervisor", "shell", "utility", "tasks")},
         "rustc": subprocess.check_output(["rustc", "--version", "--verbose"], text=True),
+        "memory_mib": memory,
     }
     return package(kernel, mode, build_id, provenance)
+
+
+def image_directory(mode, memory=DEFAULT_MEMORY_MIB):
+    """One directory per fixture and RAM profile: a non-reference profile never
+    overwrites the reference `artifacts/boot/<mode>/` image and metadata."""
+    name = mode if memory == DEFAULT_MEMORY_MIB else f"{mode}-{memory}"
+    return OUTPUT / name
 
 
 def package(kernel, mode, build_id, provenance):
     """Package a prebuilt ELF using trusted reference files, without compiling."""
     if mode not in MODES:
         raise ValueError("unsupported fixture")
-    directory = OUTPUT / mode
+    memory = provenance.get("memory_mib", DEFAULT_MEMORY_MIB)
+    directory = image_directory(mode, memory)
     directory.mkdir(parents=True, exist_ok=True)
     header = kernel.read_bytes()[:64]
     if header[:6] != b"\x7fELF\x02\x01" or header[16:20] != b"\x02\x00\x3e\x00":

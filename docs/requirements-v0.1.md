@@ -36,7 +36,7 @@ The following are test-configuration parameters, not minimum requirements for a 
 
 #4 must record exact Rust/Cargo, QEMU, OVMF, Limine, image-utility and CI versions, hashes/sources and verified commands. Do not download latest on every build. #4 cannot close with an unversioned checklist. This assignment avoids inventing versions before testing compatibility. Current versions are recorded in [the development guide](DEVELOPMENT.md) and tools/environment.toml.
 
-The current memory implementation rejects usable physical regions above 1 GiB. The integrated 2048 MiB profile remains a future acceptance target and requires extending that implementation; current 256 MiB evidence does not establish it.
+The own memory owner manages frames over a 16 GiB address budget and boots the declared 256, 512 and 2048 MiB profiles, reporting usable, reserved, managed, allocated and free frames; frames above the old 1 GiB limit are allocated, accessed and released on the integrated 2048 MiB profile (issue #48). Larger or sparse physical maps are not established, and a usable region beyond the budget is still rejected.
 
 ## Traceable requirements
 

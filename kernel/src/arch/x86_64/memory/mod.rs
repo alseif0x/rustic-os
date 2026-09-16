@@ -15,6 +15,7 @@ pub(crate) use user::UserSpace;
 
 use core::marker::PhantomData;
 use physical::Physical;
+use rustic_kernel::boot::validate_map;
 use rustic_kernel::memory::FrameError;
 use space::AddressSpace;
 
@@ -48,6 +49,9 @@ pub(crate) struct Memory {
     physical: Physical,
     kernel: AddressSpace,
     layout: BootMemory,
+    /// Firmware-reported usable bytes, kept for the boot report so the managed
+    /// count and the amount left reserved can be compared truthfully.
+    usable: u64,
     _local: PhantomData<*mut ()>,
 }
 
@@ -56,6 +60,11 @@ impl Memory {
         layout: BootMemory,
         entries: impl Iterator<Item = (u64, u64, bool)> + Clone,
     ) -> Result<Self, Error> {
+        // The validated summary supplies usable bytes with checked arithmetic, so
+        // the report never sums raw firmware lengths itself.
+        let usable = validate_map(entries.clone())
+            .map_err(|_| Error::Frames(FrameError::InvalidMap))?
+            .usable_bytes;
         let mut physical = Physical::initialize(layout, entries)?;
         let kernel = bootstrap::build(&mut physical, layout)?;
         // SAFETY: Bootstrap copied all needed higher-half mappings, made executable
@@ -67,6 +76,7 @@ impl Memory {
             physical,
             kernel,
             layout,
+            usable,
             _local: PhantomData,
         })
     }
