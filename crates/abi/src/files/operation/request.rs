@@ -41,7 +41,7 @@ impl Replacement {
             || p.status != 0
             || p.count != 36
             || p.arg > 1024
-            || p.data[36..] != [0; 4]
+            || p.data[36..40].iter().any(|b| *b != 0)
         {
             return Err(Error::Protocol);
         }

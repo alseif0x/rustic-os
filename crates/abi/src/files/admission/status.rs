@@ -70,7 +70,7 @@ impl Status {
         ) || p.status != 0
             || p.id != 0
             || p.count != 32
-            || p.data[32..] != [0; 8]
+            || p.data[32..40].iter().any(|b| *b != 0)
         {
             return Err(Error::Protocol);
         }

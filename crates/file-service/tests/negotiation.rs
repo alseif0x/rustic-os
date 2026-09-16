@@ -139,5 +139,5 @@ fn a_poisoned_volume_cannot_advertise_healthy_support() {
     let context = grant(&mut s, 0, 0, READ_RIGHT, 0);
     let reply = ask(&mut s, context, Method::OperationsGet);
     assert_eq!(reply.status, Error::Uncertain as u8);
-    assert_eq!(reply.data, [0; 40]);
+    assert_eq!(reply.data, [0; rustic_abi::files::DATA]);
 }

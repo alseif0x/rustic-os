@@ -21,14 +21,14 @@ impl<P: crate::rpc::Progress> Client<P> {
                 return Err(Error::Protocol);
             }
             opened = true;
-            for (index, chunk) in bytes.chunks(DATA).enumerate() {
+            for (index, chunk) in bytes.chunks(MAX_CHUNK).enumerate() {
                 let mut p = Packet::new(if admitted {
                     admission::CHUNK
                 } else {
                     REPLACE_CHUNK
                 });
                 p.id = request.resource.object();
-                p.arg = (index * DATA) as u32;
+                p.arg = (index * MAX_CHUNK) as u32;
                 p.count = chunk.len() as u8;
                 p.data[..chunk.len()].copy_from_slice(chunk);
                 let ack = self.operation_exchange(p)?;

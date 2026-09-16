@@ -6,7 +6,7 @@ mod handles;
 mod message;
 pub use broker::Broker;
 pub use message::Message;
-pub use rustic_abi::ipc::{ALL, Error, MAX_MESSAGE, READ, TRANSFER, WRITE};
+pub use rustic_abi::ipc::{ALL, Error, MAX_MESSAGE, PAYLOAD, READ, TRANSFER, WRITE};
 
 impl From<crate::handles::Error> for Error {
     fn from(value: crate::handles::Error) -> Self {

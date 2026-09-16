@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Pure owned progress over a caller buffer; transport owns peer and correlation checks.
 use rustic_abi::files::{
-    DATA, Error, Packet, READ_CHUNK,
+    Error, MAX_CHUNK, Packet, READ_CHUNK,
     read::{Header, Info, MAX_RANGE, Request},
 };
 use sha2::{Digest, Sha256};
@@ -64,7 +64,7 @@ impl<'a> Collector<'a> {
         let request = Request {
             expected_version: Some(info.version),
             offset: self.request.offset + self.used as u64,
-            length: (info.length - self.used).min(DATA) as u16,
+            length: (info.length - self.used).min(MAX_CHUNK) as u16,
             ..self.request
         };
         request.packet(READ_CHUNK, self.context).map(Some)

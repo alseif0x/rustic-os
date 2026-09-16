@@ -53,14 +53,11 @@ impl Server {
         grant
             .operation_inspect(&self.volume, old.workspace, old.receipt.id)
             .map_err(|_| Error::OutcomeUnknown)?;
-        receipt(old)?.part(
-            p.op,
-            p.context,
-            if p.op == OPERATION_PART {
-                p.arg as usize
-            } else {
-                0
-            },
-        )
+        // The whole receipt fits in one packet now, so only the first fragment
+        // offset remains meaningful.
+        if p.op == OPERATION_PART && p.arg != 0 {
+            return Err(Error::Offset);
+        }
+        receipt(old)?.part(p.op, p.context, 0)
     }
 }

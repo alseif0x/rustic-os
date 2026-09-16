@@ -52,11 +52,11 @@ fn stage(server: &mut Server, disk: &mut Memory, request: Replacement, context: 
         .status,
         0
     );
-    for (i, bytes) in data.chunks(DATA).enumerate() {
+    for (i, bytes) in data.chunks(MAX_CHUNK).enumerate() {
         let mut p = Packet::new(REPLACE_CHUNK);
         p.context = context;
         p.id = request.resource.object();
-        p.arg = (i * DATA) as u32;
+        p.arg = (i * MAX_CHUNK) as u32;
         p.count = bytes.len() as u8;
         p.data[..bytes.len()].copy_from_slice(bytes);
         assert_eq!(send(server, disk, 0, p).status, 0);
@@ -71,16 +71,11 @@ fn commit(server: &mut Server, disk: &mut Memory, request: Replacement, context:
 fn get(server: &mut Server, disk: &mut Memory, lookup: Lookup, context: u32) -> Operation {
     let first = send(server, disk, 0, lookup.packet(context));
     assert_eq!(first.status, 0);
+    // One packet carries the whole receipt; no fragment exchange remains.
+    assert_eq!(first.arg, RECEIPT_BYTES as u32);
+    assert_eq!(first.count as usize, RECEIPT_BYTES);
     let mut bytes = [0; RECEIPT_BYTES];
-    bytes[..40].copy_from_slice(first.payload());
-    for offset in [40, 80] {
-        let mut p = Lookup::Id(OperationId::new([7; 16], first.version).unwrap()).packet(context);
-        p.op = OPERATION_PART;
-        p.arg = offset;
-        let r = send(server, disk, 0, p);
-        assert_eq!(r.status, 0);
-        bytes[offset as usize..offset as usize + r.count as usize].copy_from_slice(r.payload());
-    }
+    bytes.copy_from_slice(first.payload());
     Operation::decode(&bytes).unwrap()
 }
 #[test]
@@ -174,6 +169,15 @@ fn operation_fragments_require_current_subject_scope_and_inspection_authority() 
         Error::Revoked as u8
     );
     let context = authorize(&mut server, 0, 0, 7, 9);
+    // A nonzero fragment offset is no longer a meaningful request: the whole
+    // receipt is one packet.
+    let mut late = Lookup::Id(id).packet(context);
+    late.op = OPERATION_PART;
+    late.arg = 40;
+    assert_eq!(
+        send(&mut server, &mut disk, 0, late).status,
+        Error::Offset as u8
+    );
     assert_eq!(get(&mut server, &mut disk, Lookup::Id(id), context).id, id);
 }
 #[test]

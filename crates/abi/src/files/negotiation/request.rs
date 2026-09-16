@@ -17,7 +17,8 @@ pub fn request(method: Method, context: u32) -> Result<Packet, Error> {
 }
 
 pub fn decode_request(p: &Packet) -> Result<Method, Error> {
-    if p.op != DESCRIBE || p.status != 0 || p.count != 0 || p.data != [0; 40] {
+    // A negotiation request carries no data; every data byte must be zero.
+    if p.op != DESCRIBE || p.status != 0 || p.count != 0 || p.data.iter().any(|b| *b != 0) {
         return Err(Error::Protocol);
     }
     if p.version != VERSION || p.arg != PROFILE {

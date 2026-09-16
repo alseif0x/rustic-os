@@ -163,7 +163,10 @@ fn observation_rechecks_authority_hides_unknown_records_and_rejects_newer_profil
             p.arg = profile;
             let r = s.scheduling_request(&mut queue, peer, p, 1);
             assert_eq!(r.status, expected as u8);
-            assert_eq!((r.count, r.data, r.version), (0, [0; 40], 0));
+            assert_eq!(
+                (r.count, r.data, r.version),
+                (0, [0; rustic_abi::files::DATA], 0)
+            );
             a::Activity::decode(&s.scheduling_request(
                 &mut queue,
                 owner,
@@ -179,7 +182,10 @@ fn observation_rechecks_authority_hides_unknown_records_and_rejects_newer_profil
                     denied = true;
                     let r = queue.request(clients, Some(active), peer, p, 1);
                     assert_eq!(r.status, expected as u8);
-                    assert_eq!((r.count, r.data, r.version), (0, [0; 40], 0));
+                    assert_eq!(
+                        (r.count, r.data, r.version),
+                        (0, [0; rustic_abi::files::DATA], 0)
+                    );
                 }
                 1
             })

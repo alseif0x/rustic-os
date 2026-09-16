@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use rustic_abi::files::{Error, Packet};
+use rustic_abi::files::{Error, MAX_CHUNK, Packet};
 use rustic_fs::MAX_FILE;
 pub(super) struct Transfer {
     pub(super) client: usize,
@@ -91,6 +91,7 @@ impl Transfers {
         }
         if request.arg as usize != slot.received
             || request.count == 0
+            || usize::from(request.count) > MAX_CHUNK
             || slot.received + usize::from(request.count) > slot.total
         {
             return Err(Error::Offset);

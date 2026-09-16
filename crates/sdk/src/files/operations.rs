@@ -9,26 +9,16 @@ use sha2::{Digest, Sha256};
 impl<P: crate::rpc::Progress> Client<P> {
     fn collect_operation(&mut self, first: Packet, lineage: [u8; 16]) -> Result<Operation, Error> {
         let id = OperationId::new(lineage, first.version).map_err(|_| Error::Protocol)?;
-        let mut bytes = [0; RECEIPT_BYTES];
-        for offset in [0, 40, 80] {
-            let p = if offset == 0 {
-                first
-            } else {
-                let mut p = Lookup::Id(id).packet(self.context);
-                p.op = OPERATION_PART;
-                p.arg = offset as u32;
-                self.operation_exchange(p)?
-            };
-            let length = (RECEIPT_BYTES - offset).min(DATA);
-            if p.id != offset as u32
-                || p.arg != RECEIPT_BYTES as u32
-                || p.version != id.sequence()
-                || p.count as usize != length
-            {
-                return Err(Error::Protocol);
-            }
-            bytes[offset..offset + length].copy_from_slice(p.payload());
+        // One packet carries the whole receipt: the transport payload is larger
+        // than RECEIPT_BYTES, so no OPERATION_PART exchange is needed.
+        if first.id != 0
+            || first.arg != RECEIPT_BYTES as u32
+            || first.count as usize != RECEIPT_BYTES
+        {
+            return Err(Error::Protocol);
         }
+        let mut bytes = [0; RECEIPT_BYTES];
+        bytes.copy_from_slice(first.payload());
         let operation = Operation::decode(&bytes)?;
         if operation.id != id {
             return Err(Error::Protocol);

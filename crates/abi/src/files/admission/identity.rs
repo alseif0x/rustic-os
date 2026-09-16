@@ -55,7 +55,7 @@ impl AdmissionId {
                 p.arg != 0
             }
             || p.count != 16
-            || p.data[16..] != [0; 24]
+            || p.data[16..40].iter().any(|b| *b != 0)
         {
             return Err(Error::Protocol);
         }

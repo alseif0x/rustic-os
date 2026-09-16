@@ -68,17 +68,23 @@ fn responder(result: Operation, corrupt: u8) {
             r.context = p.context;
             r
         };
-        if p.op == OPERATION_PART && p.arg == 40 {
+        // The whole receipt is one packet now, so corruption applies to the
+        // receipt reply itself, whatever operation requested it.
+        // Corruption targets fields the receipt decoder reads: the committed
+        // version, a reserved byte, the file hash, the workspace lineage, and a
+        // refused query. The reply envelope (id/arg/version) is covered above by
+        // the shape checks the client always performs.
+        if matches!(p.op, OPERATION_RETRY | OPERATION_ID | REPLACE_COMMIT) {
             match corrupt {
-                1 => r.version += 1,
-                2 => r.id = 0,
-                3 => r.arg += 1,
+                1 => r.data[32..40].fill(0), // Version zero is not a valid receipt.
+                2 => r.data[66] = 1,         // Reserved receipt byte.
+                3 => r.data[72] ^= 1,        // File hash mismatch.
                 4 => {
                     r = Packet::new(p.op);
                     r.context = p.context;
                     r.status = FileError::Denied as u8;
                 }
-                5 => r.data[26] = 1, // Reserved receipt byte 66.
+                5 => r.data[0] ^= 1, // Workspace lineage.
                 _ => (),
             }
         }
@@ -106,12 +112,13 @@ fn native_client_collects_one_consistent_receipt_and_does_not_replay_the_mutatio
             .count(),
         1
     );
+    // A receipt fits in one reply, so no fragment operation is sent.
     assert_eq!(
         transport::requests()
             .iter()
             .filter(|(_, _, p)| p.op == OPERATION_PART)
             .count(),
-        6
+        0
     );
 }
 #[test]
@@ -120,9 +127,16 @@ fn corrupt_or_revoked_fragments_leave_the_mutation_uncertain_and_queries_fail_cl
     for corruption in 1..=5 {
         responder(result, corruption);
         let mut client = files::Client::new(1, 7, 11);
+        let committed = client.replace_file(request, b"after");
+        // A refused commit is a definite refusal; any malformed receipt leaves
+        // the outcome unknown. Neither may be reported as a success.
         assert_eq!(
-            client.replace_file(request, b"after"),
-            Err(FileError::Uncertain)
+            committed,
+            Err(if corruption == 4 {
+                FileError::Denied
+            } else {
+                FileError::Uncertain
+            })
         );
         assert_eq!(
             transport::requests()
@@ -131,16 +145,21 @@ fn corrupt_or_revoked_fragments_leave_the_mutation_uncertain_and_queries_fail_cl
                 .count(),
             1
         );
+        // Reading a receipt by id cannot verify a content hash, so only a
+        // structurally invalid or refused receipt fails here; a well-formed
+        // receipt whose recorded hash differs is still a valid observation.
         responder(result, corruption);
         let mut client = files::Client::new(1, 7, 11);
-        assert_eq!(
-            client.operation_get(Lookup::Id(result.id)),
-            Err(if corruption == 4 {
-                FileError::Denied
-            } else {
-                FileError::Protocol
-            })
-        );
+        let observed = client.operation_get(Lookup::Id(result.id));
+        match corruption {
+            // Structurally invalid, wrong lineage, or refused.
+            1 | 2 | 5 => assert_eq!(observed, Err(FileError::Protocol)),
+            4 => assert_eq!(observed, Err(FileError::Denied)),
+            // A well-formed receipt with a different recorded hash is still a
+            // valid observation by id: there is no content to compare it with.
+            3 => assert_ne!(observed.unwrap().sha256, result.sha256),
+            _ => unreachable!(),
+        }
     }
     let mut wrong_hash = result;
     wrong_hash.sha256[0] ^= 1;

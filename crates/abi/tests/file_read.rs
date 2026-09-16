@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use rustic_abi::files::{
-    Error, Packet, READ_CHUNK, READ_OPEN, REFERENCES,
+    DATA, Error, Packet, READ_CHUNK, READ_OPEN, REFERENCES,
     read::{Header, Info, MAX_INTEGER, Request},
     reference::{Epoch, References, Resource, Version, Workspace},
 };
@@ -113,7 +113,8 @@ fn range_request_layout_separates_service_version_and_transport_context() {
     assert_eq!(&bytes[40..44], &4u32.to_le_bytes());
     assert_eq!(&bytes[44..52], &13u64.to_le_bytes());
     assert_eq!(&bytes[52..54], &[1, 0]);
-    assert_eq!(&bytes[54..], &[0; 10]);
+    // Everything after the fixed fields is reserved and must stay zero.
+    assert!(bytes[54..].iter().all(|b| *b == 0));
     assert_eq!(
         Request::decode(&Packet::decode(&bytes).unwrap()),
         Ok(request)
@@ -151,10 +152,17 @@ fn native_ranges_reject_unsafe_bounds_mixed_workspaces_and_unpinned_chunks() {
     ] {
         assert_eq!(bad.packet(READ_OPEN, 7), Err(Error::Invalid));
     }
-    assert_eq!(base.packet(READ_CHUNK, 7), Err(Error::Invalid));
-    let chunk = Request {
+    // A chunk must pin its expected version: unpinned means invalid.
+    let unpinned = Request {
         expected_version: None,
-        length: 40,
+        ..base
+    };
+    assert_eq!(unpinned.packet(READ_CHUNK, 7), Err(Error::Invalid));
+    // A chunk must not claim more than one packet payload can carry.
+    // One payload larger than a single packet can carry: valid as a range
+    // request, invalid as one chunk.
+    let chunk = Request {
+        length: (DATA + 1) as u16,
         ..base
     };
     assert_eq!(chunk.packet(READ_CHUNK, 7), Err(Error::Invalid));
@@ -183,7 +191,8 @@ fn range_header_pins_version_and_derives_eof_without_inventing_progress() {
         Ok(header)
     );
     assert_eq!(&packet.data[..32], &[0x5a; 32]);
-    assert_eq!(&packet.data[32..], &3u64.to_le_bytes());
+    assert_eq!(&packet.data[32..40], &3u64.to_le_bytes());
+    assert!(packet.data[40..].iter().all(|b| *b == 0));
     let info = Info::from_header(request, header).unwrap();
     assert_eq!((info.offset, info.length, info.eof), (13, 27, true));
     let eof = Info::from_header(

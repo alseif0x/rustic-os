@@ -2,13 +2,18 @@
 use rustic_sdk::{Error, abi::ipc, ipc::Message};
 #[test]
 fn outbound_has_canonical_header_and_no_claimed_sender() {
-    let message = Message::new(0x0102030405060708, &[42; 64]).unwrap();
-    assert_eq!(message.wire().len(), 88);
-    assert_eq!(&message.wire()[..8], &[1, 0, 1, 0, 64, 0, 0, 0]);
+    let message = Message::new(0x0102030405060708, &[42; ipc::PAYLOAD]).unwrap();
+    assert_eq!(message.wire().len(), ipc::MAX_MESSAGE);
+    let mut header = [0u8; 8];
+    header[..2].copy_from_slice(&ipc::VERSION.to_le_bytes());
+    header[2..4].copy_from_slice(&ipc::DATA.to_le_bytes());
+    header[4..8].copy_from_slice(&(ipc::PAYLOAD as u32).to_le_bytes());
+    assert_eq!(&message.wire()[..8], &header);
     assert_eq!(&message.wire()[8..16], &[8, 7, 6, 5, 4, 3, 2, 1]);
     assert_eq!(message.sender(), 0);
+    // One byte over the transport payload is refused.
     assert_eq!(
-        Message::new(0, &[0; 65]).err(),
+        Message::new(0, &vec![0; ipc::PAYLOAD + 1]).err(),
         Some(Error::Ipc(ipc::Error::Size))
     );
 }

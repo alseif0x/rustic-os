@@ -97,9 +97,10 @@ fn empty_and_eof_reads_validate_the_empty_hash_without_a_data_packet() {
 #[test]
 fn missing_or_abandoned_chunks_clear_previously_collected_bytes() {
     for abandon in [false, true] {
-        let file = [0x5a; 80];
-        let request = request(0, 80);
-        let mut output = [0xa5; 80];
+        // Larger than one operation, so a chunk always remains missing.
+        let file = [0x5a; 600];
+        let request = request(0, 600);
+        let mut output = [0xa5; 600];
         let mut collector = Collector::new(request, 11, &mut output).unwrap();
         collector.open(header(request, &file)).unwrap();
         collector
@@ -110,43 +111,46 @@ fn missing_or_abandoned_chunks_clear_previously_collected_bytes() {
         } else {
             assert_eq!(collector.finish(), Err(Error::Protocol));
         }
-        assert_eq!(output, [0; 80]);
+        assert_eq!(output, [0; 600]);
     }
 }
 
 #[test]
 fn changed_version_or_malformed_chunk_fails_the_whole_read() {
-    let file: Vec<u8> = (0..80).collect();
+    // Large enough that a second operation is always outstanding.
+    let file: Vec<u8> = (0..600).map(|index| index as u8).collect();
     for mutation in 0..7 {
-        let request = request(0, 80);
-        let mut output = [0xa5; 80];
+        let request = request(0, 600);
+        let mut output = [0xa5; 600];
         let mut collector = Collector::new(request, 11, &mut output).unwrap();
         collector.open(header(request, &file)).unwrap();
         collector
             .chunk(chunk(collector.next().unwrap().unwrap(), &file))
             .unwrap();
-        let mut bad = chunk(collector.next().unwrap().unwrap(), &file);
+        let requested = collector.next().unwrap().unwrap();
+        let mut bad = chunk(requested, &file);
         match mutation {
             0 => bad.version += 1,
             1 => bad.arg += 1,
             2 => bad.id += 1,
             3 => bad.context += 1,
             4 => bad.count = 0,
-            5 => bad.count = 41,
+            // Same bounds, different length than the outstanding operation.
+            5 => bad.count = 1,
             _ => bad.op = 6,
         }
         assert_eq!(collector.chunk(bad), Err(Error::Protocol));
         assert_eq!(collector.finish(), Err(Error::Protocol));
-        assert_eq!(output, [0; 80]);
+        assert_eq!(output, [0; 600]);
     }
 }
 
 #[test]
 fn corrupt_hash_or_repeated_data_cannot_become_a_successful_range() {
-    let file: Vec<u8> = (0..80).collect();
+    let file: Vec<u8> = (0..600).map(|index| index as u8).collect();
     for corrupt_hash in [false, true] {
-        let request = request(0, 80);
-        let mut output = [0xa5; 80];
+        let request = request(0, 600);
+        let mut output = [0xa5; 600];
         let mut collector = Collector::new(request, 11, &mut output).unwrap();
         let mut open = header(request, &file);
         if corrupt_hash {
@@ -155,14 +159,15 @@ fn corrupt_hash_or_repeated_data_cannot_become_a_successful_range() {
         collector.open(open).unwrap();
         let first = chunk(collector.next().unwrap().unwrap(), &file);
         collector.chunk(first).unwrap();
-        let second = if corrupt_hash {
-            chunk(collector.next().unwrap().unwrap(), &file)
-        } else {
-            first
-        };
-        collector.chunk(second).unwrap();
+        // A reply whose length does not match the outstanding operation is a
+        // protocol error, not a second piece of data.
+        let mut short = first;
+        short.count -= 1;
+        assert_eq!(collector.chunk(short), Err(Error::Protocol));
+        // The announced hash covers the whole range, so a corrupted header
+        // cannot become a successful read.
         assert_eq!(collector.finish(), Err(Error::Protocol));
-        assert_eq!(output, [0; 80]);
+        assert_eq!(output, [0; 600]);
     }
 }
 

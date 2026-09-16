@@ -84,7 +84,7 @@ mod transport {
         );
         assert_eq!(
             (p.id, p.version, p.arg, p.count, p.data),
-            (0, 0, 0, 0, [0; 40])
+            (0, 0, 0, 0, [0; rustic_sdk::abi::files::DATA])
         );
     }
 

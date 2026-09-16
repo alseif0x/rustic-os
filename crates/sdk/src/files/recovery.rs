@@ -79,10 +79,10 @@ impl<P: crate::rpc::Progress> Client<P> {
         p.count = 32;
         p.data[..32].copy_from_slice(&retry.encode());
         self.request(p)?;
-        for (index, chunk) in bytes.chunks(DATA).enumerate() {
+        for (index, chunk) in bytes.chunks(MAX_CHUNK).enumerate() {
             let mut p = Packet::new(CHUNK);
             p.id = id;
-            p.arg = (index * DATA) as u32;
+            p.arg = (index * MAX_CHUNK) as u32;
             p.count = chunk.len() as u8;
             p.data[..chunk.len()].copy_from_slice(chunk);
             self.request(p)?;

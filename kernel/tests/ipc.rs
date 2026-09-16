@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-use rustic_kernel::ipc::{ALL, Broker, Error, Message, READ, TRANSFER, WRITE};
+use rustic_kernel::ipc::{
+    ALL, Broker, Error, MAX_MESSAGE, Message, PAYLOAD, READ, TRANSFER, WRITE,
+};
 
 fn packet(correlation: u64) -> [u8; 32] {
     let mut bytes = [0; 32];
@@ -13,7 +15,7 @@ fn packet(correlation: u64) -> [u8; 32] {
 
 #[test]
 fn empty_and_maximum_payloads_round_trip_without_truncation() {
-    for length in [0usize, 64] {
+    for length in [0usize, PAYLOAD] {
         let mut bytes = vec![0; 24 + length];
         bytes[..2].copy_from_slice(&1u16.to_le_bytes());
         bytes[2..4].copy_from_slice(&1u16.to_le_bytes());
@@ -57,7 +59,7 @@ fn malformed_packets_cannot_change_queues_or_spoof_identity() {
     for length in [0, 23, 31] {
         assert_eq!(broker.send(1, a, &packet(0)[..length]), Err(Error::Size));
     }
-    assert_eq!(Message::decode(&[0; 89], 1), Err(Error::Size));
+    assert_eq!(Message::decode(&[0; MAX_MESSAGE + 1], 1), Err(Error::Size));
 }
 
 #[test]

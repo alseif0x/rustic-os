@@ -1,8 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Native file-service wire contract, independent from filesystem representation.
 pub const VERSION: u8 = 1;
-pub const SIZE: usize = 64;
-pub const DATA: usize = 40;
+/// File-protocol header inside one transport payload: version, op, status,
+/// count, id, arg, context and version.
+pub const HEADER: usize = 24;
+/// One packet is one transport message, so the data area is the transport
+/// payload minus this header. Keeping the payload the power of two makes the
+/// nesting explicit instead of hiding 24 bytes in the message size.
+pub const SIZE: usize = crate::ipc::PAYLOAD;
+pub const DATA: usize = SIZE - HEADER;
+/// `Packet::count` is one byte, so no single operation may carry more than this.
+/// A larger object moves in several operations; the limit is a protocol fact,
+/// not a transport one, and `DATA` stays larger than it so that whole receipts
+/// and descriptors fit in one reply.
+pub const MAX_CHUNK: usize = u8::MAX as usize;
 pub const LOOKUP: u8 = 1;
 pub const STAT: u8 = 2;
 pub const LIST: u8 = 3;

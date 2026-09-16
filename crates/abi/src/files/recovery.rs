@@ -45,14 +45,14 @@ impl Receipt {
         p.arg = self.length as u32;
         p.count = 40;
         p.data[..32].copy_from_slice(&self.retry.encode());
-        p.data[32..].copy_from_slice(&self.previous.to_le_bytes());
+        p.data[32..40].copy_from_slice(&self.previous.to_le_bytes());
         p
     }
     pub fn decode(p: Packet) -> Result<Self, Error> {
         if p.count != 40 || p.id <= 4 || p.arg > 1024 {
             return Err(Error::Protocol);
         }
-        let previous = u64::from_le_bytes(p.data[32..].try_into().unwrap());
+        let previous = u64::from_le_bytes(p.data[32..40].try_into().unwrap());
         if previous == 0 || p.version <= previous {
             return Err(Error::Protocol);
         }

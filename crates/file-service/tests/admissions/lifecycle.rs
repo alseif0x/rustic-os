@@ -9,13 +9,13 @@ fn id(status: rustic_fs::AdmissionStatus) -> a::AdmissionId {
 fn ack(p: Packet, expected: l::Disposition) {
     assert_eq!(l::CancelAck::decode(&p).unwrap().disposition, expected);
     assert_eq!(p.count, 16);
-    assert_eq!(&p.data[16..], &[0; 24]);
+    assert!(p.data[16..40].iter().all(|b| *b == 0));
 }
 fn empty_error(p: Packet, error: Error) {
     assert_eq!(p.status, error as u8);
     assert_eq!(
         (p.count, p.id, p.arg, p.version, p.data),
-        (0, 0, 0, 0, [0; 40])
+        (0, 0, 0, 0, [0; rustic_abi::files::DATA])
     );
 }
 

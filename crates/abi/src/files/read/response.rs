@@ -25,7 +25,7 @@ impl Header {
         p.version = self.version.value();
         p.count = 40;
         p.data[..32].copy_from_slice(&self.range_sha256);
-        p.data[32..].copy_from_slice(&self.retry_epoch.value().to_le_bytes());
+        p.data[32..40].copy_from_slice(&self.retry_epoch.value().to_le_bytes());
         Ok(p)
     }
     pub fn decode(p: &Packet) -> Result<Self, Error> {
@@ -42,7 +42,7 @@ impl Header {
             size: u64::from(p.arg),
             version: Version::new(p.version).map_err(|_| Error::Protocol)?,
             range_sha256: p.data[..32].try_into().unwrap(),
-            retry_epoch: Epoch::new(u64::from_le_bytes(p.data[32..].try_into().unwrap()))
+            retry_epoch: Epoch::new(u64::from_le_bytes(p.data[32..40].try_into().unwrap()))
                 .map_err(|_| Error::Protocol)?,
         })
     }

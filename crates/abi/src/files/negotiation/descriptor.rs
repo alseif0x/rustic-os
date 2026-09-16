@@ -54,7 +54,7 @@ impl Descriptor {
             || p.id != expected as u32
             || p.version != super::VERSION
             || p.arg != super::PROFILE
-            || p.data[36..] != [0; 4]
+            || p.data[36..40].iter().any(|b| *b != 0)
         {
             return Err(Error::Protocol);
         }

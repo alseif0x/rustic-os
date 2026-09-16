@@ -8,7 +8,10 @@ pub const INFO: u64 = 8;
 pub const VERSION: u16 = 1;
 pub const DATA: u16 = 1;
 pub const HEADER: usize = 24;
-pub const PAYLOAD: usize = 64;
+/// One data-carrying operation should move a bounded file object, not 40 bytes
+/// (#50). The message grows so the "one logical call = one message" model holds;
+/// every queue entry pays this size.
+pub const PAYLOAD: usize = 1024;
 pub const MAX_MESSAGE: usize = HEADER + PAYLOAD;
 pub const READ: u8 = 1;
 pub const WRITE: u8 = 2;

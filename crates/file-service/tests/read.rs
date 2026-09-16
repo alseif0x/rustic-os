@@ -206,7 +206,7 @@ fn binary_ranges_hash_exact_bytes_and_do_not_allocate_transfer_slots() {
         let mut received = Vec::new();
         let count = usize::from(length).min(data.len() - offset as usize);
         while received.len() < count {
-            let n = (count - received.len()).min(DATA) as u16;
+            let n = (count - received.len()).min(MAX_CHUNK) as u16;
             let chunk = read(
                 references(4, a),
                 offset + received.len() as u64,

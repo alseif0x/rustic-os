@@ -55,7 +55,7 @@ impl Activity {
         if p.status != 0
             || p.id != 0
             || p.count != 24
-            || p.data[24..] != [0; 16]
+            || p.data[24..40].iter().any(|b| *b != 0)
             || p.arg & !0x307 != 0
         {
             return Err(Error::Protocol);
