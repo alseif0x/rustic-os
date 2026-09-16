@@ -10,6 +10,21 @@ FAULTS = {
     "disabled-syscall": (6, 0, 0), "port-io": (13, 0, 0), "privileged-halt": (13, 0, 0),
 }
 
+# Mirror of the transport constants behind the manager's static size.
+# `metadata_bytes` is `size_of::<Manager>()`, which holds the channel message
+# buffers: eight channels, two directions, a two-message queue each, and one
+# `HEADER + PAYLOAD`-sized message per entry. #50 raised PAYLOAD to 1024, which
+# multiplied this footprint; the allowance covers the remaining manager fields
+# and alignment. This is a bound derived from the ABI constants, not a separate
+# measured threshold.
+IPC_HEADER = 24
+IPC_PAYLOAD = 1024
+CHANNELS = 8
+QUEUE_ENTRIES = 4  # two directions x two messages
+MESSAGE_BYTES = IPC_HEADER + IPC_PAYLOAD
+MANAGER_ALLOWANCE = 8 * 1024
+MANAGER_METADATA_LIMIT = CHANNELS * QUEUE_ENTRIES * MESSAGE_BYTES + MANAGER_ALLOWANCE
+
 
 def verified(serial, records):
     try:
@@ -22,7 +37,7 @@ def verified(serial, records):
             return False
         budget = {key: int(value) for key, value in memory[0].items()}
         if (budget["slots"] != 8 or budget["entry_stack_bytes"] != 20480 or budget["oom_cases"] != 3
-                or not 0 < budget["metadata_bytes"] <= 16384
+                or not 0 < budget["metadata_bytes"] <= MANAGER_METADATA_LIMIT
                 or not 0 < budget["peak_frames"] <= 8 * (256 + 16)
                 or budget["peak_frames"] % 8 != 0):
             return False

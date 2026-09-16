@@ -9,7 +9,10 @@ pub(super) fn run(handle: u64, role: u64, peer: u64) -> Result<(), Error> {
     if role > 1 || peer == 0 || process::id()? == peer {
         return Err(Error::Protocol);
     }
-    if Message::new(0, &[0; 65]).err() != Some(Error::Ipc(ipc::Error::Size)) {
+    // One byte over the transport payload must be refused; the probe is a
+    // no_std application, so the oversized buffer is a fixed array.
+    let oversized = [0u8; ipc::PAYLOAD + 1];
+    if Message::new(0, &oversized).err() != Some(Error::Ipc(ipc::Error::Size)) {
         return Err(Error::Protocol);
     }
     if Endpoint::from_bootstrap(0).wait() != Err(Error::Ipc(ipc::Error::Handle)) {

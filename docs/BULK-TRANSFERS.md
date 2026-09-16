@@ -108,3 +108,13 @@ Candidate B stays open and is not rejected: when a consumer needs multi-megabyte
 6. Tests in the owning layers: the file-service rejects a malformed length, a truncated run, a wrong offset and a chunk that exceeds the declared total; the SDK sends one chunk for a 1024-byte object; the kernel IPC tests keep passing with the larger message.
 7. Measurements before any throughput claim: bytes per operation, operations per transfer, elapsed time for a 1024-byte replacement and read, kernel queue storage, and control latency while data flows and while the reader is stopped.
 8. Known risk to bound first: one `Message` is `MAX_MESSAGE` bytes on the SDK's 64 KiB user stack. A 1 KiB message is bounded and fits, but the increment must state the measured stack headroom rather than assume it.
+
+## A1 measured cost and first results (implemented)
+
+`cargo xtask check` passes with the payload change (378 Rust tests, fmt, Clippy `-D warnings`, kernel and guest builds) and the `ok` boot fixture runs.
+
+- **What one operation carries now:** the file data area is the transport payload minus its 24-byte header. `Packet::count` is one byte, so no single operation may exceed `MAX_CHUNK = 255` bytes; the server enforces it and the SDK sends and requests at most that. A 1 KiB object therefore moves in four operations instead of 26.
+- **Receipts stopped fragmenting:** one reply now carries the whole 104-byte receipt, so the SDK reads it in one exchange and the server refuses a nonzero fragment offset. `OPERATION_PART` remains in the ABI but is no longer required for a correct client.
+- **Measured kernel cost:** `metadata_bytes` in `RUSTIC PROCESS_MEMORY` is `size_of::<Manager>()` and grew from about 9.6 KiB to **40,536 B**, because the manager holds the channel message buffers (eight channels, two directions, a two-message queue each) and each entry grew from 88 to 1048 bytes. The host oracle now derives its bound from those constants instead of a literal calibrated to the old size. This is the trade the decision predicted, and it is now a measured number rather than an estimate.
+- **Latent bugs the larger data area exposed:** five reserved-byte checks were written as open-ended slices (`data[36..] != [0; 4]`), which silently compared a long tail against a short zero array and therefore never rejected anything; the admission activity, identity and status decoders, the read header and the recovery receipt now check exactly their own field range.
+- **Still owed before a throughput claim:** elapsed time for a bounded bulk transfer, bytes per operation and per transfer, control latency while data flows and while the reader is stopped, and the stack headroom of a `MAX_MESSAGE`-sized buffer on the SDK's 64 KiB user stack.
