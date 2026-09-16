@@ -52,7 +52,9 @@ impl Broker {
         ) {
             Ok(id) => id,
             Err(error) => {
-                self.handles.remove(a, first)?;
+                // The refusal that caused the rollback is the answer the caller
+                // needs; a failed cleanup must not replace it with its own error.
+                let _ = self.handles.remove(a, first);
                 return Err(error.into());
             }
         };

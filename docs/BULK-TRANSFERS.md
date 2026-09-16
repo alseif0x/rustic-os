@@ -118,3 +118,21 @@ Candidate B stays open and is not rejected: when a consumer needs multi-megabyte
 - **Measured kernel cost:** `metadata_bytes` in `RUSTIC PROCESS_MEMORY` is `size_of::<Manager>()` and grew from about 9.6 KiB to **40,536 B**, because the manager holds the channel message buffers (eight channels, two directions, a two-message queue each) and each entry grew from 88 to 1048 bytes. The host oracle now derives its bound from those constants instead of a literal calibrated to the old size. This is the trade the decision predicted, and it is now a measured number rather than an estimate.
 - **Latent bugs the larger data area exposed:** five reserved-byte checks were written as open-ended slices (`data[36..] != [0; 4]`), which silently compared a long tail against a short zero array and therefore never rejected anything; the admission activity, identity and status decoders, the read header and the recovery receipt now check exactly their own field range.
 - **Still owed before a throughput claim:** elapsed time for a bounded bulk transfer, bytes per operation and per transfer, control latency while data flows and while the reader is stopped, and the stack headroom of a `MAX_MESSAGE`-sized buffer on the SDK's 64 KiB user stack.
+
+## Status: A1 is implemented but parked (not merged)
+
+The payload change passes the host checks and the `ok` and `block-*` boot modes, but it breaks the native terminal boot: the shell is started with no file binding and every file command answers `Unavailable`. The failure chain, narrowed with boot evidence:
+
+1. The supervisor's mount job fails at the shell-connect step (`apps/supervisor/src/work/mount.rs`, phase 3). Giving each mount step a distinct status named that step.
+2. The kernel reports the refusal after `kernel/src/process/runtime/native/control.rs` was made to preserve it: the broker's error was previously collapsed into `Error::Full`.
+3. Two different refusals appear between runs: `ipc::Error::Handle` from `Manager::live` (`kernel/src/process/runtime/ipc_control.rs`), which requires both peers to be in a live state, and `ipc::Error::Quota` from the broker, which runs out of channel slots or per-owner handles. The condition is not deterministic across runs.
+4. Retrying the connect 500 times does not help, so it is not a plain startup race; the shell still never receives a binding.
+
+What is not yet established, and what the next increment must settle before this can merge: how many channels and handles are in use at that moment, whether any process is in a state the liveness check rejects, and whether a failed mount job is retried and leaks a channel per attempt. A supervisor console print is not usable for this (its console output is not captured); the kernel's supervisor syscall is the reliable place to count.
+
+Two independent findings worth keeping regardless of A1:
+
+- `kernel/src/ipc/broker.rs` rollback replaced the refusal that caused it with its own cleanup error; preserving the original is correct, but no test yet demonstrates the path.
+- `control.rs` mapping every broker refusal to `Error::Full` hides the cause; the mapping should be faithful.
+
+Until this is settled, the #50 increment should deliver its measurements on the green trunk (bytes per operation, operations per transfer, elapsed time for a bounded transfer, and control latency under load), which need no ABI change.
