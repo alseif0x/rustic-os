@@ -12,23 +12,9 @@ use setup::open;
 
 pub(super) fn run(device: &Device, phase: u64, terminal: bool) {
     if terminal {
-        terminal::verify(
-            &mut Disk {
-                device,
-                writes: 0,
-                base: 512,
-            },
-            phase,
-        );
+        terminal::verify(&mut Disk::at(device, 512, rustic_fs::SECTORS), phase);
     } else {
-        pending::verify(
-            &mut Disk {
-                device,
-                writes: 0,
-                base: 768,
-            },
-            phase,
-        );
+        pending::verify(&mut Disk::at(device, 768, rustic_fs::SECTORS), phase);
     }
 }
 

@@ -6,6 +6,7 @@ from pathlib import Path
 import tempfile
 from . import publication_evidence
 from . import admission_evidence
+from . import workspace_evidence
 
 SIZE = 4 * 1024 ** 3
 SECTORS = (0, 8, 9, SIZE // 512 - 1)
@@ -37,6 +38,7 @@ def run(image, timeout, run_once):
     serials, logs = [], []
     publications = []
     admissions = []
+    workspaces = []
     with tempfile.TemporaryDirectory(prefix="rustic-block-") as temporary:
         disk = Path(temporary) / "disposable.raw"
         with disk.open("xb") as output:
@@ -45,6 +47,7 @@ def run(image, timeout, run_once):
         if mode == "block-user":
             publication_evidence.provision(disk)
             admission_evidence.provision(disk)
+            workspace_evidence.provision(disk)
         arguments = []
         if mode != "block-missing":
             readonly = ",readonly=on" if mode == "block-readonly" else ""
@@ -67,6 +70,9 @@ def run(image, timeout, run_once):
                 admissions.append(admission_evidence.inspect(disk, directory))
                 if admissions[-1] != admissions[0]:
                     raise RuntimeError("replay boot changed durable admission evidence")
+                workspaces.append(workspace_evidence.inspect(disk, directory))
+                if workspaces[-1] != workspaces[0]:
+                    raise RuntimeError("replay boot changed the workspace volume or observation")
         allocation = disk.stat().st_blocks * 512
     serial = "\n".join(serials)
     (directory / "serial.log").write_text(serial)
@@ -77,6 +83,7 @@ def run(image, timeout, run_once):
     if mode == "block-user":
         evidence["publications"] = publications
         evidence["admissions"] = admissions
+        evidence["workspaces"] = workspaces
     (directory / "blocks.bin").write_bytes(selected)
     (directory / "block.json").write_text(json.dumps(evidence, indent=2) + "\n")
     result = {**phases[-1], "phases": phases, "block": evidence,

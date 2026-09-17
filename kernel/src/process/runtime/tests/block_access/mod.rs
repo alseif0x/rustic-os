@@ -31,6 +31,12 @@ pub(crate) fn verify(memory: &mut Memory, mode: BootMode) {
             drive(&mut manager, memory, &[pid]);
             assert_eq!(reap(&mut manager, memory, pid, role), 1);
         }
+        // The v6 workspace: the guest mounts the host-provisioned volume and
+        // reads a 16 KiB artifact in 4 KiB ranges, then leaves its digest on the
+        // disk for the host's independent reader.
+        let (pid, _) = launch(&mut manager, memory, &mut stats, 14, 0);
+        drive(&mut manager, memory, &[pid]);
+        assert_eq!(reap(&mut manager, memory, pid, 14), 1);
         let mut serial = Serial::take().unwrap();
         writeln!(
             serial,
@@ -39,6 +45,12 @@ pub(crate) fn verify(memory: &mut Memory, mode: BootMode) {
         )
         .unwrap();
         writeln!(serial, "RUSTIC ADMISSION verified=1 phase={} admitted=1 cancelled=1 committed=1 replay_writes=0 service_control=1 fresh_authority=1", if value == 1 { "write" } else { "replay" }).unwrap();
+        writeln!(
+            serial,
+            "RUSTIC WORKSPACE verified=1 phase={} volume=v6 length=16384 ranges=4 nodes=256",
+            if value == 1 { "write" } else { "read" }
+        )
+        .unwrap();
         serial.flush();
         if value == 1 { "write" } else { "read" }
     } else {

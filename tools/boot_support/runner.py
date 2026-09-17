@@ -9,6 +9,11 @@ import time
 
 import environment
 from .image import build, memory_supported, OUTPUT
+
+# A mode with more real work than the caller's budget allows. `block-user` mounts
+# a v6 workspace volume and reads a 16 KiB artifact through the block device, so
+# its floor is 60 s; the caller's timeout stays a lower bound for every mode.
+MODE_FLOOR = {"block-user": 60}
 from .scenarios import EXPECTED, reached
 
 
@@ -63,6 +68,7 @@ def run_once(image, timeout, storage=(), output=None, on_start=None, memory=None
         raise RuntimeError("image changed since construction")
     config = environment.CONFIG
     memory = memory or guest_memory(metadata)
+    timeout = max(timeout, MODE_FLOOR.get(metadata["mode"], 0))
     serial_path = directory / "serial.log"
     serial_path.write_text("")
     started = time.monotonic()

@@ -4,6 +4,12 @@
 
 Implemented for #35, before a filesystem or storage service. The kernel can discover the dedicated R0 virtual disk, read/write one sector, flush, reject invalid requests and reclaim DMA memory after a confirmed reset. Filesystem policy remains outside this driver. #44 now adds [bounded user-mode access](BLOCK-ACCESS.md) and SDK clients above it.
 
+The `block-user` journey also mounts a v6 workspace volume: role 14 of `block-probe`
+reads a host-provisioned 16 KiB artifact in 4 KiB ranges and leaves a 64-bit FNV
+digest in the sector before the volume, which the host recomputes from its own copy
+and cross-checks with the independent v6 reader (`tools/boot_support/workspace_evidence.py`).
+The mode's timeout floor is 60 s because the mount costs 96 real block requests.
+
 ## Transport decision and reference device
 
 R0 uses the legacy PCI I/O transport of `virtio-blk-pci`, explicitly configured with `disable-modern=on,disable-legacy=off`. The dedicated persistence device is PCI **00:06.0**, vendor/device 1af4:1001, revision 0. The boot volume is a separate read-only device and is never claimed by this driver.

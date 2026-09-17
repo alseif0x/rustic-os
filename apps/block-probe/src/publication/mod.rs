@@ -8,11 +8,7 @@ use rustic_sdk::block::Device;
 // Keep this fixture's volume buffers out of unrelated role dispatch frames.
 #[inline(never)]
 pub(super) fn run(device: &Device, expected: u64) -> u64 {
-    let mut disk = Disk {
-        device,
-        writes: 0,
-        base: 256,
-    };
+    let mut disk = Disk::at(device, 256, rustic_fs::SECTORS);
     let mut volume = if expected == 1 {
         let mut volume = Volume::initialize(&mut disk).unwrap();
         volume.enable_operations(&mut disk).unwrap();

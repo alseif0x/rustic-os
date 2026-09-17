@@ -8,6 +8,7 @@ mod persistence;
 mod publication;
 mod raw;
 mod volume_disk;
+mod workspace;
 use rustic_sdk::{block::Device, process};
 rustic_sdk::entry!(run);
 fn run(handle: u64, role: u64, expected: u64) -> u64 {
@@ -20,6 +21,7 @@ fn run(handle: u64, role: u64, expected: u64) -> u64 {
         3 => boundaries::scoped(&device),
         4..=10 => lifecycle::run(handle, role, expected),
         11 => publication::run(&device, expected),
+        14 => workspace::run(&device),
         12..=13 => {
             admission::run(&device, expected, role == 12);
             1

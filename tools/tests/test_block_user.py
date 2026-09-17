@@ -11,9 +11,23 @@ from boot_support.block_runner import SECTORS, pattern, run
 from boot_support.scenarios import records
 
 
+class StubWorkspace:
+    """The workspace fixture needs the host tool; these tests own runner wiring."""
+
+    def provision(self, disk):
+        return None
+
+    def inspect(self, disk, output):
+        return {"guest_verified": True}
+
+
+def offline():
+    return patch("boot_support.block_runner.workspace_evidence", StubWorkspace())
+
+
 def marker(phase):
     faults = phase == "faults"
-    line = (f"RUSTIC BLOCK_USER verified=1 phase={phase} ring=3 applications={14 if faults else 4} "
+    line = (f"RUSTIC BLOCK_USER verified=1 phase={phase} ring=3 applications={14 if faults else 5} "
             f"rejected={53 if faults else 0} lifecycle={6 if faults else 0} control_preemptions=4 "
             "max_bytes=512 queue_slots=2 handle_slots=4 dma_frames=3 peak_frames=79 metadata_bytes=5232 free_before=90 free_after=90")
     if not faults:
@@ -21,6 +35,8 @@ def marker(phase):
                  f"cancelled={16 if phase == 'write' else 0} too_late=1 committed=1")
         line += (f"\nRUSTIC ADMISSION verified=1 phase={'write' if phase == 'write' else 'replay'} "
                  "admitted=1 cancelled=1 committed=1 replay_writes=0 service_control=1 fresh_authority=1")
+        line += (f"\nRUSTIC WORKSPACE verified=1 phase={'write' if phase == 'write' else 'read'} "
+                 "volume=v6 length=16384 ranges=4 nodes=256")
     return line
 
 
@@ -39,7 +55,10 @@ class BlockUserEvidence(unittest.TestCase):
                     good.replace("RUSTIC ADMISSION ", "MISSING "),
                     good.replace("service_control=1", "service_control=0"),
                     good.replace("fresh_authority=1", "fresh_authority=0"),
-                    good.replace(" service_control=1", ""), good.replace(" fresh_authority=1", "")]:
+                    good.replace(" service_control=1", ""), good.replace(" fresh_authority=1", ""),
+                    good.replace("RUSTIC WORKSPACE ", "MISSING "),
+                    good.replace("length=16384", "length=200000"), good.replace("ranges=4", "ranges=49"),
+                    good.replace("volume=v6", "volume=v5")]:
             self.assertFalse(verified("block-user", bad, records))
 
     def test_fault_evidence_cannot_omit_denials_or_lifecycle_cases(self):
@@ -61,7 +80,7 @@ class BlockUserEvidence(unittest.TestCase):
                 (output / "serial.log").write_text(marker("write" if len(calls) == 1 else "read"))
                 (output / "qemu.log").write_text("")
                 return {"outcome": "success", "elapsed_seconds": 0}
-            with self.assertRaises(RuntimeError):
+            with offline(), self.assertRaises(RuntimeError):
                 run(image, 1, fake_boot)
             self.assertEqual(len(calls), 1)  # Host rejects missing writes before the second boot.
 
@@ -84,7 +103,8 @@ class BlockUserEvidence(unittest.TestCase):
                 (output / "qemu.log").write_text("")
                 return {"outcome": "success" if calls == 1 else "timeout", "elapsed_seconds": 0}
             # This test owns second-VM failure propagation, not volume decoding.
-            with patch("boot_support.block_runner.publication_evidence.inspect", return_value={}), patch("boot_support.block_runner.admission_evidence.inspect", return_value=[]):
+            with offline(), patch("boot_support.block_runner.publication_evidence.inspect", return_value={}), \
+                 patch("boot_support.block_runner.admission_evidence.inspect", return_value=[]):
                 result = run(image, 1, fake_boot)
             self.assertEqual(calls, 2)
             self.assertEqual(result["outcome"], "unexpected")
@@ -104,5 +124,5 @@ class BlockUserEvidence(unittest.TestCase):
                 (output / "serial.log").write_text(marker("write"))
                 (output / "qemu.log").write_text("")
                 return {"outcome": "success", "elapsed_seconds": 0}
-            with self.assertRaisesRegex(AssertionError, "no committed filesystem metadata"):
+            with offline(), self.assertRaisesRegex(AssertionError, "no committed filesystem metadata"):
                 run(image, 1, fake_boot)

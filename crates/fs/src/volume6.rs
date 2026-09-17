@@ -26,6 +26,18 @@ pub struct Volume6 {
     pub receipts: Receipts6,
 }
 
+impl Volume6 {
+    /// An unmounted volume. The node table is larger than a process stack, so a
+    /// caller that has a static or a heap buffer mounts in place through
+    /// [`Volume6::mount_into`] instead of moving the whole table by value.
+    pub const EMPTY: Self = Self {
+        header: Header6::initial(),
+        nodes: [Node6::EMPTY; OBJECTS_V6],
+        map: [0; MAP_WORDS],
+        receipts: Receipts6::EMPTY,
+    };
+}
+
 /// The roots and the empty structures a fresh v6 volume starts from, built in
 /// memory so a caller that must publish later (the v5 upgrade) can stage records
 /// without touching the disk first.
@@ -63,57 +75,65 @@ pub fn provision(disk: &mut impl Disk, lineage: [u8; 16]) -> Result<Volume6, Err
 /// Read and verify a v6 volume. Every structure is checksummed before it is
 /// trusted, and a half-written volume is an error rather than a silent mount.
 pub fn mount(disk: &mut impl Disk) -> Result<Volume6, Error> {
-    let mut header_bytes = [0u8; SECTOR_BYTES as usize];
-    disk.read(HEADER_SECTOR, &mut header_bytes)?;
-    let header = Header6::decode(&header_bytes)?;
+    let mut volume = Volume6::EMPTY;
+    volume.mount_into(disk)?;
+    Ok(volume)
+}
 
-    let nodes_base = nodes_sector(header.active);
-    let map_base = map_sector(header.active);
-    let mut node_bytes = [0u8; 512];
-    let mut nodes = [Node6::EMPTY; OBJECTS_V6];
-    for (index, node) in nodes.iter_mut().enumerate() {
-        let sector = nodes_base + (index * NODE_BYTES / 512) as u64;
-        let offset = index * NODE_BYTES % 512;
-        disk.read(sector, &mut node_bytes)?;
-        let mut record = [0u8; NODE_BYTES];
-        record.copy_from_slice(&node_bytes[offset..offset + NODE_BYTES]);
-        *node = Node6::decode(&record)?;
-    }
-
-    let mut map = [0u64; MAP_WORDS];
-    let mut sector = [0u8; 512];
-    for (index, word) in map.iter_mut().enumerate() {
-        if index % 64 == 0 {
-            let at = map_base + (index / 64) as u64;
-            disk.read(at, &mut sector)?;
-        }
-        let at = (index % 64) * 8;
-        *word = u64::from_le_bytes(sector[at..at + 8].try_into().unwrap());
-    }
-    let receipts_base = receipts_sector(header.active);
-    let mut block = [0u8; BLOCK_BYTES];
-    for index in 0..RECEIPTS_SECTORS {
-        disk.read(receipts_base + index, &mut sector)?;
-        block[index as usize * 512..(index as usize + 1) * 512].copy_from_slice(&sector);
-    }
-    let receipts = Receipts6::decode_block(&block)?;
-    // The header commits to all three structures, so a corrupt table, map or
-    // receipt block is caught here rather than during a later read.
-    if map_checksum(&map) != header.map_checksum
-        || nodes_checksum(&nodes) != header.nodes_checksum
-        || receipts.checksum() != header.receipts_checksum
-    {
-        return Err(Error::Corrupt);
-    }
-    Ok(Volume6 {
-        header,
-        nodes,
-        map,
-        receipts,
-    })
+/// The header sector, checked on its own so a caller can decide about the rest.
+fn header(disk: &mut impl Disk) -> Result<Header6, Error> {
+    let mut bytes = [0u8; SECTOR_BYTES as usize];
+    disk.read(HEADER_SECTOR, &mut bytes)?;
+    Header6::decode(&bytes)
 }
 
 impl Volume6 {
+    /// Mount into this value, decoding each structure straight into its field so
+    /// no copy of the node table or the map is built on the stack. A failure
+    /// leaves the structures only as far as they were read, never trusted: the
+    /// checksums are compared last.
+    pub fn mount_into(&mut self, disk: &mut impl Disk) -> Result<(), Error> {
+        let header = header(disk)?;
+        let nodes_base = nodes_sector(header.active);
+        let mut sector = [0u8; 512];
+        // One read per sector, four records per read: the guest pays a real block
+        // round trip for each of these.
+        for (chunk, window) in self.nodes.chunks_mut(512 / NODE_BYTES).enumerate() {
+            disk.read(nodes_base + chunk as u64, &mut sector)?;
+            for (offset, node) in window.iter_mut().enumerate() {
+                let at = offset * NODE_BYTES;
+                let mut record = [0u8; NODE_BYTES];
+                record.copy_from_slice(&sector[at..at + NODE_BYTES]);
+                *node = Node6::decode(&record)?;
+            }
+        }
+        let map_base = map_sector(header.active);
+        for (index, word) in self.map.iter_mut().enumerate() {
+            if index % 64 == 0 {
+                disk.read(map_base + (index / 64) as u64, &mut sector)?;
+            }
+            let at = (index % 64) * 8;
+            *word = u64::from_le_bytes(sector[at..at + 8].try_into().unwrap());
+        }
+        let receipts_base = receipts_sector(header.active);
+        let mut block = [0u8; BLOCK_BYTES];
+        for index in 0..RECEIPTS_SECTORS {
+            disk.read(receipts_base + index, &mut sector)?;
+            block[index as usize * 512..(index as usize + 1) * 512].copy_from_slice(&sector);
+        }
+        let receipts = Receipts6::decode_block(&block)?;
+        // The header commits to all three structures, so a corrupt table, map or
+        // receipt block is caught here rather than during a later read.
+        if map_checksum(&self.map) != header.map_checksum
+            || nodes_checksum(&self.nodes) != header.nodes_checksum
+            || receipts.checksum() != header.receipts_checksum
+        {
+            return Err(Error::Corrupt);
+        }
+        self.header = header;
+        self.receipts = receipts;
+        Ok(())
+    }
     /// Retain a receipt and publish it with the next commit.
     pub fn retain_receipt(&mut self, disk: &mut impl Disk, receipt: Receipt6) -> Result<(), Error> {
         self.receipts.retain(receipt)?;
