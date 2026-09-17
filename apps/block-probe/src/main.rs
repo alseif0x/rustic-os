@@ -21,7 +21,7 @@ fn run(handle: u64, role: u64, expected: u64) -> u64 {
         3 => boundaries::scoped(&device),
         4..=10 => lifecycle::run(handle, role, expected),
         11 => publication::run(&device, expected),
-        14 => workspace::run(&device),
+        14 => workspace::run(&device, expected),
         12..=13 => {
             admission::run(&device, expected, role == 12);
             1

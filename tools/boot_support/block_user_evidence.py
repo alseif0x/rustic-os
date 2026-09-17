@@ -27,10 +27,11 @@ def verified(mode, serial, records):
                 if any(int(value.get(key, -1)) != number for key, number in expected.items()):
                     return False
             workspaces = records(serial, "RUSTIC WORKSPACE ")
-            if [value["phase"] for value in workspaces] != ["write", "read"]:
+            if [value["phase"] for value in workspaces] != ["write", "replay"]:
                 return False
-            for value in workspaces:
-                expected = {"verified": 1, "length": 16384, "ranges": 4, "nodes": 256}
+            for value, replay in zip(workspaces, [0, 1]):
+                expected = {"verified": 1, "length": 16384, "ranges": 4, "nodes": 256,
+                            "receipt": 1, "replay": replay}
                 if any(int(value.get(key, -1)) != number for key, number in expected.items()):
                     return False
                 if value.get("volume") != "v6":

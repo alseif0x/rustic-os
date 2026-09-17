@@ -8,7 +8,7 @@ The `block-user` journey also mounts a v6 workspace volume: role 14 of `block-pr
 reads a host-provisioned 16 KiB artifact in 4 KiB ranges and leaves a 64-bit FNV
 digest in the sector before the volume, which the host recomputes from its own copy
 and cross-checks with the independent v6 reader (`tools/boot_support/workspace_evidence.py`).
-The mode's timeout floor is 60 s because the mount costs 96 real block requests.
+The mode's timeout floor is 90 s because the mount costs 96 real block requests and the guest's tracked write commits a whole generation.
 
 ## Transport decision and reference device
 
