@@ -11,6 +11,12 @@ ROOT = Path(__file__).resolve().parents[2]
 STATE = ROOT / ".cache/sandbox-image.json"
 BASE = "ubuntu@sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254"
 PACKAGE_SOURCES = {"default": "", "github": "http://azure.archive.ubuntu.com/ubuntu"}
+# The reviewed reference tree. Every workspace member must appear here, or the
+# copied root manifest names a member the image cannot fetch.
+REFERENCE_FILES = ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "LICENSE")
+REFERENCE_TREES = ("kernel", "crates", "apps", "licenses", ".cargo", "tools/xtask",
+                   "tools/volume", "tools/boot_support", "tools/terminal_support")
+REFERENCE_TOOL_FILES = ("environment.py", "environment.toml", "application.py")
 
 
 def prepare(package_source="default"):
@@ -21,11 +27,11 @@ def prepare(package_source="default"):
         context = Path(temporary)
         reference = context / "reference"
         reference.mkdir()
-        for name in ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "LICENSE"):
+        for name in REFERENCE_FILES:
             shutil.copyfile(ROOT / name, reference / name)
-        for name in ("kernel", "crates", "apps", "licenses", ".cargo", "tools/xtask", "tools/boot_support", "tools/terminal_support"):
+        for name in REFERENCE_TREES:
             shutil.copytree(ROOT / name, reference / name, ignore=shutil.ignore_patterns("__pycache__"))
-        for name in ("environment.py", "environment.toml", "application.py"):
+        for name in REFERENCE_TOOL_FILES:
             shutil.copyfile(ROOT / "tools" / name, reference / "tools" / name)
         # The trusted UART harness shares stdlib read/replacement vectors, not the host validator.
         for name in ("tools/contracts/__init__.py", "tools/contracts/read_vectors.py",

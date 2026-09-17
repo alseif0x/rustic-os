@@ -103,6 +103,10 @@ impl Receipts6 {
             slots: [None; RETAINED_V6],
         })
     }
+    /// The lineage the table is bound to, which is also the volume's identity.
+    pub fn lineage(&self) -> [u8; 16] {
+        self.lineage
+    }
     pub fn epoch(&self) -> u64 {
         self.epoch
     }

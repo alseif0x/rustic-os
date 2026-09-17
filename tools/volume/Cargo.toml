@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+[package]
+name = "rustic-volume"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "rustic-volume"
+path = "src/main.rs"
+
+[dependencies]
+rustic-fs = { path = "../../crates/fs" }
+
+[lints]
+workspace = true

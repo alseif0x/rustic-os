@@ -181,6 +181,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustic-volume"
+version = "0.1.0"
+dependencies = [
+ "rustic-fs",
+]
+
+[[package]]
 name = "sha2"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
