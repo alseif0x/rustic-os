@@ -3,7 +3,11 @@
 //! payload I/O through extents (#51).
 use std::collections::BTreeMap;
 
-use rustic_fs::{DATA_BYTES_V6, Disk, Error, Kind, MAX_FILE_V6, Node6, mount6, provision6};
+use rustic_fs::{
+    DATA_BYTES_V6, Disk, Error, Kind, MAX_FILE_V6, Node6, Receipt6, Retry, mount6, provision6,
+};
+
+const LINEAGE: [u8; 16] = [7; 16];
 
 /// Sparse in-memory disk: only written sectors are stored, so a 64 MiB payload
 /// region costs nothing until it is used. `durable` models flush.
@@ -46,7 +50,7 @@ fn provision_then_mount_restores_the_roots_and_the_whole_free_region() {
     // An unformatted disk is not mountable: the header is missing, not guessed.
     assert_eq!(mount6(&mut disk).err(), Some(Error::Corrupt));
 
-    let volume = provision6(&mut disk).expect("provision");
+    let volume = provision6(&mut disk, LINEAGE).expect("provision");
     assert_eq!(volume.free_sectors(), rustic_fs::DATA_SECTORS);
     let mounted = mount6(&mut disk).expect("mount");
     for (index, name) in ["system", "data", "config", "workspaces"]
@@ -64,7 +68,7 @@ fn provision_then_mount_restores_the_roots_and_the_whole_free_region() {
 #[test]
 fn a_large_file_round_trips_across_extents_and_reclaims_exactly() {
     let mut disk = Sparse::default();
-    let mut volume = provision6(&mut disk).expect("provision");
+    let mut volume = provision6(&mut disk, LINEAGE).expect("provision");
     let initial = volume.free_sectors();
 
     // The layer owns payload, not identity: the caller creates the record.
@@ -105,7 +109,7 @@ fn a_large_file_round_trips_across_extents_and_reclaims_exactly() {
 #[test]
 fn a_file_larger_than_the_limit_is_refused_before_anything_is_written() {
     let mut disk = Sparse::default();
-    let mut volume = provision6(&mut disk).expect("provision");
+    let mut volume = provision6(&mut disk, LINEAGE).expect("provision");
     let initial = volume.free_sectors();
     let oversized = vec![0u8; MAX_FILE_V6 + 1];
     assert_eq!(
@@ -119,8 +123,8 @@ fn a_file_larger_than_the_limit_is_refused_before_anything_is_written() {
 #[test]
 fn a_corrupt_or_torn_volume_is_refused_instead_of_mounted() {
     let mut disk = Sparse::default();
-    provision6(&mut disk).expect("provision");
-    let mut volume = provision6(&mut disk).expect("reprovision");
+    provision6(&mut disk, LINEAGE).expect("provision");
+    let mut volume = provision6(&mut disk, LINEAGE).expect("reprovision");
     let mut record = Node6::EMPTY;
     record.id = 5;
     record.parent = 4;
@@ -170,7 +174,7 @@ fn a_corrupt_or_torn_volume_is_refused_instead_of_mounted() {
 #[test]
 fn a_torn_commit_cannot_publish_the_inactive_generation() {
     let mut disk = Sparse::default();
-    let volume = provision6(&mut disk).expect("provision");
+    let volume = provision6(&mut disk, LINEAGE).expect("provision");
     let mounted = mount6(&mut disk).expect("mount");
     let active = mounted.header.active;
     let inactive = (active + 1) % rustic_fs::GENERATIONS;
@@ -208,7 +212,7 @@ fn a_torn_commit_cannot_publish_the_inactive_generation() {
 #[test]
 fn a_stale_writer_is_refused_and_changes_nothing() {
     let mut disk = Sparse::default();
-    let mut volume = provision6(&mut disk).expect("provision");
+    let mut volume = provision6(&mut disk, LINEAGE).expect("provision");
     let mut record = Node6::EMPTY;
     record.id = 5;
     record.parent = 4;
@@ -239,4 +243,44 @@ fn a_stale_writer_is_refused_and_changes_nothing() {
     assert_eq!(mounted.read_file(&mut disk, node, &mut out), Ok(5));
     assert_eq!(&out, b"first");
     assert!(mounted.free_sectors() < before);
+}
+
+#[test]
+fn receipts_are_published_with_the_commit_and_survive_a_remount() {
+    let mut disk = Sparse::default();
+    let mut volume = provision6(&mut disk, LINEAGE).expect("provision");
+    assert_eq!(volume.receipts.len(), 0);
+    let receipt = Receipt6 {
+        retry: Retry {
+            lineage: LINEAGE,
+            epoch: volume.receipts.epoch(),
+            key: 42,
+        },
+        id: 5,
+        previous: 3,
+        committed: 4,
+        length: 220_000,
+    };
+    volume.retain_receipt(&mut disk, receipt).expect("retain");
+
+    // The commit published it: a remount reads it back from the generation.
+    let remounted = mount6(&mut disk).expect("remount");
+    assert_eq!(remounted.receipts.len(), 1);
+    assert_eq!(
+        remounted.find_receipt(receipt.retry).unwrap(),
+        Some(&receipt)
+    );
+    // It is bound to this volume's lineage.
+    let mut foreign = receipt;
+    foreign.retry.lineage = [9; 16];
+    assert_eq!(remounted.find_receipt(foreign.retry), Err(Error::Lineage));
+
+    // A corrupted receipt sector fails the mount through the header checksum.
+    let mut torn = Sparse {
+        live: disk.durable.clone(),
+        durable: disk.durable.clone(),
+    };
+    let active = mount6(&mut torn).expect("mount").header.active;
+    torn.corrupt(rustic_fs::receipts_sector(active), 4);
+    assert_eq!(mount6(&mut torn).err(), Some(Error::Corrupt));
 }
