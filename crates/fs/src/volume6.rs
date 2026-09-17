@@ -26,9 +26,10 @@ pub struct Volume6 {
     pub receipts: Receipts6,
 }
 
-/// Write a fresh v6 volume: the four root directories, an empty map and a header
-/// that checksums both. The caller owns the disk and its durability.
-pub fn provision(disk: &mut impl Disk, lineage: [u8; 16]) -> Result<Volume6, Error> {
+/// The roots and the empty structures a fresh v6 volume starts from, built in
+/// memory so a caller that must publish later (the v5 upgrade) can stage records
+/// without touching the disk first.
+pub(crate) fn blank(lineage: [u8; 16]) -> Result<Volume6, Error> {
     let mut volume = Volume6 {
         header: Header6::initial(),
         nodes: [Node6::EMPTY; OBJECTS_V6],
@@ -48,6 +49,13 @@ pub fn provision(disk: &mut impl Disk, lineage: [u8; 16]) -> Result<Volume6, Err
         record.name_length = name.len() as u8;
         volume.nodes[index] = record;
     }
+    Ok(volume)
+}
+
+/// Write a fresh v6 volume: the four root directories, an empty map and a header
+/// that checksums both. The caller owns the disk and its durability.
+pub fn provision(disk: &mut impl Disk, lineage: [u8; 16]) -> Result<Volume6, Error> {
+    let mut volume = blank(lineage)?;
     volume.flush(disk)?;
     Ok(volume)
 }
@@ -183,6 +191,29 @@ impl Volume6 {
         if self.nodes[index].version != expected {
             return Err(Error::Version);
         }
+        self.stage_bytes(disk, index, bytes)?;
+        let node = &mut self.nodes[index];
+        node.version = node.version.saturating_add(1);
+        let version = node.version;
+        self.flush(disk)?;
+        Ok(version)
+    }
+    /// Allocate extents for `bytes`, write the payload and record it on the node.
+    /// The version and the commit stay with the caller so a migration can keep
+    /// the version it read; a failure before the payload is written leaves the
+    /// node untouched, and only payload sectors are written until `flush`.
+    pub(crate) fn stage_bytes(
+        &mut self,
+        disk: &mut impl Disk,
+        index: usize,
+        bytes: &[u8],
+    ) -> Result<(), Error> {
+        if index >= OBJECTS_V6 || bytes.len() > MAX_FILE_V6 {
+            return Err(Error::Size);
+        }
+        if self.nodes[index].kind == Kind::Empty {
+            return Err(Error::NotFound);
+        }
         let sectors = (bytes.len() as u64).div_ceil(SECTOR_BYTES);
         let mut plan = Extents::new();
         let mut allocated: [Extent; 8] = [Extent::new(0, 0); 8];
@@ -217,10 +248,7 @@ impl Volume6 {
             node.extents[slot] = *run;
         }
         node.extents_used = used as u8;
-        node.version = node.version.saturating_add(1);
-        let version = node.version;
-        self.flush(disk)?;
-        Ok(version)
+        Ok(())
     }
     /// Read a node's bytes into `out`, returning how many were copied. A record
     /// whose extents cannot hold its length is refused before any read.

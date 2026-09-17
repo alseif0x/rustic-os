@@ -1,48 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Host tests for the v6 volume layer: provision, mount, verified structures and
 //! payload I/O through extents (#51).
-use std::collections::BTreeMap;
+mod support;
 
 use rustic_fs::{
     DATA_BYTES_V6, Disk, Error, Kind, MAX_FILE_V6, Node6, Receipt6, Retry, mount6, provision6,
 };
+use support::Sparse;
 
 const LINEAGE: [u8; 16] = [7; 16];
-
-/// Sparse in-memory disk: only written sectors are stored, so a 64 MiB payload
-/// region costs nothing until it is used. `durable` models flush.
-#[derive(Default)]
-struct Sparse {
-    live: BTreeMap<u64, [u8; 512]>,
-    durable: BTreeMap<u64, [u8; 512]>,
-}
-
-impl Sparse {
-    fn recover(&self) -> Self {
-        Self {
-            live: self.durable.clone(),
-            durable: self.durable.clone(),
-        }
-    }
-    fn corrupt(&mut self, sector: u64, offset: usize) {
-        self.live.get_mut(&sector).expect("written sector")[offset] ^= 1;
-    }
-}
-
-impl Disk for Sparse {
-    fn read(&mut self, sector: u64, bytes: &mut [u8; 512]) -> Result<(), Error> {
-        *bytes = self.live.get(&sector).copied().unwrap_or([0; 512]);
-        Ok(())
-    }
-    fn write(&mut self, sector: u64, bytes: &[u8; 512]) -> Result<(), Error> {
-        self.live.insert(sector, *bytes);
-        Ok(())
-    }
-    fn flush(&mut self) -> Result<(), Error> {
-        self.durable = self.live.clone();
-        Ok(())
-    }
-}
 
 #[test]
 fn provision_then_mount_restores_the_roots_and_the_whole_free_region() {
@@ -142,26 +108,17 @@ fn a_corrupt_or_torn_volume_is_refused_instead_of_mounted() {
     let map_base = rustic_fs::map_sector(active);
 
     // A single flipped byte in the node table must fail the header's checksum.
-    let mut torn = Sparse {
-        live: disk.durable.clone(),
-        durable: disk.durable.clone(),
-    };
+    let mut torn = disk.recover();
     torn.corrupt(nodes_base, 0);
     assert_eq!(mount6(&mut torn).err(), Some(Error::Corrupt));
 
     // So must a flipped byte in the free-space map.
-    let mut map_torn = Sparse {
-        live: disk.durable.clone(),
-        durable: disk.durable.clone(),
-    };
+    let mut map_torn = disk.recover();
     map_torn.corrupt(map_base, 3);
     assert_eq!(mount6(&mut map_torn).err(), Some(Error::Corrupt));
 
     // And so must a flipped byte in the header itself.
-    let mut header_torn = Sparse {
-        live: disk.durable.clone(),
-        durable: disk.durable.clone(),
-    };
+    let mut header_torn = disk.recover();
     header_torn.corrupt(8, 12);
     assert_eq!(mount6(&mut header_torn).err(), Some(Error::Corrupt));
 
@@ -276,10 +233,7 @@ fn receipts_are_published_with_the_commit_and_survive_a_remount() {
     assert_eq!(remounted.find_receipt(foreign.retry), Err(Error::Lineage));
 
     // A corrupted receipt sector fails the mount through the header checksum.
-    let mut torn = Sparse {
-        live: disk.durable.clone(),
-        durable: disk.durable.clone(),
-    };
+    let mut torn = disk.recover();
     let active = mount6(&mut torn).expect("mount").header.active;
     torn.corrupt(rustic_fs::receipts_sector(active), 4);
     assert_eq!(mount6(&mut torn).err(), Some(Error::Corrupt));
