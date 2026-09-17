@@ -7,7 +7,7 @@ RUN if [ -n "$UBUNTU_MIRROR" ]; then sed -i -e "s|http://archive.ubuntu.com/ubun
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl python3 git build-essential qemu-system-x86=1:8.2.2+ds-0ubuntu1.18 ovmf=2024.02-2ubuntu0.9 mtools=4.0.43-1build1 dosfstools=4.2-1.1build1 xorriso=1:1.5.6-1.1ubuntu3 && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://static.rust-lang.org/rustup/archive/1.29.1/x86_64-unknown-linux-gnu/rustup-init -o /tmp/rustup-init && echo "dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71 /tmp/rustup-init" | sha256sum -c - && chmod +x /tmp/rustup-init && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain 1.98.1 --component rustfmt --component clippy --target x86_64-unknown-none && rm /tmp/rustup-init
 COPY reference /opt/reference
-RUN cd /opt/reference && cargo fetch --locked && python3 tools/environment.py verify && python3 tools/environment.py fetch-bootloader
+RUN cd /opt/reference && cargo fetch --locked && python3 tools/environment.py verify && python3 tools/environment.py fetch-bootloader && cargo build -p rustic-volume --locked --offline
 COPY controller /opt/controller
 RUN chmod -R a+rX /opt && mkdir -p /work
 USER 1000:1000
