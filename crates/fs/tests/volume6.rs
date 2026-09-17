@@ -273,3 +273,83 @@ fn rewriting_a_file_reclaims_the_payload_it_replaced() {
     assert_eq!(volume.write_file(&mut disk, 4, 3, &[]), Ok(4));
     assert_eq!(volume.free_sectors(), initial);
 }
+
+#[test]
+fn a_range_read_streams_only_the_extents_a_range_needs() {
+    let mut disk = Sparse::default();
+    let mut volume = provision6(&mut disk, LINEAGE).expect("provision");
+    let mut record = Node6::EMPTY;
+    record.id = 5;
+    record.parent = 4;
+    record.kind = Kind::File;
+    record.version = 1;
+    volume.nodes[4] = record;
+    let bytes: Vec<u8> = (0..200_000u32).map(|index| (index % 251) as u8).collect();
+    volume.write_file(&mut disk, 4, 1, &bytes).expect("write");
+    let mounted = mount6(&mut disk).expect("mount");
+    let node = mounted.node(5).expect("file node");
+    assert!(node.runs().len() > 1, "the fixture must span runs");
+
+    // A whole-file read and a range read of the whole file agree.
+    let mut all = vec![0; bytes.len()];
+    assert_eq!(
+        mounted.read_file(&mut disk, node, &mut all),
+        Ok(bytes.len())
+    );
+    assert_eq!(all, bytes);
+    let mut whole = vec![0; bytes.len()];
+    assert_eq!(
+        mounted.read_range(&mut disk, node, 0, &mut whole),
+        Ok(bytes.len())
+    );
+    assert_eq!(whole, bytes);
+
+    // A range that starts and ends inside different runs, and one that crosses
+    // several, both return exactly the bytes at those offsets.
+    for (offset, count) in [(0usize, 1usize), (511, 2), (100_000, 4096)] {
+        let mut part = vec![0; count];
+        assert_eq!(
+            mounted.read_range(&mut disk, node, offset as u64, &mut part),
+            Ok(count)
+        );
+        assert_eq!(part, bytes[offset..offset + count]);
+    }
+    // A range that asks for more than the file holds stops at the end.
+    let mut over = vec![0; 10_000];
+    assert_eq!(
+        mounted.read_range(&mut disk, node, 199_000, &mut over),
+        Ok(1_000)
+    );
+    assert_eq!(&over[..1_000], &bytes[199_000..]);
+    // A range past the end copies the remainder, and one past the length is refused.
+    let mut tail = vec![0; 100];
+    assert_eq!(
+        mounted.read_range(&mut disk, node, 199_999, &mut tail),
+        Ok(1)
+    );
+    assert_eq!(tail[0], bytes[199_999]);
+    assert_eq!(
+        mounted.read_range(&mut disk, node, bytes.len() as u64, &mut tail),
+        Ok(0)
+    );
+    assert_eq!(
+        mounted.read_range(&mut disk, node, bytes.len() as u64 + 1, &mut tail),
+        Err(Error::Size)
+    );
+
+    // A record whose extents cannot hold its length is refused, not read short.
+    let mut lying = *node;
+    lying.length = 400_000;
+    assert_eq!(
+        mounted.read_range(&mut disk, &lying, 0, &mut tail),
+        Err(Error::Corrupt)
+    );
+    assert_eq!(
+        mounted.read_file(&mut disk, &lying, &mut vec![0; 400_000]),
+        Err(Error::Corrupt)
+    );
+    assert_eq!(
+        mounted.read_file(&mut disk, node, &mut tail),
+        Err(Error::Size)
+    );
+}
