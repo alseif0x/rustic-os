@@ -126,11 +126,8 @@ impl<'a> FreeSpace<'a> {
         if words.len() != MAP_WORDS {
             return Err(Error::Size);
         }
-        let used_sectors = DATA_SECTORS;
-        Ok(Self {
-            words,
-            free: used_sectors,
-        })
+        let free = words.iter().map(|word| u64::from(word.count_zeros())).sum();
+        Ok(Self { words, free })
     }
     /// Mark every sector used, for a region that is not yet formatted.
     pub fn fill(&mut self) {
