@@ -135,6 +135,7 @@ owns those images:
 ```sh
 cargo run -p rustic-volume -- provision <image> <32-hex-lineage>
 cargo run -p rustic-volume -- seed <image>
+cargo run -p rustic-volume -- write <image> <parent-id> <name> <source-file>
 cargo run -p rustic-volume -- migrate <image> <32-hex-lineage>
 cargo run -p rustic-volume -- report <image>
 ```
@@ -142,6 +143,11 @@ cargo run -p rustic-volume -- report <image>
 `seed` writes a small v5 experiment volume, never the owner's terminal volume, and
 `migrate` is the deliberate one-way upgrade. Host agreement is not guest execution: no
 guest mounts a v6 volume yet.
+
+The `block-user` mode mounts a host-provisioned v6 workspace volume and reads a
+16 KiB artifact through the real block device in 4 KiB ranges; its documented
+floor is 60 s (`MODE_FLOOR` in `tools/boot_support/runner.py`), while every other
+mode keeps the caller's timeout.
 
 ## Delayed-device regression
 

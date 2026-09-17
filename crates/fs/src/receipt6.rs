@@ -93,6 +93,12 @@ pub struct Receipts6 {
 }
 
 impl Receipts6 {
+    /// An empty table with no lineage, for a volume that has not been read yet.
+    pub const EMPTY: Self = Self {
+        lineage: [0; 16],
+        epoch: 0,
+        slots: [None; RETAINED_V6],
+    };
     pub fn new(lineage: [u8; 16]) -> Result<Self, Error> {
         if lineage == [0; 16] {
             return Err(Error::Invalid);

@@ -8,7 +8,7 @@ def verified(mode, serial, records):
             return False
         for value in values:
             faults = value["phase"] == "faults"
-            expected = {"verified": 1, "ring": 3, "applications": 14 if faults else 4,
+            expected = {"verified": 1, "ring": 3, "applications": 14 if faults else 5,
                         "rejected": 53 if faults else 0, "lifecycle": 6 if faults else 0,
                         "max_bytes": 512, "queue_slots": 2, "handle_slots": 4, "dma_frames": 3}
             if any(int(value.get(key, -1)) != number for key, number in expected.items()):
@@ -26,6 +26,15 @@ def verified(mode, serial, records):
                 expected = {"verified": 1, "cancelled": cancelled, "too_late": 1, "committed": 1}
                 if any(int(value.get(key, -1)) != number for key, number in expected.items()):
                     return False
+            workspaces = records(serial, "RUSTIC WORKSPACE ")
+            if [value["phase"] for value in workspaces] != ["write", "read"]:
+                return False
+            for value in workspaces:
+                expected = {"verified": 1, "length": 16384, "ranges": 4, "nodes": 256}
+                if any(int(value.get(key, -1)) != number for key, number in expected.items()):
+                    return False
+                if value.get("volume") != "v6":
+                    return False
             if [value["phase"] for value in admissions] != ["write", "replay"]:
                 return False
             for value in admissions:
@@ -33,7 +42,7 @@ def verified(mode, serial, records):
                             "service_control": 1, "fresh_authority": 1}
                 if any(int(value.get(key, -1)) != number for key, number in expected.items()):
                     return False
-        elif publications or admissions:
+        elif publications or admissions or records(serial, "RUSTIC WORKSPACE "):
             return False
         return True
     except (KeyError, ValueError):

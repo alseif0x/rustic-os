@@ -353,3 +353,36 @@ fn a_range_read_streams_only_the_extents_a_range_needs() {
         Err(Error::Size)
     );
 }
+
+#[test]
+fn an_in_place_mount_matches_a_value_mount_and_refuses_a_torn_volume() {
+    let mut disk = Sparse::default();
+    let mut volume = provision6(&mut disk, LINEAGE).expect("provision");
+    let mut record = Node6::EMPTY;
+    record.id = 5;
+    record.parent = 4;
+    record.kind = Kind::File;
+    record.version = 1;
+    volume.nodes[4] = record;
+    volume
+        .write_file(&mut disk, 4, 1, b"payload")
+        .expect("write");
+
+    // The two entry points must describe one volume, field by field.
+    let by_value = mount6(&mut disk).expect("mount");
+    let mut in_place = rustic_fs::Volume6::EMPTY;
+    in_place.mount_into(&mut disk).expect("mount in place");
+    assert_eq!(in_place.header, by_value.header);
+    assert_eq!(in_place.nodes, by_value.nodes);
+    assert_eq!(in_place.free_sectors(), by_value.free_sectors());
+    assert_eq!(in_place.node(5).map(|node| node.length), Some(7));
+
+    // A refused mount leaves the caller's storage as it was, so a caller that
+    // reuses the slot cannot see a half-read table.
+    let mut torn = disk.recover();
+    torn.corrupt(8, 12);
+    let mut slot = rustic_fs::Volume6::EMPTY;
+    assert_eq!(slot.mount_into(&mut torn), Err(Error::Corrupt));
+    assert_eq!(slot.header.sequence, 1);
+    assert!(slot.node(5).is_none());
+}

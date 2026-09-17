@@ -12,6 +12,7 @@ const USAGE: &str = "\
 usage: rustic-volume <command>
   provision <image> <lineage>   write a fresh v6 volume image
   seed <image>                  write a small v5 experiment volume image
+  write <image> <parent> <name> <source>   place a host file in a v6 image
   migrate <image> <lineage>     migrate a v5 image to v6 in place
   report <image>                print a v6 image as JSON
 A lineage is 32 hex characters. Images are exactly one volume long; a shorter
@@ -38,6 +39,9 @@ fn run(args: &[String]) -> Result<String, String> {
         }
         [command, image, lineage] if command == "migrate" => {
             command::migrate(Path::new(image), lineage)
+        }
+        [command, image, parent, name, source] if command == "write" => {
+            command::write(Path::new(image), parent, name, Path::new(source))
         }
         [command, image] if command == "seed" => command::seed(Path::new(image)),
         [command, image] if command == "report" => command::report(Path::new(image)),

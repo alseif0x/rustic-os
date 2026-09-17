@@ -2,7 +2,7 @@
 //! The four volume operations this tool exposes, all against a real image file.
 use std::path::Path;
 
-use rustic_fs::{DATA_SECTORS, Kind, VOLUME_SECTORS, Volume, mount6, provision6, upgrade6};
+use rustic_fs::{DATA_SECTORS, Kind, Node6, VOLUME_SECTORS, Volume, mount6, provision6, upgrade6};
 
 use crate::disk::FileDisk;
 
@@ -51,6 +51,71 @@ pub(crate) fn seed(image: &Path) -> Result<String, String> {
         notes.version,
         SEEDED.len(),
         empty.id
+    ))
+}
+
+/// Place a host file in a v6 image, reusing an existing record with the same
+/// parent and name so a fixture is written once and rewritten in place.
+pub(crate) fn write(
+    image: &Path,
+    parent: &str,
+    name: &str,
+    source: &Path,
+) -> Result<String, String> {
+    let bytes = std::fs::read(source)
+        .map_err(|error| format!("cannot read {}: {error}", source.display()))?;
+    let parent: u32 = parent
+        .parse()
+        .map_err(|_| "parent must be a node id".to_owned())?;
+    if name.is_empty() || name.len() > 32 || !name.is_ascii() {
+        return Err("name must be 1..=32 ASCII bytes".to_owned());
+    }
+    let mut disk = open(image)?;
+    let mut volume = mount6(&mut disk).map_err(|error| format!("mount refused: {error:?}"))?;
+    let directory = volume
+        .node(parent)
+        .ok_or_else(|| format!("no node {parent}"))?;
+    if directory.kind != Kind::Directory {
+        return Err(format!("node {parent} is not a directory"));
+    }
+    let existing = volume.nodes.iter().position(|node| {
+        node.kind == Kind::File && node.parent == parent && node.name() == name.as_bytes()
+    });
+    let slot = match existing {
+        Some(slot) => slot,
+        None => {
+            let slot = volume
+                .nodes
+                .iter()
+                .position(|node| node.kind == Kind::Empty)
+                .ok_or("no free node slot")?;
+            let id = volume.nodes.iter().map(|node| node.id).max().unwrap_or(0) + 1;
+            let mut record = Node6::EMPTY;
+            record.id = id;
+            record.parent = parent;
+            record.kind = Kind::File;
+            record.version = 1;
+            record.name[..name.len()].copy_from_slice(name.as_bytes());
+            record.name_length = name.len() as u8;
+            volume.nodes[slot] = record;
+            slot
+        }
+    };
+    let expected = volume.nodes[slot].version;
+    let version = volume
+        .write_file(&mut disk, slot, expected, &bytes)
+        .map_err(|error| format!("write refused: {error:?}"))?;
+    let node = &volume.nodes[slot];
+    let extents: Vec<String> = node
+        .runs()
+        .iter()
+        .map(|run| format!("[{},{}]", run.start, run.sectors))
+        .collect();
+    Ok(format!(
+        "{{\"id\":{},\"version\":{version},\"length\":{},\"extents\":[{}]}}",
+        node.id,
+        bytes.len(),
+        extents.join(",")
     ))
 }
 

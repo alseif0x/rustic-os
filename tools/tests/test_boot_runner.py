@@ -63,3 +63,13 @@ class OutcomeTests(unittest.TestCase):
         self.assertTrue(memory_supported("ok", MAX_MEMORY_MIB))
         self.assertFalse(memory_supported("ok", MAX_MEMORY_MIB + 256))
         self.assertFalse(memory_supported("ok", 1024 + 128))  # not a 256 MiB step
+
+
+class ModeFloorTests(unittest.TestCase):
+    def test_a_mode_with_a_documented_floor_raises_a_shorter_request(self):
+        """The suite's budget is a lower bound, never a ceiling for real work."""
+        from boot_support import runner
+        self.assertEqual(runner.MODE_FLOOR.get("block-user"), 60)
+        self.assertEqual(max(45, runner.MODE_FLOOR.get("block-user", 0)), 60)
+        self.assertEqual(max(90, runner.MODE_FLOOR.get("block-user", 0)), 90)
+        self.assertEqual(max(5, runner.MODE_FLOOR.get("ok", 0)), 5)
