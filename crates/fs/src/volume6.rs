@@ -14,7 +14,7 @@ use crate::format6::{
     GENERATIONS, HEADER_SECTOR, Header6, NODE_BYTES, Node6, PAYLOAD_SECTOR, RECEIPTS_SECTORS,
     SECTOR_BYTES, map_sector, nodes_sector, receipts_sector,
 };
-use crate::receipt6::{BLOCK_BYTES, Receipt6, Receipts6};
+use crate::receipt6::{BLOCK_BYTES, RETAINED_V6, Receipt6, Receipts6};
 use crate::{Disk, Error, Kind, OBJECTS_V6};
 
 /// A mounted v6 volume: the verified header, the node table and the free-space
@@ -197,6 +197,55 @@ impl Volume6 {
         let version = node.version;
         self.flush(disk)?;
         Ok(version)
+    }
+    /// Write `bytes` and retain the operation identity that produced them, so
+    /// data, version and receipt are published by one commit. Repeating a retry
+    /// returns the retained receipt without writing; a retry that describes a
+    /// different record is a conflict, and a full table is `Full` before any
+    /// payload is staged. Unlike the v5 record, a v6 receipt keeps no snapshot of
+    /// the replaced bytes, so a replay matches identity, previous version and
+    /// length rather than content.
+    pub fn write_tracked(
+        &mut self,
+        disk: &mut impl Disk,
+        index: usize,
+        expected: u64,
+        retry: crate::recovery::Retry,
+        bytes: &[u8],
+    ) -> Result<Receipt6, Error> {
+        if index >= OBJECTS_V6 || bytes.len() > MAX_FILE_V6 {
+            return Err(Error::Size);
+        }
+        let id = self.nodes[index].id;
+        if self.nodes[index].kind == Kind::Empty {
+            return Err(Error::NotFound);
+        }
+        if let Some(record) = self.receipts.find(retry)? {
+            if record.id != id || record.previous != expected || record.length != bytes.len() as u32
+            {
+                return Err(Error::IdempotencyConflict);
+            }
+            return Ok(*record);
+        }
+        if self.nodes[index].version != expected {
+            return Err(Error::Version);
+        }
+        if self.receipts.len() >= RETAINED_V6 {
+            return Err(Error::Full);
+        }
+        self.stage_bytes(disk, index, bytes)?;
+        let node = &mut self.nodes[index];
+        node.version = node.version.saturating_add(1);
+        let receipt = Receipt6 {
+            retry,
+            id,
+            previous: expected,
+            committed: node.version,
+            length: bytes.len() as u32,
+        };
+        self.receipts.retain(receipt)?;
+        self.flush(disk)?;
+        Ok(receipt)
     }
     /// Allocate extents for `bytes`, write the payload and record it on the node.
     /// The version and the commit stay with the caller so a migration can keep

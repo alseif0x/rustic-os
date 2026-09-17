@@ -11,7 +11,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use rustic_fs::{
-    DATA_SECTORS, Disk, Error, Kind, Node6, PAYLOAD_SECTOR, VOLUME_SECTORS, Volume, Volume6,
+    DATA_SECTORS, Disk, Error, Kind, Node6, PAYLOAD_SECTOR, Retry, VOLUME_SECTORS, Volume, Volume6,
     mount6, provision6, upgrade6,
 };
 
@@ -175,6 +175,60 @@ fn a_v5_image_is_migrated_in_place_and_keeps_its_files() {
     assert_eq!(out, b"a v5 record");
     // The v5 layout is gone: what was a v5 volume is not one any more.
     assert_eq!(Volume::mount(&mut reopened).err(), Some(Error::Corrupt));
+    drop(reopened);
+    std::fs::remove_file(&path).ok();
+}
+
+#[test]
+fn a_tracked_write_exports_the_receipt_binding() {
+    let path = image("tracked");
+    let mut disk = FileDisk::create(&path, VOLUME_SECTORS);
+    let mut volume = provision6(&mut disk, LINEAGE).expect("provision");
+    let bytes = pattern(4096);
+    let mut record = Node6::EMPTY;
+    record.id = 5;
+    record.parent = 4;
+    record.kind = Kind::File;
+    record.version = 1;
+    record.name[..8].copy_from_slice(b"artifact");
+    record.name_length = 8;
+    volume.nodes[4] = record;
+    let receipt = volume
+        .write_tracked(
+            &mut disk,
+            4,
+            1,
+            Retry {
+                lineage: LINEAGE,
+                epoch: 1,
+                key: 21,
+            },
+            &bytes,
+        )
+        .expect("tracked write");
+    assert_eq!(
+        (
+            receipt.id,
+            receipt.previous,
+            receipt.committed,
+            receipt.length
+        ),
+        (5, 1, 2, 4096)
+    );
+    let used = payload_end(&volume);
+    disk.export("v6-tracked.img", PAYLOAD_SECTOR + used);
+
+    let mut reopened = FileDisk::reopen(&path, VOLUME_SECTORS);
+    let mounted = mount6(&mut reopened).expect("mount from file");
+    assert_eq!(mounted.find_receipt(receipt.retry), Ok(Some(&receipt)));
+    let node = mounted.node(5).expect("file node");
+    assert_eq!(node.version, receipt.committed);
+    let mut out = vec![0; bytes.len()];
+    assert_eq!(
+        mounted.read_file(&mut reopened, node, &mut out),
+        Ok(bytes.len())
+    );
+    assert_eq!(out, bytes);
     drop(reopened);
     std::fs::remove_file(&path).ok();
 }

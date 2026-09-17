@@ -67,7 +67,7 @@ def export(output):
                             env={**os.environ, "RUSTIC_FS6_EXPORT": str(images)})
     if result.returncode != 0:
         raise SystemExit("image export failed:\n" + result.stdout + result.stderr)
-    for name in ("v5-source.img", "v6-provisioned.img"):
+    for name in ("v5-source.img", "v6-provisioned.img", "v6-tracked.img"):
         if not (images / name).is_file():
             raise SystemExit(f"the image test did not export {name}")
     return images
@@ -150,6 +150,17 @@ def verify(output, images):
     if big["used_sectors"] != (BIG + 511) // 512:
         raise SystemExit("the exported volume accounting is wrong")
 
+    # A tracked write publishes the bytes, the version and the receipt that names
+    # them together, and the independent reader checks the binding.
+    tracked = oracle6.snapshot((images / "v6-tracked.img").read_bytes())
+    receipt, = tracked["receipts"]
+    if (receipt["id"], receipt["previous"], receipt["committed"], receipt["length"]) != (5, 1, 2, 4096):
+        raise SystemExit("the retained receipt does not describe the tracked write")
+    if tracked["nodes"][5]["version"] != receipt["committed"]:
+        raise SystemExit("the receipt and the committed version disagree")
+    if tracked["files"].get((4, "artifact")) != bytes(index % 251 for index in range(4096)):
+        raise SystemExit("independent read of the tracked payload differs")
+
     evidence = [tool_refusal(output, "an existing v6 volume", "migrate", str(fresh), LINEAGE),
                 tool_refusal(output, "an image that is not a volume", "report", str(images / "v5-source.img"))]
     raw = (images / "v6-provisioned.img").read_bytes()
@@ -181,6 +192,8 @@ def verify(output, images):
         "seeded": seeded,
         "migrated": migrated,
         "exported": {"bytes": BIG, "extents": len(node["extents"]), "used_sectors": big["used_sectors"]},
+        "tracked": {"receipts": len(tracked["receipts"]), "committed": receipt["committed"],
+                    "length": receipt["length"]},
         "refusals": evidence,
         "images": {path.name: {"bytes": path.stat().st_size, "sha256": digest(path)}
                    for path in sorted(images.iterdir())},
