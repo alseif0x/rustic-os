@@ -214,6 +214,8 @@ impl Volume6 {
         if self.nodes[index].kind == Kind::Empty {
             return Err(Error::NotFound);
         }
+        let previous = self.nodes[index].extents;
+        let previous_used = self.nodes[index].extents_used;
         let sectors = (bytes.len() as u64).div_ceil(SECTOR_BYTES);
         let mut plan = Extents::new();
         let mut allocated: [Extent; 8] = [Extent::new(0, 0); 8];
@@ -239,6 +241,15 @@ impl Volume6 {
                 block[..take].copy_from_slice(&bytes[written..written + take]);
                 written += take;
                 disk.write(PAYLOAD_SECTOR + run.start + sector, &block)?;
+            }
+        }
+        // The record is moved to the new runs only after the payload exists, and
+        // the runs it held before are released in the same step: a rewrite that
+        // kept the old allocation would leak it until the volume filled.
+        {
+            let mut space = FreeSpace::new(&mut self.map).expect("map size is fixed");
+            for run in previous[..previous_used as usize].iter() {
+                space.release(*run)?;
             }
         }
         let node = &mut self.nodes[index];

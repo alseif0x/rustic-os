@@ -106,6 +106,28 @@ fn a_corrupt_or_impossible_record_is_refused() {
     let checksum = crc_of(&long);
     long[NODE_BYTES - 4..].copy_from_slice(&checksum.to_le_bytes());
     assert_eq!(Node6::decode(&long), Err(Error::Corrupt));
+
+    // A name longer than the record's name field is refused here rather than
+    // panicking later, when the name is read from media this code did not write.
+    let mut bad_name = bytes;
+    bad_name[120] = 33;
+    let checksum = crc_of(&bad_name);
+    bad_name[NODE_BYTES - 4..].copy_from_slice(&checksum.to_le_bytes());
+    assert_eq!(Node6::decode(&bad_name), Err(Error::Corrupt));
+
+    // Eight runs of 65 sectors are 520 sectors, past the selected per-file cap
+    // of 512, even though a 256 KiB length alone would fit inside them.
+    let mut wide = bytes;
+    wide[22] = 8;
+    for index in 0..8 {
+        let start = (index as u32) * 100;
+        wide[24 + index * 8..28 + index * 8].copy_from_slice(&start.to_le_bytes());
+        wide[28 + index * 8..32 + index * 8].copy_from_slice(&65u32.to_le_bytes());
+    }
+    wide[16..20].copy_from_slice(&262_144u32.to_le_bytes());
+    let checksum = crc_of(&wide);
+    wide[NODE_BYTES - 4..].copy_from_slice(&checksum.to_le_bytes());
+    assert_eq!(Node6::decode(&wide), Err(Error::Corrupt));
 }
 
 #[test]
