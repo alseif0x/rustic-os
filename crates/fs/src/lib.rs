@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 mod admission;
 mod checksum;
+mod extent;
 mod format;
 mod mutations;
 mod namespace;
@@ -15,6 +16,10 @@ mod references;
 mod storage;
 mod volume;
 pub use admission::{Admission, AdmissionId, AdmissionState, AdmissionStatus, PreventionReason};
+pub use extent::{
+    DATA_BYTES_V6, DATA_SECTORS, EXTENTS_PER_FILE, Extent, Extents, FILE_SECTORS_MAX, FreeSpace,
+    MAP_WORDS, MAX_FILE_V6, OBJECTS_V6,
+};
 pub use namespace::{Kind, Node};
 pub use publication::{Publication, PublicationCancel, PublicationPhase};
 pub use recovery::{Operation, RETAINED, Receipt, Replacement, Retry};
