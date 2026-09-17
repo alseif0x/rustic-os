@@ -87,6 +87,7 @@ The layers below are in the tree with host tests; guest-side integration and the
 | Receipts | `crates/fs/src/receipt6.rs` | Eight retained records in the published generation; a full table is `Full`, never an eviction, and the epoch cannot rotate while a record is held |
 | v5 upgrade | `crates/fs/src/upgrade6.rs` | Deliberate, one-way migration that preserves identity, names, versions, kinds, spaces and bytes |
 | Independent reader | `tools/terminal_support/oracle6.py`, `tools/fs6_test.py` | Reads images the Rust code wrote, from the format description and Python's own CRC, and records what it refuses |
+| Host tool | `tools/volume` (package `rustic-volume`) | `provision`, `seed`, `migrate` and `report` real image files, so the v6 layer and the migration are executable outside a test |
 
 **What the independent reader found.** Two defects that the in-crate tests did not: `Node6::decode` accepted a `name_length` beyond the 32 bytes it holds (a panic waiting on media this code did not write) and a record claiming more than the 512-sector per-file cap, and `Volume6::stage_bytes` never released the runs a rewritten file replaced, so every rewrite leaked its old payload until the region filled. The first two are refused by `decode` now, the third releases the replaced runs after the new payload is written, and the reader checks the free-space map against the live records so a leak cannot pass unnoticed. The 200 kB image fixture is what exposed the leak: a shorter rewrite of the same file held 197 sectors instead of 1.
 

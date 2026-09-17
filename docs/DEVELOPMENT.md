@@ -129,7 +129,18 @@ reads those images with `terminal_support/oracle6.py`, written from the format d
 with Python's own CRC rather than from the Rust code, compares the migration output with
 the v5 reader's view of the source image, and records the damaged images the reader
 refuses. It needs only the pinned Rust toolchain, writes `artifacts/fs6/` and boots no
-guest, so it runs in the workspace-check job. Host agreement is not guest execution: no
+guest, so it runs in the workspace-check job. The same suite drives the host tool that
+owns those images:
+
+```sh
+cargo run -p rustic-volume -- provision <image> <32-hex-lineage>
+cargo run -p rustic-volume -- seed <image>
+cargo run -p rustic-volume -- migrate <image> <32-hex-lineage>
+cargo run -p rustic-volume -- report <image>
+```
+
+`seed` writes a small v5 experiment volume, never the owner's terminal volume, and
+`migrate` is the deliberate one-way upgrade. Host agreement is not guest execution: no
 guest mounts a v6 volume yet.
 
 ## Delayed-device regression

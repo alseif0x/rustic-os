@@ -30,7 +30,7 @@ class PackageSource(unittest.TestCase):
                 target = root / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text("fixture\n")
-            for name in ("kernel", "crates", "apps", "licenses", ".cargo", "tools/xtask", "tools/boot_support", "tools/terminal_support"):
+            for name in preparation.REFERENCE_TREES:
                 (root / name).mkdir(parents=True, exist_ok=True)
             state = root / ".cache/sandbox-image.json"
             results = []
