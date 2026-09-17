@@ -6,6 +6,7 @@ mod admission;
 mod checksum;
 mod extent;
 mod format;
+mod format6;
 mod mutations;
 mod namespace;
 mod provision;
@@ -19,6 +20,9 @@ pub use admission::{Admission, AdmissionId, AdmissionState, AdmissionStatus, Pre
 pub use extent::{
     DATA_BYTES_V6, DATA_SECTORS, EXTENTS_PER_FILE, Extent, Extents, FILE_SECTORS_MAX, FreeSpace,
     MAP_WORDS, MAX_FILE_V6, OBJECTS_V6,
+};
+pub use format6::{
+    Header6, MAGIC, MAP_SECTORS, NODE_BYTES, NODES_SECTORS, Node6, PAYLOAD_SECTOR, VOLUME_SECTORS,
 };
 pub use namespace::{Kind, Node};
 pub use publication::{Publication, PublicationCancel, PublicationPhase};
