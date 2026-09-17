@@ -322,26 +322,59 @@ impl Volume6 {
         if out.len() < length {
             return Err(Error::Size);
         }
-        let capacity: u64 = node.runs().iter().map(|run| run.sectors).sum();
-        if u64::from(node.length) > capacity * SECTOR_BYTES {
+        self.read_range(disk, node, 0, &mut out[..length])
+    }
+    /// Read at most `out.len()` bytes from `offset`, streaming only the extents
+    /// the range touches so a caller needs no buffer for the whole file. A range
+    /// that starts past the end is `Size`; one that runs past the end copies what
+    /// the file holds and returns that count.
+    pub fn read_range(
+        &self,
+        disk: &mut impl Disk,
+        node: &Node6,
+        offset: u64,
+        out: &mut [u8],
+    ) -> Result<usize, Error> {
+        let length = u64::from(node.length);
+        if offset > length {
+            return Err(Error::Size);
+        }
+        let held: u64 = node.runs().iter().map(|run| run.sectors).sum();
+        if length > held * SECTOR_BYTES {
             return Err(Error::Corrupt);
         }
+        let count = out.len().min((length - offset) as usize);
+        let end = offset + count as u64;
+        let mut position = 0u64;
         let mut written = 0usize;
         for run in node.runs() {
-            for sector in 0..run.sectors {
+            let start = position;
+            position += run.sectors * SECTOR_BYTES;
+            if position <= offset {
+                continue;
+            }
+            if start >= end {
+                break;
+            }
+            let from = offset.max(start);
+            let to = end.min(position);
+            let mut sector = (from - start) / SECTOR_BYTES;
+            let mut within = (from - start) % SECTOR_BYTES;
+            let mut remaining = (to - from) as usize;
+            while remaining > 0 {
                 let mut block = [0u8; 512];
                 disk.read(PAYLOAD_SECTOR + run.start + sector, &mut block)?;
-                let take = (length - written).min(512);
-                out[written..written + take].copy_from_slice(&block[..take]);
+                let take = remaining.min(512 - within as usize);
+                out[written..written + take]
+                    .copy_from_slice(&block[within as usize..within as usize + take]);
                 written += take;
-                if written == length {
-                    return Ok(written);
-                }
+                remaining -= take;
+                sector += 1;
+                within = 0;
             }
         }
         Ok(written)
     }
-    /// Return a node's payload to the free map and empty its record.
     pub fn remove_file(&mut self, disk: &mut impl Disk, index: usize) -> Result<(), Error> {
         let runs = self.nodes[index].extents;
         let used = self.nodes[index].extents_used as usize;
