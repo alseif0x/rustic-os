@@ -143,7 +143,7 @@ def _receipts(data, header):
             raise AssertionError("receipt record checksum or reserved bytes do not match")
         if raw[:16] != lineage:
             raise AssertionError("receipt record carries another lineage")
-        key, subject = struct.unpack_from("<Q", raw, 24)[0], struct.unpack_from("<I", raw, 32)
+        key, subject = struct.unpack_from("<Q", raw, 24)[0], struct.unpack_from("<I", raw, 32)[0]
         previous, committed, length = struct.unpack_from("<QQ", raw, 36)[0], struct.unpack_from("<Q", raw, 44)[0], struct.unpack_from("<I", raw, 52)[0]
         records.append({"lineage": lineage, "epoch": struct.unpack_from("<Q", raw, 16)[0],
                         "key": key, "id": subject, "previous": previous,
@@ -186,6 +186,14 @@ def snapshot(data):
             raise AssertionError("file payload is shorter than its length")
         files[(node["parent"], node["name"])] = bytes(out)
     by_id = {node["id"]: node for node in nodes if node["kind"] != "empty"}
+    # A retained receipt names the operation's outcome, so its identity must still
+    # be a live file and its committed version must be the one it reports.
+    for receipt in receipts["records"]:
+        node = by_id.get(receipt["id"])
+        if node is None or node["kind"] != "file":
+            raise AssertionError("a receipt names an identity that is no longer a live file")
+        if not receipt["previous"] < receipt["committed"] or receipt["length"] > MAX_FILE:
+            raise AssertionError("a receipt reports an impossible version or length")
     return {"format": VERSION, "sequence": header["sequence"], "active": header["active"],
             "nodes": by_id, "files": files, "used_sectors": len(claimed),
             "free_sectors": DATA_SECTORS - len(claimed), "receipts": receipts["records"],
