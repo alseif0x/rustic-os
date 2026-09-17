@@ -11,8 +11,8 @@
 use crate::checksum::crc_update;
 use crate::extent::{Extent, Extents, FreeSpace, MAP_WORDS, MAX_FILE_V6};
 use crate::format6::{
-    HEADER_SECTOR, Header6, MAP_SECTOR, NODE_BYTES, NODES_SECTOR, Node6, PAYLOAD_SECTOR,
-    SECTOR_BYTES,
+    GENERATIONS, HEADER_SECTOR, Header6, NODE_BYTES, Node6, PAYLOAD_SECTOR, SECTOR_BYTES,
+    map_sector, nodes_sector,
 };
 use crate::{Disk, Error, Kind, OBJECTS_V6};
 
@@ -56,10 +56,12 @@ pub fn mount(disk: &mut impl Disk) -> Result<Volume6, Error> {
     disk.read(HEADER_SECTOR, &mut header_bytes)?;
     let header = Header6::decode(&header_bytes)?;
 
+    let nodes_base = nodes_sector(header.active);
+    let map_base = map_sector(header.active);
     let mut node_bytes = [0u8; 512];
     let mut nodes = [Node6::EMPTY; OBJECTS_V6];
     for (index, node) in nodes.iter_mut().enumerate() {
-        let sector = NODES_SECTOR + (index * NODE_BYTES / 512) as u64;
+        let sector = nodes_base + (index * NODE_BYTES / 512) as u64;
         let offset = index * NODE_BYTES % 512;
         disk.read(sector, &mut node_bytes)?;
         let mut record = [0u8; NODE_BYTES];
@@ -71,7 +73,7 @@ pub fn mount(disk: &mut impl Disk) -> Result<Volume6, Error> {
     let mut sector = [0u8; 512];
     for (index, word) in map.iter_mut().enumerate() {
         if index % 64 == 0 {
-            let at = MAP_SECTOR + (index / 64) as u64;
+            let at = map_base + (index / 64) as u64;
             disk.read(at, &mut sector)?;
         }
         let at = (index % 64) * 8;
@@ -101,8 +103,14 @@ impl Volume6 {
     /// Persist the node table, the map and the header, in that order, so a torn
     /// write leaves the old checksums describing the old structures.
     pub fn flush(&mut self, disk: &mut impl Disk) -> Result<(), Error> {
+        // Commit discipline: build the inactive generation completely, then let
+        // one header sector publish it. Before that write the mounted generation
+        // is still the active one, so a torn commit cannot be mounted as truth.
+        let next = (self.header.active + 1) % GENERATIONS;
+        let nodes_base = nodes_sector(next);
+        let map_base = map_sector(next);
         for (index, node) in self.nodes.iter().enumerate() {
-            let sector = NODES_SECTOR + (index * NODE_BYTES / 512) as u64;
+            let sector = nodes_base + (index * NODE_BYTES / 512) as u64;
             let offset = index * NODE_BYTES % 512;
             let mut block = [0u8; 512];
             disk.read(sector, &mut block)?;
@@ -114,24 +122,34 @@ impl Volume6 {
             for (word, value) in chunk.iter().enumerate() {
                 sector[word * 8..word * 8 + 8].copy_from_slice(&value.to_le_bytes());
             }
-            disk.write(MAP_SECTOR + index as u64, &sector)?;
+            disk.write(map_base + index as u64, &sector)?;
         }
         self.header.nodes_checksum = nodes_checksum(&self.nodes);
         self.header.map_checksum = map_checksum(&self.map);
+        self.header.active = next;
+        self.header.sequence = self.header.sequence.saturating_add(1);
         disk.write(HEADER_SECTOR, &self.header.encode())?;
         disk.flush()
     }
-    /// Write `bytes` into a node and record the extents that hold them. The
-    /// payload is allocated before anything is written, so a full volume leaves
-    /// the node untouched.
+    /// Write `bytes` into a node and record the extents that hold them, refusing
+    /// a node whose current version is not `expected` so a stale writer cannot
+    /// overwrite a newer one. The payload is allocated before anything is
+    /// written, so a full or conflicting request leaves the node untouched.
     pub fn write_file(
         &mut self,
         disk: &mut impl Disk,
         index: usize,
+        expected: u64,
         bytes: &[u8],
-    ) -> Result<(), Error> {
+    ) -> Result<u64, Error> {
         if index >= OBJECTS_V6 || bytes.len() > MAX_FILE_V6 {
             return Err(Error::Size);
+        }
+        if self.nodes[index].kind == Kind::Empty {
+            return Err(Error::NotFound);
+        }
+        if self.nodes[index].version != expected {
+            return Err(Error::Version);
         }
         let sectors = (bytes.len() as u64).div_ceil(SECTOR_BYTES);
         let mut plan = Extents::new();
@@ -167,7 +185,10 @@ impl Volume6 {
             node.extents[slot] = *run;
         }
         node.extents_used = used as u8;
-        self.flush(disk)
+        node.version = node.version.saturating_add(1);
+        let version = node.version;
+        self.flush(disk)?;
+        Ok(version)
     }
     /// Read a node's bytes into `out`, returning how many were copied. A record
     /// whose extents cannot hold its length is refused before any read.

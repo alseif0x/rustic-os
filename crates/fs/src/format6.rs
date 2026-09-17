@@ -18,15 +18,26 @@ pub const VERSION: u8 = 6;
 pub const SECTOR_BYTES: u64 = 512;
 /// One control record: bounded so the node table has a known size.
 pub const NODE_BYTES: usize = 128;
-/// Header sector, the node table and the map, in sectors from the volume start.
+/// Header sector, then two generations of the node table and the map, in
+/// sectors from the volume start. Two generations are what makes a commit
+/// atomic: the new structures are written to the inactive one and the header
+/// names it afterwards, so a torn write can only leave the old generation.
 pub const HEADER_SECTOR: u64 = 8;
-pub const NODES_SECTOR: u64 = HEADER_SECTOR + 1;
+pub const GENERATIONS: u8 = 2;
 pub const NODES_SECTORS: u64 = (OBJECTS_V6 * NODE_BYTES) as u64 / SECTOR_BYTES;
-pub const MAP_SECTOR: u64 = NODES_SECTOR + NODES_SECTORS;
 pub const MAP_BYTES: u64 = super::extent::MAP_WORDS as u64 * 8;
 pub const MAP_SECTORS: u64 = MAP_BYTES / SECTOR_BYTES;
+pub const GENERATION_SECTORS: u64 = NODES_SECTORS + MAP_SECTORS;
+/// First sector of a generation's node table.
+pub const fn nodes_sector(generation: u8) -> u64 {
+    HEADER_SECTOR + 1 + (generation as u64 % GENERATIONS as u64) * GENERATION_SECTORS
+}
+/// First sector of a generation's free-space map.
+pub const fn map_sector(generation: u8) -> u64 {
+    nodes_sector(generation) + NODES_SECTORS
+}
 /// First sector of the payload region; extents are relative to it.
-pub const PAYLOAD_SECTOR: u64 = MAP_SECTOR + MAP_SECTORS;
+pub const PAYLOAD_SECTOR: u64 = HEADER_SECTOR + 1 + GENERATIONS as u64 * GENERATION_SECTORS;
 /// Total sectors the v6 volume occupies, payload included.
 pub const VOLUME_SECTORS: u64 = PAYLOAD_SECTOR + DATA_SECTORS;
 
@@ -149,6 +160,8 @@ impl Node6 {
 pub struct Header6 {
     pub sequence: u64,
     pub objects: u32,
+    /// The generation whose table and map the checksums describe.
+    pub active: u8,
     pub nodes_checksum: u32,
     pub map_checksum: u32,
 }
@@ -158,6 +171,7 @@ impl Header6 {
         Self {
             sequence: 1,
             objects: OBJECTS_V6 as u32,
+            active: 0,
             nodes_checksum: 0,
             map_checksum: 0,
         }
@@ -173,20 +187,24 @@ impl Header6 {
         b[20..24].copy_from_slice(&self.objects.to_le_bytes());
         b[24..28].copy_from_slice(&(NODE_BYTES as u32).to_le_bytes());
         b[28..32].copy_from_slice(&(DATA_SECTORS as u32).to_le_bytes());
-        b[32..36].copy_from_slice(&self.nodes_checksum.to_le_bytes());
-        b[36..40].copy_from_slice(&self.map_checksum.to_le_bytes());
+        b[32] = self.active;
+        b[33..36].copy_from_slice(&[0, 0, 0]);
+        b[36..40].copy_from_slice(&self.nodes_checksum.to_le_bytes());
+        b[40..44].copy_from_slice(&self.map_checksum.to_le_bytes());
         let checksum = crc(&b);
-        b[40..44].copy_from_slice(&checksum.to_le_bytes());
+        b[44..48].copy_from_slice(&checksum.to_le_bytes());
         b
     }
     pub fn decode(b: &[u8; SECTOR_BYTES as usize]) -> Result<Self, Error> {
         let mut body = *b;
-        let checksum = u32::from_le_bytes(body[40..44].try_into().unwrap());
-        body[40..44].fill(0);
+        let checksum = u32::from_le_bytes(body[44..48].try_into().unwrap());
+        body[44..48].fill(0);
         if b[..8] != MAGIC
             || b[8] != VERSION
             || b[9..12] != [0, 0, 2]
-            || b[44..].iter().any(|byte| *byte != 0)
+            || b[33..36] != [0, 0, 0]
+            || b[48..].iter().any(|byte| *byte != 0)
+            || b[32] >= GENERATIONS
             || u32::from_le_bytes(b[20..24].try_into().unwrap()) as usize != OBJECTS_V6
             || u32::from_le_bytes(b[24..28].try_into().unwrap()) as usize != NODE_BYTES
             || u32::from_le_bytes(b[28..32].try_into().unwrap()) as u64 != DATA_SECTORS
@@ -197,8 +215,9 @@ impl Header6 {
         Ok(Self {
             sequence: u64::from_le_bytes(b[12..20].try_into().unwrap()),
             objects: u32::from_le_bytes(b[20..24].try_into().unwrap()),
-            nodes_checksum: u32::from_le_bytes(b[32..36].try_into().unwrap()),
-            map_checksum: u32::from_le_bytes(b[36..40].try_into().unwrap()),
+            active: b[32],
+            nodes_checksum: u32::from_le_bytes(b[36..40].try_into().unwrap()),
+            map_checksum: u32::from_le_bytes(b[40..44].try_into().unwrap()),
         })
     }
 }
