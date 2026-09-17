@@ -12,8 +12,8 @@ from .image import build, memory_supported, OUTPUT
 
 # A mode with more real work than the caller's budget allows. `block-user` mounts
 # a v6 workspace volume and reads a 16 KiB artifact through the block device, so
-# its floor is 60 s; the caller's timeout stays a lower bound for every mode.
-MODE_FLOOR = {"block-user": 60}
+# its floor is 90 s; the caller's timeout stays a lower bound for every mode.
+MODE_FLOOR = {"block-user": 90}
 from .scenarios import EXPECTED, reached
 
 

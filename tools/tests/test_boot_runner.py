@@ -69,7 +69,7 @@ class ModeFloorTests(unittest.TestCase):
     def test_a_mode_with_a_documented_floor_raises_a_shorter_request(self):
         """The suite's budget is a lower bound, never a ceiling for real work."""
         from boot_support import runner
-        self.assertEqual(runner.MODE_FLOOR.get("block-user"), 60)
-        self.assertEqual(max(45, runner.MODE_FLOOR.get("block-user", 0)), 60)
-        self.assertEqual(max(90, runner.MODE_FLOOR.get("block-user", 0)), 90)
+        self.assertEqual(runner.MODE_FLOOR.get("block-user"), 90)
+        self.assertEqual(max(45, runner.MODE_FLOOR.get("block-user", 0)), 90)
+        self.assertEqual(max(120, runner.MODE_FLOOR.get("block-user", 0)), 120)
         self.assertEqual(max(5, runner.MODE_FLOOR.get("ok", 0)), 5)

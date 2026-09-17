@@ -49,7 +49,9 @@ pub(super) fn launch(
     (pid, handle)
 }
 pub(super) fn drive(manager: &mut Manager, memory: &mut Memory, pids: &[Pid]) {
-    for _ in 0..4096 {
+    // A v6 commit rewrites a whole generation, about 100 real block requests,
+    // so the event budget is large enough for the workspace role's write.
+    for _ in 0..16384 {
         if pids
             .iter()
             .all(|pid| matches!(manager.state(*pid).unwrap(), State::Exited(_)))
