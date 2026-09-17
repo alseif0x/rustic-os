@@ -75,8 +75,24 @@ The mechanism classes are standard: block chains (as FAT-style filesystems use) 
 
 **Why this is the robust choice for this project:** it is the only shape that keeps the guarantees already demonstrated on this volume — atomic commit, version conflict detection, receipts and recovery — while changing the part that actually limits capacity, the payload placement. Adopting a foreign on-disk format would put those guarantees on new, unreviewed ground and make the existing recovery evidence state something weaker than it does today.
 
+## Stage three: what stage one and two decided, implemented
+
+The layers below are in the tree with host tests; guest-side integration and the disposable-volume acceptance are still owed (see the issue for the remaining bullets).
+
+| Layer | Owner | What it fixes |
+| --- | --- | --- |
+| Extent types | `crates/fs/src/extent.rs` | One file holds at most eight runs and 512 sectors; the free-space map is first-fit, refuses a double release and reports typed exhaustion |
+| Control records | `crates/fs/src/format6.rs` | 128-byte nodes with `length: u32`, two generations, a header that checksums nodes, map and receipt block together |
+| Publication | `crates/fs/src/volume6.rs` | Payload allocated and written before the record that points at it; one header write publishes a completely built inactive generation, so a torn commit cannot mount as truth |
+| Receipts | `crates/fs/src/receipt6.rs` | Eight retained records in the published generation; a full table is `Full`, never an eviction, and the epoch cannot rotate while a record is held |
+| v5 upgrade | `crates/fs/src/upgrade6.rs` | Deliberate, one-way migration that preserves identity, names, versions, kinds, spaces and bytes |
+
+**Upgrade rules, concretely.** The v5 layout overlaps v6 (header at sector 8, banked data from sector 32, recovery state from sector 160; v6 keeps header, node tables, maps and receipts in 8..205), so an in-place upgrade reads the v5 records, stages each file's payload into the free v6 region at sector 205 and above, and only then publishes. Two states are refused instead of being dropped: a retained v5 recovery record, because the v5 record snapshots the original file bytes as evidence and the v6 receipt table carries no such snapshot yet, and a v5 provisioning envelope with a different lineage, because that is another volume's identity. A v5 volume with no retained record migrates, and its identity watermark is reported so the caller can seed allocation: v6 deliberately carries no allocator.
+
+**What the upgrade does not promise.** It is one-way and needs a caller-owned backup. A publish torn between the v6 structure writes and the header write leaves the old v5 header in place over data the structure writes have already overwritten, so a torn publish is detected by v6 refusing to mount, not by v5 still being usable. The migration also drops the v5 recovery capability flags, which describe how new evidence would be captured and retain nothing by themselves. It does clear the v5 second metadata bank before it publishes, because that header sits outside the v6 structures and a later v5 mount could otherwise republish the old layout over the new one. Nothing of this runs on a guest yet.
+
 ## Next stages of #51
 
-1. Implement the v6 layout with typed limits, honest exhaustion and upgrade behavior; never silently rotate an epoch or evict unresolved outcomes.
-2. Extend the admission and reclamation rules to the new capacity, preserving unresolved evidence.
-3. Run the selected consumer on a disposable volume above today's limits and verify data, versions and operation identity independently, with interrupted publication, reboot/remount, corrupt input and bounded RAM.
+1. Implement the v6 layout with typed limits, honest exhaustion and upgrade behavior; never silently rotate an epoch or evict unresolved outcomes. Implemented in the tree, host-tested (stage three above); the file service does not mount it yet.
+2. Extend the admission and reclamation rules to the new capacity, preserving unresolved evidence. Not started; v6 currently refuses to migrate a volume that still retains recovery evidence.
+3. Run the selected consumer on a disposable volume above today's limits and verify data, versions and operation identity independently, with interrupted publication, reboot/remount, corrupt input and bounded RAM. Not started; it needs stage one of the two above.

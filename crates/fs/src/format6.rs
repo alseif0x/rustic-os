@@ -76,6 +76,10 @@ impl Node6 {
         name_length: 0,
     };
 
+    pub fn name(&self) -> &[u8] {
+        &self.name[..usize::from(self.name_length)]
+    }
+
     pub fn encode(&self) -> [u8; NODE_BYTES] {
         let mut b = [0; NODE_BYTES];
         b[0..4].copy_from_slice(&self.id.to_le_bytes());
