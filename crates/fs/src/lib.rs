@@ -12,6 +12,7 @@ mod namespace;
 mod provision;
 mod publication;
 mod read;
+mod receipt6;
 mod recovery;
 mod references;
 mod storage;
@@ -28,6 +29,7 @@ pub use format6::{
 };
 pub use namespace::{Kind, Node};
 pub use publication::{Publication, PublicationCancel, PublicationPhase};
+pub use receipt6::{RECEIPT_BYTES, RECEIPT_SECTORS, RETAINED_V6, Receipt6, Receipts6};
 pub use recovery::{Operation, RETAINED, Receipt, Replacement, Retry};
 pub use storage::{Disk, PollDisk};
 pub use volume::Volume;
