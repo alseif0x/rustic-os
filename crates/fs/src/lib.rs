@@ -23,7 +23,8 @@ pub use extent::{
     MAP_WORDS, MAX_FILE_V6, OBJECTS_V6,
 };
 pub use format6::{
-    Header6, MAGIC, MAP_SECTORS, NODE_BYTES, NODES_SECTORS, Node6, PAYLOAD_SECTOR, VOLUME_SECTORS,
+    GENERATIONS, Header6, MAGIC, MAP_SECTORS, NODE_BYTES, NODES_SECTORS, Node6, PAYLOAD_SECTOR,
+    VOLUME_SECTORS, map_sector, nodes_sector,
 };
 pub use namespace::{Kind, Node};
 pub use publication::{Publication, PublicationCancel, PublicationPhase};
