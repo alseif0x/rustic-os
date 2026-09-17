@@ -31,7 +31,7 @@ def suite(revision):
     cases.insert(0, ("recovery-test", revision, "recovery-test", 120, 60, "success"))
     # Five deliberate device timeouts consume about 25 guest seconds under the
     # 500-tick policy. Include boot/setup and control progress in its host budget.
-    # Four sequential ring-3 fixtures now run in each block-user VM. Match the
+    # Five sequential ring-3 fixtures now run in each block-user VM. Match the
     # direct suite's 45-second VM budget; per-application event limits stay fixed.
     cases[13:13] = [(mode, revision, mode, 120, 45 if mode in ("block-user", "block-user-faults") else 30, "success")
                     for mode in BLOCK_MODES]
