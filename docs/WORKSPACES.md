@@ -58,3 +58,25 @@ Whole-file buffers are the other bound: the file service holds `Transfer.data: [
 ## Not claimed
 
 No capacity is implemented, no format is selected, and no filesystem is preselected by this document. The numbers above are measurements of one build on one machine; the 64 MiB figure is the issue's planning target and not a product promise. Whole-file RAM cost, interruption behavior, retention maintenance and migration are named here and remain to be measured and implemented in the following stages.
+
+## Stage two: format decision
+
+Three shapes were considered for the budget selected above.
+
+| Shape | What it keeps | Cost | Fit |
+| --- | --- | --- | --- |
+| **Extend the current layout in place** — wider length, one bank per file replaced by a bank chain, larger fixed sector budget | The verified copy-on-write commit, version pinning, receipts and recovery evidence | The fixed `(slot, bank)` address formula does not scale to 64 MiB; a chain makes read amplification and corruption reach grow with file length | Works for the small end, not for the selected budget |
+| **Adopt an existing filesystem** (FAT-style cluster chains, or a journaling design such as the one `#12` references) | Mature on-disk algorithms and tooling familiarity | A no_std port plus the product's own semantics on top: FAT-style chains have neither atomic copy-on-write commit nor version/receipt records, and journaling gives metadata consistency, not the operation boundary this system promises; `docs/architecture/systems-roadmap.md` also defers a custom advanced filesystem without a concrete experiment | Rejected for this stage |
+| **Extend the copy-on-write metadata, split the payload** — keep `Node`/version/receipt structures as the control records, widen `length` beyond 16 bits, and move file bytes into a dedicated extent region owned by a free-space map, with a typed total-data cap | Every guarantee that is already evidenced: atomic publication, version conflicts, receipts, interrupted-write recovery, and the authority model that sits above them | New work: extent allocation, free-space accounting, typed exhaustion, and a deliberate v5 to v6 upgrade | **Selected** |
+
+The mechanism classes are standard: block chains (as FAT-style filesystems use) trade random access and corruption blast radius for simplicity, while extent lists (as in ext4's extent tree) describe runs and bound the metadata per file. This system's payload is mostly whole-artifact writes and range reads, so runs are the natural unit and the control records stay small. The comparison here is a design judgement from those references, not a measured benchmark; `#12` owns original storage acceptance and the roadmap's citation of [ext4 journaling](https://www.kernel.org/doc/html/latest/filesystems/ext4/journal.html) is used for its architectural lesson, not as an adoption argument.
+
+**Selected shape, concretely:** control records stay in the existing copy-on-write structures with `length` widened; payload occupies a dedicated region addressed by an extent per file (one or more runs), with a free-space map that is itself checksummed; a typed cap bounds total data, per-file size and object count separately, and exhaustion is reported honestly rather than by eviction. Retention grows to eight operation records, and its maintenance path stays a separate, explicit stage.
+
+**Why this is the robust choice for this project:** it is the only shape that keeps the guarantees already demonstrated on this volume — atomic commit, version conflict detection, receipts and recovery — while changing the part that actually limits capacity, the payload placement. Adopting a foreign on-disk format would put those guarantees on new, unreviewed ground and make the existing recovery evidence state something weaker than it does today.
+
+## Next stages of #51
+
+1. Implement the v6 layout with typed limits, honest exhaustion and upgrade behavior; never silently rotate an epoch or evict unresolved outcomes.
+2. Extend the admission and reclamation rules to the new capacity, preserving unresolved evidence.
+3. Run the selected consumer on a disposable volume above today's limits and verify data, versions and operation identity independently, with interrupted publication, reboot/remount, corrupt input and bounded RAM.
