@@ -27,7 +27,12 @@ pub const GENERATIONS: u8 = 2;
 pub const NODES_SECTORS: u64 = (OBJECTS_V6 * NODE_BYTES) as u64 / SECTOR_BYTES;
 pub const MAP_BYTES: u64 = super::extent::MAP_WORDS as u64 * 8;
 pub const MAP_SECTORS: u64 = MAP_BYTES / SECTOR_BYTES;
-pub const GENERATION_SECTORS: u64 = NODES_SECTORS + MAP_SECTORS;
+pub const RECEIPTS_SECTORS: u64 = crate::receipt6::RECEIPT_SECTORS;
+pub const GENERATION_SECTORS: u64 = NODES_SECTORS + MAP_SECTORS + RECEIPTS_SECTORS;
+/// First sector of a generation's receipt block.
+pub const fn receipts_sector(generation: u8) -> u64 {
+    map_sector(generation) + MAP_SECTORS
+}
 /// First sector of a generation's node table.
 pub const fn nodes_sector(generation: u8) -> u64 {
     HEADER_SECTOR + 1 + (generation as u64 % GENERATIONS as u64) * GENERATION_SECTORS
@@ -164,6 +169,7 @@ pub struct Header6 {
     pub active: u8,
     pub nodes_checksum: u32,
     pub map_checksum: u32,
+    pub receipts_checksum: u32,
 }
 
 impl Header6 {
@@ -174,6 +180,7 @@ impl Header6 {
             active: 0,
             nodes_checksum: 0,
             map_checksum: 0,
+            receipts_checksum: 0,
         }
     }
     pub fn encode(&self) -> [u8; SECTOR_BYTES as usize] {
@@ -191,19 +198,20 @@ impl Header6 {
         b[33..36].copy_from_slice(&[0, 0, 0]);
         b[36..40].copy_from_slice(&self.nodes_checksum.to_le_bytes());
         b[40..44].copy_from_slice(&self.map_checksum.to_le_bytes());
+        b[44..48].copy_from_slice(&self.receipts_checksum.to_le_bytes());
         let checksum = crc(&b);
-        b[44..48].copy_from_slice(&checksum.to_le_bytes());
+        b[48..52].copy_from_slice(&checksum.to_le_bytes());
         b
     }
     pub fn decode(b: &[u8; SECTOR_BYTES as usize]) -> Result<Self, Error> {
         let mut body = *b;
-        let checksum = u32::from_le_bytes(body[44..48].try_into().unwrap());
-        body[44..48].fill(0);
+        let checksum = u32::from_le_bytes(body[48..52].try_into().unwrap());
+        body[48..52].fill(0);
         if b[..8] != MAGIC
             || b[8] != VERSION
             || b[9..12] != [0, 0, 2]
             || b[33..36] != [0, 0, 0]
-            || b[48..].iter().any(|byte| *byte != 0)
+            || b[52..].iter().any(|byte| *byte != 0)
             || b[32] >= GENERATIONS
             || u32::from_le_bytes(b[20..24].try_into().unwrap()) as usize != OBJECTS_V6
             || u32::from_le_bytes(b[24..28].try_into().unwrap()) as usize != NODE_BYTES
@@ -218,6 +226,7 @@ impl Header6 {
             active: b[32],
             nodes_checksum: u32::from_le_bytes(b[36..40].try_into().unwrap()),
             map_checksum: u32::from_le_bytes(b[40..44].try_into().unwrap()),
+            receipts_checksum: u32::from_le_bytes(b[44..48].try_into().unwrap()),
         })
     }
 }

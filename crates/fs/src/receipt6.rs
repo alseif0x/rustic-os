@@ -16,8 +16,12 @@ use crate::{Error, OBJECTS_V6};
 pub const RETAINED_V6: usize = 8;
 /// On-disk size of one receipt record.
 pub const RECEIPT_BYTES: usize = 96;
-/// Sectors one generation's receipt table occupies.
-pub const RECEIPT_SECTORS: u64 = (RETAINED_V6 * RECEIPT_BYTES) as u64 / 512;
+/// Sectors one generation's receipt block occupies: a 24-byte block header, the
+/// records, and padding to a sector boundary.
+pub const BLOCK_BYTES: usize = 1024;
+pub const RECEIPT_SECTORS: u64 = BLOCK_BYTES as u64 / 512;
+/// Bytes before the records inside the block: lineage and epoch.
+pub const BLOCK_HEADER_BYTES: usize = 24;
 
 /// What a committed operation records, without the payload.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -197,6 +201,31 @@ impl Receipts6 {
             }
         }
         bytes
+    }
+    /// Serialize the whole block, including the lineage and epoch it belongs to,
+    /// so a generation's receipts are self-describing.
+    pub fn encode_block(&self) -> [u8; BLOCK_BYTES] {
+        let mut bytes = [0; BLOCK_BYTES];
+        bytes[..16].copy_from_slice(&self.lineage);
+        bytes[16..24].copy_from_slice(&self.epoch.to_le_bytes());
+        bytes[BLOCK_HEADER_BYTES..BLOCK_HEADER_BYTES + RETAINED_V6 * RECEIPT_BYTES]
+            .copy_from_slice(&self.encode());
+        bytes
+    }
+    pub fn decode_block(bytes: &[u8; BLOCK_BYTES]) -> Result<Self, Error> {
+        if bytes[BLOCK_HEADER_BYTES + RETAINED_V6 * RECEIPT_BYTES..]
+            .iter()
+            .any(|byte| *byte != 0)
+        {
+            return Err(Error::Corrupt);
+        }
+        let lineage: [u8; 16] = bytes[..16].try_into().unwrap();
+        let epoch = u64::from_le_bytes(bytes[16..24].try_into().unwrap());
+        let mut records = [0u8; RETAINED_V6 * RECEIPT_BYTES];
+        records.copy_from_slice(
+            &bytes[BLOCK_HEADER_BYTES..BLOCK_HEADER_BYTES + RETAINED_V6 * RECEIPT_BYTES],
+        );
+        Self::decode(lineage, epoch, &records)
     }
     pub fn decode(
         lineage: [u8; 16],

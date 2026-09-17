@@ -31,17 +31,22 @@ fn node() -> Node6 {
 
 #[test]
 fn the_v6_geometry_is_the_selected_budget_and_fits_the_disk() {
-    // Header, 256 nodes of 128 bytes, the 16 KiB map, then the 64 MiB payload.
+    // Header, then two generations of: 256 nodes of 128 bytes, the 16 KiB map
+    // and the receipt block; then the 64 MiB payload.
     assert_eq!(NODE_BYTES, 128);
     assert_eq!(NODES_SECTORS, 64);
     assert_eq!(MAP_SECTORS, 32);
-    // Two generations of the node table and the map, then the payload.
+    assert_eq!(rustic_fs::RECEIPTS_SECTORS, 2);
     assert_eq!(rustic_fs::GENERATIONS, 2);
+    // Generation 0.
     assert_eq!(rustic_fs::nodes_sector(0), 9);
-    assert_eq!(rustic_fs::map_sector(0), 9 + 64);
-    assert_eq!(rustic_fs::nodes_sector(1), 9 + 96);
-    assert_eq!(rustic_fs::map_sector(1), 9 + 96 + 64);
-    assert_eq!(PAYLOAD_SECTOR, 8 + 1 + 2 * (64 + 32));
+    assert_eq!(rustic_fs::map_sector(0), 73);
+    assert_eq!(rustic_fs::receipts_sector(0), 105);
+    // Generation 1 starts after a whole 64 + 32 + 2 sector generation.
+    assert_eq!(rustic_fs::nodes_sector(1), 107);
+    assert_eq!(rustic_fs::map_sector(1), 171);
+    assert_eq!(rustic_fs::receipts_sector(1), 203);
+    assert_eq!(PAYLOAD_SECTOR, 205);
     assert_eq!(VOLUME_SECTORS, PAYLOAD_SECTOR + DATA_SECTORS);
     // The reference disk is 4 GiB; the volume structures plus payload fit well
     // inside it. Checked at compile time so a geometry change cannot pass by

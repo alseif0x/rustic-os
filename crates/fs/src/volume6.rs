@@ -11,9 +11,10 @@
 use crate::checksum::crc_update;
 use crate::extent::{Extent, Extents, FreeSpace, MAP_WORDS, MAX_FILE_V6};
 use crate::format6::{
-    GENERATIONS, HEADER_SECTOR, Header6, NODE_BYTES, Node6, PAYLOAD_SECTOR, SECTOR_BYTES,
-    map_sector, nodes_sector,
+    GENERATIONS, HEADER_SECTOR, Header6, NODE_BYTES, Node6, PAYLOAD_SECTOR, RECEIPTS_SECTORS,
+    SECTOR_BYTES, map_sector, nodes_sector, receipts_sector,
 };
+use crate::receipt6::{BLOCK_BYTES, Receipt6, Receipts6};
 use crate::{Disk, Error, Kind, OBJECTS_V6};
 
 /// A mounted v6 volume: the verified header, the node table and the free-space
@@ -22,15 +23,17 @@ pub struct Volume6 {
     pub header: Header6,
     pub nodes: [Node6; OBJECTS_V6],
     pub(crate) map: [u64; MAP_WORDS],
+    pub receipts: Receipts6,
 }
 
 /// Write a fresh v6 volume: the four root directories, an empty map and a header
 /// that checksums both. The caller owns the disk and its durability.
-pub fn provision(disk: &mut impl Disk) -> Result<Volume6, Error> {
+pub fn provision(disk: &mut impl Disk, lineage: [u8; 16]) -> Result<Volume6, Error> {
     let mut volume = Volume6 {
         header: Header6::initial(),
         nodes: [Node6::EMPTY; OBJECTS_V6],
         map: [0; MAP_WORDS],
+        receipts: Receipts6::new(lineage)?,
     };
     for (index, name) in [b"system".as_slice(), b"data", b"config", b"workspaces"]
         .iter()
@@ -79,16 +82,38 @@ pub fn mount(disk: &mut impl Disk) -> Result<Volume6, Error> {
         let at = (index % 64) * 8;
         *word = u64::from_le_bytes(sector[at..at + 8].try_into().unwrap());
     }
-    // The header commits to both structures, so a corrupt table or map is caught
-    // here rather than during a later read of the wrong bytes.
-    if map_checksum(&map) != header.map_checksum || nodes_checksum(&nodes) != header.nodes_checksum
+    let receipts_base = receipts_sector(header.active);
+    let mut block = [0u8; BLOCK_BYTES];
+    for index in 0..RECEIPTS_SECTORS {
+        disk.read(receipts_base + index, &mut sector)?;
+        block[index as usize * 512..(index as usize + 1) * 512].copy_from_slice(&sector);
+    }
+    let receipts = Receipts6::decode_block(&block)?;
+    // The header commits to all three structures, so a corrupt table, map or
+    // receipt block is caught here rather than during a later read.
+    if map_checksum(&map) != header.map_checksum
+        || nodes_checksum(&nodes) != header.nodes_checksum
+        || receipts.checksum() != header.receipts_checksum
     {
         return Err(Error::Corrupt);
     }
-    Ok(Volume6 { header, nodes, map })
+    Ok(Volume6 {
+        header,
+        nodes,
+        map,
+        receipts,
+    })
 }
 
 impl Volume6 {
+    /// Retain a receipt and publish it with the next commit.
+    pub fn retain_receipt(&mut self, disk: &mut impl Disk, receipt: Receipt6) -> Result<(), Error> {
+        self.receipts.retain(receipt)?;
+        self.flush(disk)
+    }
+    pub fn find_receipt(&self, retry: crate::recovery::Retry) -> Result<Option<&Receipt6>, Error> {
+        self.receipts.find(retry)
+    }
     pub fn node(&self, id: u32) -> Option<&Node6> {
         self.nodes
             .iter()
@@ -124,8 +149,15 @@ impl Volume6 {
             }
             disk.write(map_base + index as u64, &sector)?;
         }
+        let block = self.receipts.encode_block();
+        for index in 0..RECEIPTS_SECTORS {
+            let mut sector = [0u8; 512];
+            sector.copy_from_slice(&block[index as usize * 512..(index as usize + 1) * 512]);
+            disk.write(receipts_sector(next) + index, &sector)?;
+        }
         self.header.nodes_checksum = nodes_checksum(&self.nodes);
         self.header.map_checksum = map_checksum(&self.map);
+        self.header.receipts_checksum = self.receipts.checksum();
         self.header.active = next;
         self.header.sequence = self.header.sequence.saturating_add(1);
         disk.write(HEADER_SECTOR, &self.header.encode())?;
