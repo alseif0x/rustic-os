@@ -116,6 +116,22 @@ python3 tools/terminal_test.py
 
 #44 adds [bounded user-mode disk access](BLOCK-ACCESS.md). The host builder/linter selects both `sdk-probe` and `block-probe`; both manifests and ELFs have separate hashes. Shared block codecs and pure ownership/queue tests run on the host, while two additional VM scenarios exercise actual copied sector calls, cancellation, process death and persistence. The regression inventory is 46 Rust and 30 runner tests, 20 direct VM scenarios and 24 isolated scenarios.
 
+## v6 volume images
+
+The v6 layout (#51) has an independent reader. `cargo test -p rustic-fs --test fs6_image`
+provisions and migrates real volume images and exports the prefix each one uses, and
+
+```sh
+python3 tools/fs6_test.py
+```
+
+reads those images with `terminal_support/oracle6.py`, written from the format description
+with Python's own CRC rather than from the Rust code, compares the migration output with
+the v5 reader's view of the source image, and records the damaged images the reader
+refuses. It needs only the pinned Rust toolchain, writes `artifacts/fs6/` and boots no
+guest, so it runs in the workspace-check job. Host agreement is not guest execution: no
+guest mounts a v6 volume yet.
+
 ## Delayed-device regression
 
 The separate delayed-device regression runs after the direct boot suite in CI:

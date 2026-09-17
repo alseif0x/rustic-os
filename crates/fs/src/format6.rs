@@ -9,7 +9,7 @@
 //! encoding and decoding; mounting and upgrading a volume are separate stages.
 
 use crate::checksum::crc;
-use crate::extent::{DATA_SECTORS, EXTENTS_PER_FILE, Extent};
+use crate::extent::{DATA_SECTORS, EXTENTS_PER_FILE, Extent, FILE_SECTORS_MAX, MAX_FILE_V6};
 use crate::{Error, Kind, OBJECTS_V6};
 
 /// Distinct from v5's `RUSTFS1`, so a v5 volume is never misread as v6.
@@ -118,7 +118,7 @@ impl Node6 {
         if extents_used > EXTENTS_PER_FILE as u8 {
             return Err(Error::Corrupt);
         }
-        if b[23] != 0 {
+        if b[23] != 0 || b[120] as usize > 32 {
             return Err(Error::Corrupt);
         }
         let mut extents = [Extent::new(0, 0); EXTENTS_PER_FILE];
@@ -141,7 +141,12 @@ impl Node6 {
             .iter()
             .map(|run| run.sectors)
             .sum();
-        if u64::from(length) > sectors * SECTOR_BYTES {
+        // A record cannot claim more payload than the selected per-file budget,
+        // and a record that claims less than its length is corrupt.
+        if u64::from(length) > sectors * SECTOR_BYTES
+            || sectors > FILE_SECTORS_MAX
+            || u64::from(length) > MAX_FILE_V6 as u64
+        {
             return Err(Error::Corrupt);
         }
         Ok(Self {

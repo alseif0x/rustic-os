@@ -238,3 +238,38 @@ fn receipts_are_published_with_the_commit_and_survive_a_remount() {
     torn.corrupt(rustic_fs::receipts_sector(active), 4);
     assert_eq!(mount6(&mut torn).err(), Some(Error::Corrupt));
 }
+
+#[test]
+fn rewriting_a_file_reclaims_the_payload_it_replaced() {
+    let mut disk = Sparse::default();
+    let mut volume = provision6(&mut disk, LINEAGE).expect("provision");
+    let initial = volume.free_sectors();
+    let mut record = Node6::EMPTY;
+    record.id = 5;
+    record.parent = 4;
+    record.kind = Kind::File;
+    record.version = 1;
+    volume.nodes[4] = record;
+
+    let large = vec![7u8; 100_000];
+    assert_eq!(volume.write_file(&mut disk, 4, 1, &large), Ok(2));
+    assert_eq!(initial - volume.free_sectors(), 100_000u64.div_ceil(512));
+
+    // A rewrite holds only what the new bytes need: the replaced runs return to
+    // the map, or repeated writes of one file exhaust the region.
+    let small = vec![9u8; 100];
+    assert_eq!(volume.write_file(&mut disk, 4, 2, &small), Ok(3));
+    assert_eq!(initial - volume.free_sectors(), 1);
+    let mounted = mount6(&mut disk).expect("mount");
+    let node = mounted.node(5).expect("file node");
+    assert_eq!(node.length, 100);
+    let mut out = vec![0u8; 100];
+    let mut disk = disk.recover();
+    assert_eq!(mounted.read_file(&mut disk, node, &mut out), Ok(100));
+    assert_eq!(out, small);
+
+    // Truncating to nothing returns everything the file held.
+    let mut volume = mount6(&mut disk).expect("mount for truncation");
+    assert_eq!(volume.write_file(&mut disk, 4, 3, &[]), Ok(4));
+    assert_eq!(volume.free_sectors(), initial);
+}
