@@ -100,11 +100,14 @@ pub(super) fn run(device: &Device, phase: u64) -> u64 {
         if u64::from_le_bytes(observed) != digest {
             return 0;
         }
+        // Identical final bytes alone would also accept redundant sector writes.
+        // Count both writes and flushes at the guest's disk boundary.
+        let writes_before = disk.writes;
         let Ok(replayed) = volume.write_tracked(&mut disk, 5, retained.previous, retry, &payload)
         else {
             return 0;
         };
-        if replayed != retained {
+        if replayed != retained || disk.writes != writes_before {
             return 0;
         }
         retained
