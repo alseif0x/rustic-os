@@ -45,6 +45,10 @@ Project-scoped Codex roles and the bounded delegation workflow are documented in
 [Current work state](WORK-STATE.md). This optional host configuration adds no
 requirement to build, boot, CI or run RusticOS manually.
 
+The optional [JEV context-ranking pilot](JEV-CONTEXT.md) compares a local lexical
+baseline with typed decisions through OpenRouter on explicitly selected excerpts.
+It is a host experiment with no automatic CI or guest API calls.
+
 - kernel/src/lib.rs: entry and composition for the no_std library.
 - kernel/src/boot/mod.rs: boot-data module facade.
 - kernel/src/boot/region.rs: range validation; no Limine dependency or memory allocation.
