@@ -146,3 +146,6 @@ representative usefulness, retrieval benefit or developer time/token savings.
 Keep the workflow in explicit research mode; the next acceptance should use
 prospectively labelled failures with an explicit harness result and a separately
 versioned evaluation, without tuning on this retained sample.
+
+The next delivered evidence adapter is documented in [explicit boot harness
+evidence](JEV-HARNESS.md). Its controls do not change this historical measurement.

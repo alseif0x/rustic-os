@@ -113,6 +113,8 @@ jobs:
         run: python3 -m unittest discover -s tools/tests -v
       - name: Verify UEFI boot and failures
         run: python3 tools/boot.py test --timeout 45
+      - name: Verify offline triage of native harness controls
+        run: python3 -m tools.research.failure_triage.check_harness --boot-directory artifacts/boot --output artifacts/boot/triage-harness
       - name: Verify delayed device completion and recovery
         run: python3 tools/latency_test.py --image artifacts/boot/recovery-test/rustic-os.img --output artifacts/boot/latency-test
       - name: Verify native task writes and retained recovery
