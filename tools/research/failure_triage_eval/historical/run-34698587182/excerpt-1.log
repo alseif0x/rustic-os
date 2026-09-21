@@ -1,0 +1,7 @@
+2026-09-12T14:13:11.8009008Z ##[group]Run python3 tools/sandbox.py test --revision "$(git rev-parse HEAD)"
+2026-09-12T14:13:11.8009532Z [36;1mpython3 tools/sandbox.py test --revision "$(git rev-parse HEAD)"[0m
+2026-09-12T14:13:11.8033096Z shell: /usr/bin/bash -e {0}
+2026-09-12T14:13:11.8033370Z ##[endgroup]
+2026-09-12T14:13:12.1824616Z {"event": "started", "job_id": "28d504bc6e5f42f6b3851ed2d066966d"}
+2026-09-12T14:19:27.2277836Z {"status": "request_error", "error": "recovery-test: expected success, got executor_error; job 28d504bc6e5f42f6b3851ed2d066966d"}
+2026-09-12T14:19:27.2369047Z ##[error]Process completed with exit code 1.

@@ -9,6 +9,7 @@ import sys
 
 from .diagnose import diagnose_request
 from .format import RequestError, write_json
+from .import_report import build_manifest, write_manifest
 from .prepare import build_request
 
 
@@ -27,6 +28,15 @@ def _parser() -> argparse.ArgumentParser:
     diagnose.add_argument("--output", required=True, type=Path)
     diagnose.add_argument("--live", action="store_true", help="make one native Decisions request")
     diagnose.add_argument("--key-file", type=Path, default=None, metavar="FILE")
+
+    import_report = commands.add_parser(
+        "import-report",
+        help="import one bounded native report into a portable triage manifest",
+    )
+    import_report.add_argument("--kind", choices=("boot", "sandbox", "github-job"), required=True)
+    import_report.add_argument("--input", required=True, type=Path)
+    import_report.add_argument("--run-id", required=True)
+    import_report.add_argument("--output", required=True, type=Path)
     return parser
 
 
@@ -39,6 +49,12 @@ def main(argv: list[str] | None = None) -> int:
             # bound that was validated before writing it.
             write_json(args.output, request, pretty=False, label="request")
             print(f"status=prepared output={args.output}")
+            return 0
+
+        if args.command == "import-report":
+            manifest = build_manifest(args.kind, args.input, args.run_id, output_path=args.output)
+            write_manifest(args.output, manifest)
+            print(f"status=imported output={args.output}")
             return 0
 
         status, reason = diagnose_request(

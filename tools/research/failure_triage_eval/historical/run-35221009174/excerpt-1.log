@@ -1,0 +1,13 @@
+2026-09-17T12:40:23.9469048Z {"event": "started", "job_id": "888dd891678143e7a7d665fd9e7334a2"}
+2026-09-17T12:40:43.0150931Z {"case": "block-persist", "job_id": "888dd891678143e7a7d665fd9e7334a2", "status": "success"}
+2026-09-17T12:40:43.0177148Z {"event": "started", "job_id": "5ee2e710ec7c4ad2aac0d23b9709e706"}
+2026-09-17T12:40:59.1346197Z {"case": "block-readonly", "job_id": "5ee2e710ec7c4ad2aac0d23b9709e706", "status": "success"}
+2026-09-17T12:40:59.1371531Z {"event": "started", "job_id": "f97b1e93c2ed481f957b802287b967a9"}
+2026-09-17T12:41:15.2040194Z {"case": "block-error", "job_id": "f97b1e93c2ed481f957b802287b967a9", "status": "success"}
+2026-09-17T12:41:15.2066007Z {"event": "started", "job_id": "31f25bd3353e4fb481c07e3af687af8c"}
+2026-09-17T12:41:36.2859287Z {"case": "block-timeout", "job_id": "31f25bd3353e4fb481c07e3af687af8c", "status": "success"}
+2026-09-17T12:41:36.2884814Z {"event": "started", "job_id": "bd4489e2ac344b778dd00b4b28dad13c"}
+2026-09-17T12:41:52.1959209Z {"case": "block-missing", "job_id": "bd4489e2ac344b778dd00b4b28dad13c", "status": "success"}
+2026-09-17T12:41:52.1984491Z {"event": "started", "job_id": "be89a9b9c08a4a2eb1de9d7b175f418d"}
+2026-09-17T12:42:04.6197681Z {"status": "request_error", "error": "block-user: expected success, got boot_failed; job be89a9b9c08a4a2eb1de9d7b175f418d"}
+2026-09-17T12:42:04.6289685Z ##[error]Process completed with exit code 1.

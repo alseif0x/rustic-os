@@ -1,0 +1,3 @@
+2026-09-21T00:28:56.9956951Z verified /home/runner/work/rustic-os/rustic-os/.cache/limine-12.8.0-binary.tar.gz
+2026-09-21T00:28:56.9958361Z Native recovery: 49 cases, 98 VM boots; real I/O faults, lost reply and independent receipt/content oracle.
+2026-09-21T00:28:57.0095154Z All 22 boot scenarios verified.

@@ -12,7 +12,7 @@ Plan validation: local document links and named initial evidence-owner paths wer
 checked. Independent review found no material gaps in scope, prerequisites,
 authority, fallback or acceptance. This is review of a proposal, not new runtime
 test evidence. See [D1 delivery and evaluation](JEV-TRIAGE.md) for the implemented
-subset and remaining acceptance.
+subset and remaining acceptance, and [native evidence import and historical evaluation](JEV-REAL-EVIDENCE.md) for the next delivered D1 increment.
 
 ## Outcome
 

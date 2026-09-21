@@ -1,0 +1,5 @@
+2026-09-20T21:39:59.1422482Z     Finished `release` profile [optimized] target(s) in 0.01s
+2026-09-20T21:39:59.1884422Z     Finished `release` profile [optimized] target(s) in 0.01s
+2026-09-20T21:39:59.2323095Z    Compiling rustic-kernel v0.1.0 (/home/runner/work/rustic-os/rustic-os/kernel)
+2026-09-20T21:40:00.7700146Z     Finished `release` profile [optimized] target(s) in 1.55s
+2026-09-20T21:47:38.2224745Z ##[error]The operation was canceled.

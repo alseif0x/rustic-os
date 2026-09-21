@@ -139,7 +139,9 @@ these synthetic counts do not establish real-world calibration.
 the proposed 90% gate, and the raw model did not respect every passed-harness fact.
 The small evidence-ranking improvement is useful to investigate, but is not proof
 of developer time savings. Keep explicit experimental invocations, collect actual
-labelled failures and evaluate a separately versioned follow-up. No prompt or
+labelled failures and evaluate a separately versioned follow-up. The native import
+and selected historical evaluation are recorded in [JEV-REAL-EVIDENCE.md](JEV-REAL-EVIDENCE.md)
+with the [retained evidence](evidence/jev-triage-historical-v1.json). No prompt or
 threshold was retuned after seeing these live answers.
 
 Validation: `cargo xtask check` passed 418 Rust tests, formatting, Clippy and
