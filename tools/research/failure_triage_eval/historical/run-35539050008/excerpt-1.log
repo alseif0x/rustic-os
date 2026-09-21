@@ -1,0 +1,18 @@
+2026-09-20T21:37:37.6005795Z Traceback (most recent call last):
+2026-09-20T21:37:37.6007124Z   File "/home/runner/work/rustic-os/rustic-os/tools/boot.py", line 35, in <module>
+2026-09-20T21:37:37.6008119Z     suite(args.timeout)
+2026-09-20T21:37:37.6009270Z   File "/home/runner/work/rustic-os/rustic-os/tools/boot_support/runner.py", line 118, in suite
+2026-09-20T21:37:37.6010735Z     result = run(build(mode), timeout)
+2026-09-20T21:37:37.6011631Z              ^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-09-20T21:37:37.6012799Z   File "/home/runner/work/rustic-os/rustic-os/tools/boot_support/runner.py", line 49, in run
+2026-09-20T21:37:37.6014256Z     return verify(image, timeout)
+2026-09-20T21:37:37.6015088Z            ^^^^^^^^^^^^^^^^^^^^^^
+2026-09-20T21:37:37.6016388Z   File "/home/runner/work/rustic-os/rustic-os/tools/terminal_support/acceptance.py", line 55, in verify
+2026-09-20T21:37:37.6017794Z     cases = exercise(uart)
+2026-09-20T21:37:37.6018428Z             ^^^^^^^^^^^^^^
+2026-09-20T21:37:37.6020128Z   File "/home/runner/work/rustic-os/rustic-os/tools/terminal_support/cases.py", line 62, in exercise
+2026-09-20T21:37:37.6021185Z     uart.command('write hello "Hello from native Rust"', "written 22 bytes")
+2026-09-20T21:37:37.6022321Z   File "/home/runner/work/rustic-os/rustic-os/tools/terminal_support/connection.py", line 67, in command
+2026-09-20T21:37:37.6023903Z     raise AssertionError(f"{command!r}: missing {expected!r} in {output!r}")
+2026-09-20T21:37:37.6025327Z AssertionError: 'write hello "Hello from native Rust"': missing 'written 22 bytes' in 'write hello "Hello from native Rust"\r\nerror: Unavailable\r\nrustic:/workspaces> '
+2026-09-20T21:37:37.6208637Z ##[error]Process completed with exit code 1.

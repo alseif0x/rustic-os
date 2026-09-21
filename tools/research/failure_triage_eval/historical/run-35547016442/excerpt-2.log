@@ -1,0 +1,3 @@
+2026-09-21T00:15:15.3713093Z verified /usr/share/OVMF/OVMF_VARS_4M.fd
+2026-09-21T00:15:15.3713531Z verified /home/runner/work/rustic-os/rustic-os/.cache/limine-12.8.0-binary.tar.gz
+2026-09-21T00:15:15.3713985Z hang: timeout (45.005s)

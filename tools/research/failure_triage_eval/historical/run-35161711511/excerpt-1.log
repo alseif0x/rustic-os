@@ -1,0 +1,18 @@
+2026-09-16T23:32:35.5348077Z ok: success (3.622s)
+2026-09-16T23:32:46.8348011Z {"batch": "control", "sample": 4, "warmup": false, "status": "success"}
+2026-09-16T23:32:50.4776832Z ok: success (3.572s)
+2026-09-16T23:33:03.4259410Z {"batch": "control", "sample": 5, "warmup": false, "status": "success"}
+2026-09-16T23:33:07.0194283Z ok: success (3.522s)
+2026-09-16T23:33:21.9681275Z {"batch": "injected", "sample": 0, "warmup": true, "status": "success"}
+2026-09-16T23:33:25.6600053Z ok: success (3.622s)
+2026-09-16T23:33:39.2939233Z {"batch": "injected", "sample": 1, "warmup": false, "status": "success"}
+2026-09-16T23:33:42.8859194Z ok: success (3.522s)
+2026-09-16T23:33:58.1340611Z {"batch": "injected", "sample": 2, "warmup": false, "status": "success"}
+2026-09-16T23:34:01.7756313Z ok: success (3.573s)
+2026-09-16T23:34:14.8135860Z {"batch": "injected", "sample": 3, "warmup": false, "status": "success"}
+2026-09-16T23:34:18.5063908Z ok: success (3.623s)
+2026-09-16T23:34:31.6819326Z {"batch": "injected", "sample": 4, "warmup": false, "status": "success"}
+2026-09-16T23:34:35.3738846Z ok: success (3.622s)
+2026-09-16T23:34:49.0341544Z {"batch": "injected", "sample": 5, "warmup": false, "status": "success"}
+2026-09-16T23:34:49.0372394Z {"schema": 1, "status": "failure", "source": {"revision": "f4f617fad3aa908198cddd1dc507ac3053d04c74", "worktree_status": "", "build_id": "2d3fd0bf2bd6909b", "kernel_sha256": "b6712d4a1049bc5cb4f84bac41c6e1b50c867129b366a864aebffe7d46a0d39e", "image_sha256": {"terminal": "9400802740de339066de46c407dddb158bed603cd56770a98d6c8a1d0da5a0ce", "ok": "b636b53557a1e4a94e7b17d39ee6ce2e4cd50e54d093260fb80c55b533cdcbd8"}}, "configuration_id": "49dd3bd45fb504fe75244c9648de045a78166d7b38d9ffc71bbef01c6bc9f2fa", "control_status": "regression", "regression_status": "regression", "injected_read_regression_detected": true, "measured_samples_per_batch": 5, "warmups_per_batch": 1, "native_vm_boots": 36}
+2026-09-16T23:34:49.0483433Z ##[error]Process completed with exit code 1.

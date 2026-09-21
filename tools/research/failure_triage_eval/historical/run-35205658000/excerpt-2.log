@@ -1,0 +1,4 @@
+2026-09-17T09:33:01.0633781Z --------------------
+2026-09-17T09:33:01.0635273Z ERROR: failed to build: failed to solve: process "/bin/sh -c cd /opt/reference && cargo fetch --locked && python3 tools/environment.py verify && python3 tools/environment.py fetch-bootloader" did not complete successfully: exit code: 101
+2026-09-17T09:33:01.0880477Z {"status": "request_error", "error": "Command '['docker', 'build', '--build-arg', 'BASE=ubuntu@sha256:224a1869083a311ef3f13648a154ba79832fbef6364d31493642ca03082da254', '--build-arg', 'UBUNTU_MIRROR=http://azure.archive.ubuntu.com/ubuntu', '-t', 'rusticos-runner:0652a9e8f9229962', '/tmp/rustic-toolchain-1e1f4opt']' returned non-zero exit status 1."}
+2026-09-17T09:33:01.0973579Z ##[error]Process completed with exit code 1.

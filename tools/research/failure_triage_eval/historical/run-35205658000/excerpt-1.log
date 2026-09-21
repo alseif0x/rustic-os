@@ -1,0 +1,11 @@
+2026-09-17T09:33:01.0613870Z  > [6/9] RUN cd /opt/reference && cargo fetch --locked && python3 tools/environment.py verify && python3 tools/environment.py fetch-bootloader:
+2026-09-17T09:33:01.0615223Z 0.150 error: failed to load manifest for workspace member `/opt/reference/tools/volume`
+2026-09-17T09:33:01.0616136Z 0.150 referenced by workspace at `/opt/reference/Cargo.toml`
+2026-09-17T09:33:01.0616715Z 0.150 
+2026-09-17T09:33:01.0617039Z 0.150 Caused by:
+2026-09-17T09:33:01.0617533Z 0.150   failed to read `/opt/reference/tools/volume/Cargo.toml`
+2026-09-17T09:33:01.0618099Z 0.150 
+2026-09-17T09:33:01.0618424Z 0.150 Caused by:
+2026-09-17T09:33:01.0618826Z 0.150   No such file or directory (os error 2)
+2026-09-17T09:33:01.0619300Z ------
+2026-09-17T09:33:01.0619640Z Dockerfile:10
