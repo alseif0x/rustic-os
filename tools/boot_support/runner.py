@@ -9,6 +9,7 @@ import time
 
 import environment
 from .image import build, memory_supported, OUTPUT
+from . import harness_report
 
 # A mode with more real work than the caller's budget allows. `block-user` mounts
 # a v6 workspace volume and reads a 16 KiB artifact through the block device, so
@@ -119,14 +120,28 @@ def run_once(image, timeout, storage=(), output=None, on_start=None, memory=None
 def suite(timeout):
     OUTPUT.mkdir(parents=True, exist_ok=True)
     (OUTPUT / "suite.json").unlink(missing_ok=True)
+    harness_report.clear_reports(OUTPUT)
+    suite_run_id = harness_report.new_suite_run_id()
     results = []
     for mode, expected in EXPECTED.items():
         result = run(build(mode), timeout)
-        serial = (OUTPUT / mode / "serial.log").read_text(errors="replace")
+        mode_directory = OUTPUT / mode
+        serial_path = mode_directory / "serial.log"
+        serial = serial_path.read_text(errors="replace")
         # A loader failure that hangs cannot pass the deliberate-hang fixture.
         reached_fixture = reached(mode, serial)
+        harness_report.write_report(
+            mode_directory / "harness.json",
+            suite_run_id,
+            mode,
+            expected,
+            result,
+            reached_fixture,
+            result_path=mode_directory / "result.json",
+            serial_path=serial_path,
+        )
         if result["outcome"] != expected or not reached_fixture:
-            raise RuntimeError(f"{mode}: expected {expected}, got {result}; inspect {OUTPUT / mode}")
+            raise RuntimeError(f"{mode}: expected {expected}, got {result}; inspect {mode_directory}")
         results.append({"mode": mode, **result})
     (OUTPUT / "suite.json").write_text(json.dumps(results, indent=2) + "\n")
     print(f"All {len(EXPECTED)} boot scenarios verified.", flush=True)

@@ -35,6 +35,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     import_report.add_argument("--kind", choices=("boot", "sandbox", "github-job"), required=True)
     import_report.add_argument("--input", required=True, type=Path)
+    import_report.add_argument("--harness", type=Path, default=None,
+                               help="optional boot-suite harness.json (only with --kind boot)")
     import_report.add_argument("--run-id", required=True)
     import_report.add_argument("--output", required=True, type=Path)
     return parser
@@ -52,7 +54,13 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.command == "import-report":
-            manifest = build_manifest(args.kind, args.input, args.run_id, output_path=args.output)
+            manifest = build_manifest(
+                args.kind,
+                args.input,
+                args.run_id,
+                output_path=args.output,
+                harness_path=args.harness,
+            )
             write_manifest(args.output, manifest)
             print(f"status=imported output={args.output}")
             return 0

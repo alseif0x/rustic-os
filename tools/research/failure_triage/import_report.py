@@ -24,6 +24,7 @@ from .format import (
     strict_text,
     write_json,
 )
+from .harness import read_report as read_harness_report
 from .schema import validate_manifest
 
 
@@ -149,6 +150,33 @@ def _read_report(input_path: Path, output_path: Path | None) -> tuple[dict[str, 
     return report, str(input_path), digest
 
 
+def _read_harness(
+    harness_path: Path,
+    native_path: Path,
+    output_path: Path | None,
+    native_report: dict[str, Any],
+    native_digest: str,
+) -> tuple[dict[str, Any], str, str]:
+    """Read an explicit boot harness attachment and bind it to the result."""
+
+    if not isinstance(harness_path, Path):
+        harness_path = Path(harness_path)
+    _reject_alias(native_path, harness_path)
+    if output_path is not None:
+        _reject_alias(harness_path, output_path)
+    report, raw, digest = read_harness_report(
+        harness_path,
+        native_report=native_report,
+        native_sha256=native_digest,
+    )
+    # ``read_json_file`` enforces the raw bound.  Preserve the canonical-size
+    # check used for native reports because the complete harness is retained in
+    # the portable manifest as well.
+    if len(serialize_json(report)) > MAX_REQUEST_BYTES:
+        raise RequestError("harness report exceeds compact byte limit")
+    return report, str(harness_path), digest
+
+
 def _source_report(kind: str, path: str, digest: str) -> dict[str, str]:
     _text(path, label="source report path")
     return {"kind": kind, "path": path, "sha256": digest}
@@ -254,12 +282,15 @@ def build_manifest(
     run_id: str,
     *,
     output_path: Path | None = None,
+    harness_path: Path | None = None,
 ) -> dict[str, Any]:
     """Build one validated portable manifest from one native report.
 
     ``output_path`` is optional for callers that only need the in-memory
-    manifest.  When supplied, input/output aliases are rejected before the
-    report is read so an output write can never destroy its source.
+    manifest.  When supplied, input/output aliases are rejected before either
+    report is read so an output write can never destroy its source.  A harness
+    attachment is accepted only for ``boot`` and is bound to the raw native
+    result before its acceptance fields are promoted.
     """
 
     if kind not in _KIND_RUNNERS:
@@ -267,8 +298,33 @@ def build_manifest(
     run_id = _text(run_id, label="manifest run_id")
     report, path_text, digest = _read_report(input_path, output_path)
 
+    if harness_path is not None and kind != "boot":
+        raise RequestError("harness attachment is supported only for boot reports")
+
     if kind == "boot":
         facts = _boot_facts(report)
+        if harness_path is not None:
+            harness, harness_path_text, harness_digest = _read_harness(
+                harness_path,
+                Path(input_path),
+                output_path,
+                report,
+                digest,
+            )
+            # These scalar facts are all independently validated by the
+            # harness contract.  Keep the complete association and its source
+            # reference namespaced so arbitrary report fields stay inert.
+            facts.update(
+                {
+                    "harness_passed": harness["harness_passed"],
+                    "expected_outcome": harness["expected_outcome"],
+                    "harness_suite_run_id": harness["suite_run_id"],
+                    "harness_mode": harness["mode"],
+                    "harness_producer": harness["producer"],
+                    "harness_report": harness,
+                    "source_harness": _source_report("boot-harness", harness_path_text, harness_digest),
+                }
+            )
     elif kind == "sandbox":
         facts = _sandbox_facts(report)
     else:
@@ -296,10 +352,11 @@ def import_report(
     run_id: str,
     *,
     output_path: Path | None = None,
+    harness_path: Path | None = None,
 ) -> dict[str, Any]:
     """Compatibility name for :func:`build_manifest`."""
 
-    return build_manifest(kind, input_path, run_id, output_path=output_path)
+    return build_manifest(kind, input_path, run_id, output_path=output_path, harness_path=harness_path)
 
 
 def write_manifest(
@@ -314,6 +371,9 @@ def write_manifest(
     source = manifest["facts"].get("source_report")
     if isinstance(source, dict) and isinstance(source.get("path"), str):
         _reject_alias(Path(source["path"]), Path(output_path))
+    harness_source = manifest["facts"].get("source_harness")
+    if isinstance(harness_source, dict) and isinstance(harness_source.get("path"), str):
+        _reject_alias(Path(harness_source["path"]), Path(output_path))
     write_json(output_path, manifest, pretty=False, label="manifest")
 
 
