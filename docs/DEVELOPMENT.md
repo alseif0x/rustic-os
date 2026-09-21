@@ -48,6 +48,8 @@ requirement to build, boot, CI or run RusticOS manually.
 The optional [JEV context-ranking pilot](JEV-CONTEXT.md) compares a local lexical
 baseline with typed decisions through OpenRouter on explicitly selected excerpts.
 It is a host experiment with no automatic CI or guest API calls.
+The [failure diagnosis pilot](JEV-TRIAGE.md) adds explicit log-based advisories;
+the [integration plan](JEV-PLAN.md) separates host work from future native services.
 
 - kernel/src/lib.rs: entry and composition for the no_std library.
 - kernel/src/boot/mod.rs: boot-data module facade.
