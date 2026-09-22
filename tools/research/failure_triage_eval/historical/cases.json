@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "origin": "selected historical CI observations; not representative or independently established root causes",
+  "cases": [
+    {
+      "id": "run-35205658000",
+      "incident_group": "observation-35205658000",
+      "cohort": "failure",
+      "expected": "environment",
+      "label_basis": "Cargo could not read a workspace manifest missing from the prepared container image; no compilation diagnostic is present.",
+      "run_id": "github/35205658000/105150675947",
+      "report_kind": "github-job",
+      "report": {
+        "path": "tools/research/failure_triage_eval/historical/run-35205658000/job.json",
+        "sha256": "624d494be64fa78f553ecf0ea3b8ba0f1ee581af3f5f991585244a18a9a0f2bc"
+      },
+      "logs": [
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-35205658000/excerpt-1.log",
+          "start": 1,
+          "end": 11,
+          "sha256": "01fe905fa29bcd6f38daad85e0e2ee7201df15a435f4053a7ebf01b5b89ebac6",
+          "upstream_start": 1227,
+          "upstream_end": 1237,
+          "upstream_log_sha256": "77258633640e5904443aa3800a633c12ffd1ca3ddb1120d10bfcbd433ca43e21"
+        },
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-35205658000/excerpt-2.log",
+          "start": 1,
+          "end": 4,
+          "sha256": "b7c6526b815622c89754d2393988de7d0212026255567d02778ee543206a13f5",
+          "upstream_start": 1244,
+          "upstream_end": 1247,
+          "upstream_log_sha256": "77258633640e5904443aa3800a633c12ffd1ca3ddb1120d10bfcbd433ca43e21"
+        }
+      ],
+      "source_url": "https://github.com/alseif0x/rustic-os/actions/runs/35205658000/job/105150675947"
+    },
+    {
+      "id": "run-34664552375",
+      "incident_group": "observation-34664552375",
+      "cohort": "failure",
+      "expected": "assertion",
+      "label_basis": "The native contract validator rejected an incomplete recovery mission; this labels the observed validation failure, not a storage root cause.",
+      "run_id": "github/34664552375/103473721584",
+      "report_kind": "github-job",
+      "report": {
+        "path": "tools/research/failure_triage_eval/historical/run-34664552375/job.json",
+        "sha256": "66f450e63d664420816bf499a921e0e407bbe17f53b0fa2c95838c44bb5ec72a"
+      },
+      "logs": [
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-34664552375/excerpt-1.log",
+          "start": 1,
+          "end": 16,
+          "sha256": "2250b9cc8350eee545d3f1fd248524b027e8d82b0c7db1e90be15f64303d0c39",
+          "upstream_start": 954,
+          "upstream_end": 969,
+          "upstream_log_sha256": "edeef3092b2c838612e34a64313b31a5d0e9c5c30b9fb3be8d3983de0ee0cf87"
+        }
+      ],
+      "source_url": "https://github.com/alseif0x/rustic-os/actions/runs/34664552375/job/103473721584"
+    },
+    {
+      "id": "run-35539050008",
+      "incident_group": "observation-35539050008",
+      "cohort": "failure",
+      "expected": "assertion",
+      "label_basis": "The terminal acceptance assertion expected written bytes and instead received Unavailable. The underlying service cause is not established by this excerpt.",
+      "run_id": "github/35539050008/106153224095",
+      "report_kind": "github-job",
+      "report": {
+        "path": "tools/research/failure_triage_eval/historical/run-35539050008/job.json",
+        "sha256": "b4dd9a4b544f210b6377bbbb7859981dcb4e91858ef525bdb097056252ae8362"
+      },
+      "logs": [
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-35539050008/excerpt-1.log",
+          "start": 1,
+          "end": 18,
+          "sha256": "5f996184e00dffc736286e292ba450c4f537c2d53561e37269de3130d00bac2c",
+          "upstream_start": 1009,
+          "upstream_end": 1026,
+          "upstream_log_sha256": "ebaf146809c740a517505147285eec175de75dacb3825df057540e9c55031337"
+        }
+      ],
+      "source_url": "https://github.com/alseif0x/rustic-os/actions/runs/35539050008/job/106153224095"
+    },
+    {
+      "id": "run-34698587182",
+      "incident_group": "observation-34698587182",
+      "cohort": "failure",
+      "expected": "executor",
+      "label_basis": "The sandbox controller explicitly reports executor_error for its recovery job; no finer cause is established.",
+      "run_id": "github/34698587182/103566230161",
+      "report_kind": "github-job",
+      "report": {
+        "path": "tools/research/failure_triage_eval/historical/run-34698587182/job.json",
+        "sha256": "26fcbdcbc6f0aaab1c052d67c80d6c612b2f3ae5458deee8f84370a631b2c056"
+      },
+      "logs": [
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-34698587182/excerpt-1.log",
+          "start": 1,
+          "end": 7,
+          "sha256": "733602798eb182a28485f544ac52c8a9067491730020708d41c8979831635af8",
+          "upstream_start": 1221,
+          "upstream_end": 1227,
+          "upstream_log_sha256": "a487572304a1a2998ab2045f4dcb981665579fab88f1dd031d22250c64c5ac05"
+        }
+      ],
+      "source_url": "https://github.com/alseif0x/rustic-os/actions/runs/34698587182/job/103566230161"
+    },
+    {
+      "id": "run-35221009174",
+      "incident_group": "observation-35221009174",
+      "cohort": "failure",
+      "expected": "assertion",
+      "label_basis": "The controller rejected block-user because observed boot_failed differed from expected success. The guest root cause is missing.",
+      "run_id": "github/35221009174/105200864220",
+      "report_kind": "github-job",
+      "report": {
+        "path": "tools/research/failure_triage_eval/historical/run-35221009174/job.json",
+        "sha256": "61364b3a7f7f3a1a5e0cf8d17beb58b9aebb6bc2538dabea34ac7f7260da87cf"
+      },
+      "logs": [
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-35221009174/excerpt-1.log",
+          "start": 1,
+          "end": 13,
+          "sha256": "654a6c6adbe870685f12d964c116c369c58a0fee265d705eaeb35f967016a49f",
+          "upstream_start": 1278,
+          "upstream_end": 1290,
+          "upstream_log_sha256": "abc53b1a9fd22034b24475288d8b3dca9b1f70268c11dcf90f21f11d9f5327c1"
+        }
+      ],
+      "source_url": "https://github.com/alseif0x/rustic-os/actions/runs/35221009174/job/105200864220"
+    },
+    {
+      "id": "run-35161711511",
+      "incident_group": "observation-35161711511",
+      "cohort": "failure",
+      "expected": "assertion",
+      "label_basis": "The calibration acceptance failed because its control batch was already a regression. This is a failed acceptance condition, not proof of a code regression or timing root cause.",
+      "run_id": "github/35161711511/105013728034",
+      "report_kind": "github-job",
+      "report": {
+        "path": "tools/research/failure_triage_eval/historical/run-35161711511/job.json",
+        "sha256": "85339aaaf54714c327c10ecac229ea1d7ca512cf7e25efdb93c244ce960340fc"
+      },
+      "logs": [
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-35161711511/excerpt-1.log",
+          "start": 1,
+          "end": 18,
+          "sha256": "3f18ebe7cf947961deb6f0ac5fe9fcea025a642af87d876a862737c2eba568c4",
+          "upstream_start": 440,
+          "upstream_end": 457,
+          "upstream_log_sha256": "9714cb59377c805dbd66a8c8dccdac82e1e29247d0655de54f8d5d08ccd77afe"
+        }
+      ],
+      "source_url": "https://github.com/alseif0x/rustic-os/actions/runs/35161711511/job/105013728034"
+    },
+    {
+      "id": "run-35539017737",
+      "incident_group": "observation-35539017737",
+      "cohort": "failure",
+      "expected": "timeout",
+      "label_basis": "GitHub check annotations explicitly state that the job exceeded its 15-minute maximum. The job conclusion remains cancelled; the annotation distinguishes this from manual cancellation.",
+      "run_id": "github/35539017737/106153138512",
+      "report_kind": "github-job",
+      "report": {
+        "path": "tools/research/failure_triage_eval/historical/run-35539017737/job.json",
+        "sha256": "a18ee8e2e566a54ea82692eeccd526ea34689cc30edd615c7177b6d99063bd81"
+      },
+      "logs": [
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-35539017737/excerpt-1.log",
+          "start": 1,
+          "end": 5,
+          "sha256": "6003ed07566f520509f44756eb872dcd5c9920e17036f5fbc45d7cbc3aed984b",
+          "upstream_start": 1018,
+          "upstream_end": 1022,
+          "upstream_log_sha256": "9fedbb7cede54ebdccdca80e363b830489a8307846031f0ccb212506cdc898ce"
+        },
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-35539017737/annotations.json",
+          "start": 1,
+          "end": 1,
+          "sha256": "faa6ce4221ef18cc97a09138234c1b4f646f3e7aa3248aa2016279033b2a80c7",
+          "upstream_url": "https://api.github.com/repos/alseif0x/rustic-os/check-runs/106153138512/annotations"
+        }
+      ],
+      "source_url": "https://github.com/alseif0x/rustic-os/actions/runs/35539017737/job/106153138512"
+    },
+    {
+      "id": "run-35547016442",
+      "incident_group": "observation-35547016442",
+      "cohort": "control",
+      "expected": "unknown",
+      "label_basis": "A completed successful CI boot job reports deliberately negative panic/hang fixtures followed by verification of all 22 scenarios. No unexpected failure is evidenced.",
+      "run_id": "github/35547016442/106174628260",
+      "report_kind": "github-job",
+      "report": {
+        "path": "tools/research/failure_triage_eval/historical/run-35547016442/job.json",
+        "sha256": "cf7c4cf440ff62eb61146b4444e8dc8f8b0538f32fec2cd263e82f168eb1be2f"
+      },
+      "logs": [
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-35547016442/excerpt-1.log",
+          "start": 1,
+          "end": 3,
+          "sha256": "3eb2d8e0b646009790865b1ac1a45750f213bdcf5e54286aac660a2154182f47",
+          "upstream_start": 705,
+          "upstream_end": 707,
+          "upstream_log_sha256": "1fa69133f7b9421153f47372c70f0b90b8fa7908f0b56ebf3ac9fbbc786f7c45"
+        },
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-35547016442/excerpt-2.log",
+          "start": 1,
+          "end": 3,
+          "sha256": "ad51c3cee293f9fc5b60c3dac3592c1f63ad6f58944f3b9dbd2e5736d3230097",
+          "upstream_start": 722,
+          "upstream_end": 724,
+          "upstream_log_sha256": "1fa69133f7b9421153f47372c70f0b90b8fa7908f0b56ebf3ac9fbbc786f7c45"
+        },
+        {
+          "path": "tools/research/failure_triage_eval/historical/run-35547016442/excerpt-3.log",
+          "start": 1,
+          "end": 3,
+          "sha256": "09861f85f57860948da2a0ff923e28fd63964dd1db946c738e06e0f9f17626b3",
+          "upstream_start": 1055,
+          "upstream_end": 1057,
+          "upstream_log_sha256": "1fa69133f7b9421153f47372c70f0b90b8fa7908f0b56ebf3ac9fbbc786f7c45"
+        }
+      ],
+      "source_url": "https://github.com/alseif0x/rustic-os/actions/runs/35547016442/job/106174628260"
+    }
+  ]
+}

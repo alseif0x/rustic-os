@@ -81,3 +81,10 @@ Licenses for Limine, the bindings, bitflags and Rust are included in the image. 
 The additional modes are `block-persist`, `block-readonly`, `block-error`, `block-timeout` and `block-missing`. They require successful guest checks (QEMU exit 33) plus the host oracle. Persistence starts two separate VMs with one freshly created disposable disk. Phase logs, selected disk bytes and hashes are retained; the sparse disk itself is removed. See [BLOCK.md](BLOCK.md) for the contract and limits.
 
 The recovery-test scenario combines [native operation recovery](FILE-RECOVERY.md), [workspace operations](FILE-OPERATIONS.md) and [owner-control races](FILE-CONTROL.md): 19 groups across 38 VM boots. It includes selected QEMU EIO cuts, discarded IPC replies, explicit format upgrades and revocation during pending I/O. It preserves recovery.json and the bounded files.bin oracle area. The separate two-VM `block-user` scenario also verifies [durable admission storage](FILE-ADMISSION.md), with four sequential test applications per boot and an independent reader for retained admitted/cancelled/committed records.
+
+## Per-mode acceptance evidence
+
+The suite also exports hash-bound `harness.json` acceptance for each completed
+mode, including failed outcome/fixture checks, and clears stale reports at suite
+start. Pre-result exceptions have no acceptance report. See [the harness evidence
+guide](JEV-HARNESS.md) for the contract and optional offline triage consumer.

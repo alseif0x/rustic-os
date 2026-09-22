@@ -56,7 +56,9 @@ jobs:
           retention-days: 14
   sandbox:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Full isolated validation already took about 20 minutes on PR #83.
+    # Keep per-build and per-VM limits in the harness; allow CI setup overhead.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -96,7 +98,9 @@ jobs:
           retention-days: 14
   boot:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # The full recovery suite includes 98 VM boots, followed by latency/task
+    # acceptance. The old job cap cancelled it before those checks finished.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -109,6 +113,8 @@ jobs:
         run: python3 -m unittest discover -s tools/tests -v
       - name: Verify UEFI boot and failures
         run: python3 tools/boot.py test --timeout 45
+      - name: Verify offline triage of native harness controls
+        run: python3 -m tools.research.failure_triage.check_harness --boot-directory artifacts/boot --output artifacts/boot/triage-harness
       - name: Verify delayed device completion and recovery
         run: python3 tools/latency_test.py --image artifacts/boot/recovery-test/rustic-os.img --output artifacts/boot/latency-test
       - name: Verify native task writes and retained recovery

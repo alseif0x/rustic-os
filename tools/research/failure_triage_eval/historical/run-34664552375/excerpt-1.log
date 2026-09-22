@@ -1,0 +1,16 @@
+2026-09-12T01:30:54.0353728Z Installing collected packages: typing_extensions, rpds-py, attrs, referencing, jsonschema-specifications, jsonschema
+2026-09-12T01:30:54.2125499Z Successfully installed attrs-26.1.0 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 referencing-0.37.0 rpds-py-2026.6.3 typing_extensions-4.16.0
+2026-09-12T01:30:54.7157867Z Traceback (most recent call last):
+2026-09-12T01:30:54.7158512Z   File "<frozen runpy>", line 198, in _run_module_as_main
+2026-09-12T01:30:54.7159095Z   File "<frozen runpy>", line 88, in _run_code
+2026-09-12T01:30:54.7159895Z   File "/home/runner/work/rustic-os/rustic-os/tools/contracts/__main__.py", line 63, in <module>
+2026-09-12T01:30:54.7160690Z     main()
+2026-09-12T01:30:54.7161297Z   File "/home/runner/work/rustic-os/rustic-os/tools/contracts/__main__.py", line 49, in main
+2026-09-12T01:30:54.7162935Z     result = host_check(catalog) if args.command == "operations-check" else native_check(catalog, load_native(args.evidence))
+2026-09-12T01:30:54.7164061Z                                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+2026-09-12T01:30:54.7165058Z   File "/home/runner/work/rustic-os/rustic-os/tools/contracts/operation_conformance.py", line 39, in native_check
+2026-09-12T01:30:54.7166318Z     require(isinstance(evidence, dict) and evidence.get("verified") is True and evidence.get("boots") == 58, "incomplete native recovery mission")
+2026-09-12T01:30:54.7167237Z   File "/home/runner/work/rustic-os/rustic-os/tools/contracts/validation.py", line 35, in require
+2026-09-12T01:30:54.7167777Z     raise ContractError(reason)
+2026-09-12T01:30:54.7168224Z tools.contracts.validation.ContractError: incomplete native recovery mission
+2026-09-12T01:30:54.7314832Z ##[error]Process completed with exit code 1.

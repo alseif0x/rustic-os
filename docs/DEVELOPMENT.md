@@ -45,6 +45,12 @@ Project-scoped Codex roles and the bounded delegation workflow are documented in
 [Current work state](WORK-STATE.md). This optional host configuration adds no
 requirement to build, boot, CI or run RusticOS manually.
 
+The optional [JEV context-ranking pilot](JEV-CONTEXT.md) compares a local lexical
+baseline with typed decisions through OpenRouter on explicitly selected excerpts.
+It is a host experiment with no automatic CI or guest API calls.
+The [failure diagnosis pilot](JEV-TRIAGE.md) adds explicit log-based advisories;
+the [integration plan](JEV-PLAN.md) separates host work from future native services.
+
 - kernel/src/lib.rs: entry and composition for the no_std library.
 - kernel/src/boot/mod.rs: boot-data module facade.
 - kernel/src/boot/region.rs: range validation; no Limine dependency or memory allocation.
@@ -152,7 +158,7 @@ rather than with the candidate under test.
 
 The `block-user` mode mounts a host-provisioned v6 workspace volume and reads a
 16 KiB artifact through the real block device in 4 KiB ranges; its documented
-floor is 60 s (`MODE_FLOOR` in `tools/boot_support/runner.py`), while every other
+floor is 90 s (`MODE_FLOOR` in `tools/boot_support/runner.py`), while every other
 mode keeps the caller's timeout.
 
 ## Delayed-device regression

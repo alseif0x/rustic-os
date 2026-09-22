@@ -70,9 +70,10 @@ def run(image, timeout, run_once):
                 admissions.append(admission_evidence.inspect(disk, directory))
                 if admissions[-1] != admissions[0]:
                     raise RuntimeError("replay boot changed durable admission evidence")
-                workspaces.append(workspace_evidence.inspect(disk, directory))
-                if workspaces[-1] != workspaces[0]:
-                    raise RuntimeError("replay boot changed the workspace volume or observation")
+                workspaces.append(workspace_evidence.inspect(disk, directory, number + 1))
+                if workspaces[-1]["volume_sha256"] != workspaces[0]["volume_sha256"]:
+                    # The replay boot must return the retained receipt, not write.
+                    raise RuntimeError("the replay boot changed the workspace volume")
         allocation = disk.stat().st_blocks * 512
     serial = "\n".join(serials)
     (directory / "serial.log").write_text(serial)

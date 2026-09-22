@@ -17,8 +17,9 @@ class StubWorkspace:
     def provision(self, disk):
         return None
 
-    def inspect(self, disk, output):
-        return {"guest_verified": True}
+    def inspect(self, disk, output, phase):
+        return {"guest_verified": True, "phase": "write" if phase == 1 else "replay",
+                "volume_sha256": "stub"}
 
 
 def offline():
@@ -35,8 +36,8 @@ def marker(phase):
                  f"cancelled={16 if phase == 'write' else 0} too_late=1 committed=1")
         line += (f"\nRUSTIC ADMISSION verified=1 phase={'write' if phase == 'write' else 'replay'} "
                  "admitted=1 cancelled=1 committed=1 replay_writes=0 service_control=1 fresh_authority=1")
-        line += (f"\nRUSTIC WORKSPACE verified=1 phase={'write' if phase == 'write' else 'read'} "
-                 "volume=v6 length=16384 ranges=4 nodes=256")
+        line += (f"\nRUSTIC WORKSPACE verified=1 phase={'write' if phase == 'write' else 'replay'} "
+                 f"receipt=1 replay={0 if phase == 'write' else 1} volume=v6 length=16384 ranges=4 nodes=256")
     return line
 
 
@@ -58,7 +59,8 @@ class BlockUserEvidence(unittest.TestCase):
                     good.replace(" service_control=1", ""), good.replace(" fresh_authority=1", ""),
                     good.replace("RUSTIC WORKSPACE ", "MISSING "),
                     good.replace("length=16384", "length=200000"), good.replace("ranges=4", "ranges=49"),
-                    good.replace("volume=v6", "volume=v5")]:
+                    good.replace("volume=v6", "volume=v5"), good.replace("receipt=1", "receipt=0"),
+                    good.replace("phase=write receipt=1 replay=0", "phase=write receipt=1 replay=1")]:
             self.assertFalse(verified("block-user", bad, records))
 
     def test_fault_evidence_cannot_omit_denials_or_lifecycle_cases(self):
