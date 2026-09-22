@@ -2,9 +2,25 @@
 
 # Current work state
 
-Updated 2026-09-22. Replace this checkpoint rather than appending conversation history.
+Updated 2026-09-23. Replace this checkpoint rather than appending conversation history.
 
 ## Current foundation checkpoint
+
+PR [#92](https://github.com/alseif0x/rustic-os/pull/92) merged as `062833c139b868ce2ae7f166bc4570ea7e540143` after all four final-head jobs passed on tested head `bf7b749543fcfa26adbb2917726e9d2585c80f5c` ([CI run](https://github.com/alseif0x/rustic-os/actions/runs/35791385458)). This branch, `codex/workspace-v7-mount`, is based on that merge.
+
+The owner authorized autonomous implementation decisions, versioned storage/protocol evolution, PRs and merges after verification (2026-09-22). Preserve #51 authority/recovery guarantees and never use the owner's real terminal volume for experiments. The production successor is v7, not a direct substitution of `Volume6` for `Volume`; v5/v6 remain frozen. Issue #51 is open and #52 remains untouched.
+
+**Current increment:** `Volume7` destructively provisions only fresh/disposable media and adds read-only mount. It flushes before reading, selects the highest valid dual-header history, checks raw node/map/receipt aggregates, calls whole-generation validation, and streams CRC checks over logical bytes of every live and retained payload. Invalid-header recovery is reported; corruption named by a valid newest header is refused rather than rolled back. A failed operation clears the owner and keeps access fenced. Its fixed caller-owned storage must not live in a constrained kernel stack frame. There is no v7 mutation/publication, staging, migration, service/SDK advertisement or guest behavior yet.
+
+**Local evidence:** `cargo xtask check` passed 486 Rust tests, formatting, Clippy and host/guest-target builds ([log](../artifacts/workspace-v7-mount-check.log)); the v7 disk test binary passed 17 cases ([log](../artifacts/workspace-v7-mount-disk-tests.log)); Python passed 263 tests ([log](../artifacts/workspace-v7-mount-python.log)); and the independent v6 image/migration oracle verified the 200,000-byte case and rejected eight damaged/inapplicable images ([log](../artifacts/workspace-v7-mount-oracle.log)). Coverage includes all provision write/flush failure cuts checked after durable recovery, a torn first-header write, noncontiguous extents, logical-tail handling and the 256 KiB payload limit. This is host evidence, not crash-atomic publication, service integration or guest acceptance. Astra low review found no remaining actionable findings after the durable-recovery/multi-extent evidence was added.
+
+DeepSeek returned HTTP 402 for exhausted API balance; the already-authorized implementation was completed manually by GPT-6 Luna Max at max effort. This is explicit manual fallback, not automatic failover or a change to the DeepSeek default.
+
+**Next:** add v7 durable mutation/publication while retaining the current generation's payload until replacement is durable, and test every write/flush cut across reboot/remount. Then implement bounded staging/admission, cancellation and explicit safe retention maintenance, deliberate v5 upgrade, production file-service/profile integration and the original #51 workload/failure guest acceptance. Keep #51 open until every original criterion is evidenced.
+
+## Prior foundation history
+
+The entries below preserve earlier checkpoints. References to the branch or next action describe the state at that earlier date and are superseded by the current checkpoint above.
 
 PR [#89](https://github.com/alseif0x/rustic-os/pull/89), tested head `5311dcb`, merged as `c077886` after its authoritative PR CI [35721138519](https://github.com/alseif0x/rustic-os/actions/runs/35721138519) passed all four jobs. Its publication-failure discipline is described below. The duplicate push workflow was cancelled, not counted as a passing check.
 

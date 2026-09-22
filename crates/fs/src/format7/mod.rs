@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //! v7 immutable-content workspace contract: codecs and structural validation.
 //!
-//! This is the format and structural-validation half of the #51 successor. It
-//! fixes the on-disk shapes, checks each record and a decoded generation's
-//! namespace and allocation ownership. It does not mount a volume, allocate
-//! identities, read payload bytes or serve a request. The v5 and v6 layouts stay
-//! frozen, and no type here replaces them or claims service support. Mounting,
-//! publication and upgrade are later stages that must not be inferred from these
-//! types.
+//! This module fixes the on-disk shapes, checks each record and a decoded
+//! generation's namespace and allocation ownership. It stays pure: the separate
+//! `Volume7` owner provisions and verifies mounts, while publication, allocation,
+//! migration and service support remain later stages. The v5 and v6 layouts stay
+//! frozen, and these codecs do not claim service support.
 //!
 //! Sectors are 512 bytes, numbered from the volume start:
 //!
@@ -22,10 +20,10 @@
 //! A header is keyed by generation: the copy in sector `8 + generation` names the
 //! checksums of that generation's node table, free-space map and receipt block.
 //! That is the layout an atomic publication is meant to use, writing the inactive
-//! generation before its header. Nothing here publishes, mounts or reclaims, so
-//! this module does not establish crash safety: ordering the flushes, retaining
-//! the payload a superseded generation still mentions, and invoking generation
-//! validation when mounting a chosen generation all remain future work.
+//! generation before its header. This module does not publish or reclaim, so it
+//! does not establish crash safety. The `Volume7` owner selects and verifies a
+//! mounted generation; retaining payload while publishing a replacement and
+//! ordering the flushes remain future work.
 //!
 //! Validation is split on purpose. [`Node7`] and [`Record7`] check what a single
 //! record can prove about itself. [`Header7::validate`] and [`Record7::validate`]

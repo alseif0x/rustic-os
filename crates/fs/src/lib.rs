@@ -20,6 +20,7 @@ mod storage;
 mod upgrade6;
 mod volume;
 mod volume6;
+mod volume7;
 pub use admission::{Admission, AdmissionId, AdmissionState, AdmissionStatus, PreventionReason};
 pub use extent::{
     DATA_BYTES_V6, DATA_SECTORS, EXTENTS_PER_FILE, Extent, Extents, FILE_SECTORS_MAX, FreeSpace,
@@ -37,6 +38,7 @@ pub use storage::{Disk, PollDisk};
 pub use upgrade6::{Report as UpgradeReport, UpgradedVolume, upgrade as upgrade6};
 pub use volume::Volume;
 pub use volume6::{Volume6, mount as mount6, provision as provision6};
+pub use volume7::Volume7;
 pub const OBJECTS: usize = 32;
 pub const MAX_FILE: usize = 1024;
 pub const SECTORS: u64 = 174;
