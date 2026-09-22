@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 # Project profile; preserve the user's existing permissions and integrations.
-model = "gpt-6-astra"
-model_reasoning_effort = "medium"
+model = "claude-subscription/claude-opus-5"
+model_reasoning_effort = "high"
 
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 2
-default_subagent_model = "gpt-5.6-luna"
-default_subagent_reasoning_effort = "max"
+default_subagent_model = "deepseek/deepseek-v4.1-flash"
+default_subagent_reasoning_effort = "high"

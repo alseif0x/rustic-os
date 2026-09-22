@@ -3,12 +3,74 @@
 import argparse
 import hashlib
 from pathlib import Path
+import shlex
 import subprocess
 import tomllib
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG = tomllib.loads((ROOT / "tools/environment.toml").read_text())
+OS_RELEASE = Path("/etc/os-release")
+
+
+def os_release(path=OS_RELEASE):
+    """The declared fields of an os-release(5) file.
+
+    Those values use that format's shell-like quoting, so the standard shlex
+    parser reads them instead of ad-hoc quote stripping.
+    """
+    try:
+        text = path.read_text()
+    except OSError as error:
+        raise RuntimeError(f"cannot read {path}: {error}") from error
+    values = {}
+    for line in text.splitlines():
+        name, separator, value = line.partition("=")
+        name = name.strip()
+        if not separator or not name or name.startswith("#"):
+            continue
+        try:
+            values[name] = " ".join(shlex.split(value))
+        except ValueError as error:
+            raise RuntimeError(f"unreadable value for {name} in {path}") from error
+    return values
+
+
+def host_release(path=OS_RELEASE):
+    """The Ubuntu release the reviewed baselines are keyed by."""
+    values = os_release(path)
+    if values.get("ID") != "ubuntu":
+        raise RuntimeError(
+            f"the reference environment is Ubuntu; this host reports {values.get('ID', 'no ID')}"
+        )
+    if not values.get("VERSION_ID"):
+        raise RuntimeError(f"{path} does not declare VERSION_ID")
+    return values["VERSION_ID"]
+
+
+def resolve(document, release):
+    """Flatten one reviewed baseline into the shared configuration.
+
+    Package versions and firmware hashes differ per Ubuntu release, so they are
+    stored per release and selected here. An unreviewed release is refused: the
+    caller must add its measured versions rather than accept whatever apt offers.
+    """
+    baselines = document.get("baselines")
+    if not isinstance(baselines, dict) or not baselines:
+        raise RuntimeError("the environment document declares no reviewed baseline")
+    if release not in baselines:
+        reviewed = ", ".join(sorted(baselines))
+        raise RuntimeError(
+            f"no reviewed baseline for Ubuntu {release}; reviewed releases: {reviewed}"
+        )
+    shared = {name: value for name, value in document.items() if name != "baselines"}
+    return {**shared, "release": release, **baselines[release]}
+
+
+# The pinned versions are needed by every consumer, so the baseline is selected
+# when this module loads: an unreviewed host release refuses here, not later.
+CONFIG = resolve(
+    tomllib.loads((ROOT / "tools/environment.toml").read_text()), host_release()
+)
 
 
 def digest(path):
@@ -26,6 +88,7 @@ def install():
 
 
 def verify():
+    print(f"reviewed baseline: Ubuntu {CONFIG['release']}")
     for name, expected in CONFIG["packages"].items():
         actual = subprocess.check_output(
             ["dpkg-query", "-W", "-f=${Version}", name], text=True

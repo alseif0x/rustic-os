@@ -6,7 +6,7 @@ The owner can build a Git revision and test its kernel in QEMU without running c
 
 ## Usage
 
-Baseline: Linux amd64, Python 3.12, Git and Docker Engine with cgroup v2. Validated on Ubuntu 24.04 under WSL2 and in CI. On Windows, run from Ubuntu; QEMU uses TCG without KVM or access to host devices.
+Baseline: Linux amd64, Python 3.12, Git and Docker Engine with cgroup v2. Validated on Ubuntu 24.04 under WSL2 and in CI. The executor image stays on the 24.04 baseline in tools/environment.toml, so a newer host release does not change the container. On Windows, run from Ubuntu; QEMU uses TCG without KVM or access to host devices.
 
 From a reviewed infrastructure checkout:
 

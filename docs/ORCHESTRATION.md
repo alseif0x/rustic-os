@@ -2,12 +2,13 @@
 
 # Development orchestration
 
-The project profile uses one role topology: a medium-effort root for coordination, maximum-effort explorer/worker/tester/researcher, and a low-effort independent reviewer. At most two child agents run concurrently. The owner selected this profile; it is not a measured cost or quality guarantee.
+The Codex project profile uses Opus for coordination and DeepSeek for implementation through the operator's installed Codex Router. At most two child agents run concurrently. The owner selected this profile; it is not a measured cost or quality guarantee. Native Claude Code retains its separate profile.
 
 | Role | Codex | Claude Code |
 | --- | --- | --- |
-| Root / orchestrator | Astra — medium | Fable — medium |
-| Explorer, worker, tester, researcher | Luna — max | Opus — high |
+| Root / orchestrator | Opus 5 — high | Fable — medium |
+| Worker / implementer | DeepSeek V4.1 Flash — high | Opus — high |
+| Explorer, tester, researcher | Luna — max | Opus — high |
 | Independent reviewer | Astra — low | Fable — low |
 | Concurrent children | 2 | 2 |
 
@@ -16,6 +17,12 @@ Codex configuration is in [.codex/config.toml](../.codex/config.toml), with expl
 ## Codex profile
 
 Open a new Codex task/session rooted in this trusted repository to load project defaults. An existing task or explicit model/effort selection may retain its own overrides; writing configuration does not hot-switch the current task. Inspect the selected model and actual child trace before reporting which model ran.
+
+The exact routed model IDs are `claude-subscription/claude-opus-5` for the root and `deepseek/deepseek-v4.1-flash` for the worker and unspecified children, both at `high` effort. Named explorer/tester/researcher/reviewer files override the child default. These routes require the existing user-level Codex Router setup and its authenticated providers; the repository supplies no credentials or provider installation. Do not silently substitute a different model when a route is unavailable.
+
+Local validation on 2026-09-22 used Codex CLI 0.155.1. A fresh `codex exec --ephemeral --strict-config` selected Opus 5 at high effort without a model override and read the project settings. A second probe had that Opus root delegate one read-only task to the configured DeepSeek worker, wait for its answer and interrupt the completed child. The child returned the correct 26.04 QEMU pin and `RUSTIC_HANDOFF_OK`; local router usage events recorded successful DeepSeek requests during both handoff probes. Logs are in `artifacts/opus-orchestration-probe-20260922.log`, `artifacts/opus-deepseek-handoff-20260922.log` and `artifacts/opus-deepseek-trace-20260922.jsonl`. The main task's DeepSeek implementation child also completed the validator changes, and an Astra low reviewer found no material issues. This establishes a bounded working route, not a quality or cost benchmark.
+
+An initial Astra-to-Opus child probe failed to receive its delegated task. The fresh Opus-root probes above succeeded; the reverse handoff is not claimed fixed. If a routed child reports missing instructions, stop that child and report the routing failure rather than treating it as completed work.
 
 For a nontrivial implementation, ask Codex to use the project workflow or invoke `$rustic-orchestrator`. The root may delegate only the useful roles. Other coding agents must not pretend to have invoked Codex tools they do not possess.
 
@@ -33,13 +40,13 @@ Claude Code has no per-agent sandbox mode. Explorer, researcher and reviewer are
 
 Choose one issue acceptance increment. Give a worker minimal source context and exclusive ownership; reserve a tester for shared build/VM artifacts. Keep native evidence distinct from host checks. Save full logs to ignored artifacts and return concise results. Review the final diff, address material findings, and update the compact work state.
 
-Measure comparable completed increments before claiming savings: model/effort actually used, useful outcome, wall time, available usage metrics and rework. Do not equate total tokens with subscription quota, or attribute account-wide usage to one task while other sessions run. No billing credentials or API service is required by these configuration files.
+Measure comparable completed increments before claiming savings: model/effort actually used, useful outcome, wall time, available usage metrics and rework. Do not equate total tokens with subscription quota, or attribute account-wide usage to one task while other sessions run. Routed inference uses the operator's configured Claude subscription and DeepSeek API access; these files contain no billing credentials.
 
 ## Provenance and maintenance
 
 Inspired by [donvito/codex-astra-luna-orchestrator at 575e74e](https://github.com/donvito/codex-astra-luna-orchestrator/tree/575e74ebcf9b199513151a8996665a71cf64ce50), reviewed 2026-09-13. These are newly written RusticOS instructions/configuration using its agreed model topology. No upstream installer, skill text, role implementation or usage script is vendored or executed. No guest/build runtime dependency is introduced.
 
-The adaptation uses a shorter project-specific workflow, two concurrent children, inherited root permissions, explicit shared-test ownership and a maintained work-state entry point. It preserves Luna max and Astra low review. Refer to [official custom-agent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents) for configuration and precedence. Recheck compatibility when updating Codex.
+The adaptation uses a shorter project-specific workflow, two concurrent children, inherited root permissions, explicit shared-test ownership and a maintained work-state entry point. The 2026-09-22 owner request replaces the Codex root and implementation models; support roles retain Luna max and Astra low review. Refer to [official custom-agent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents) for configuration and precedence. Recheck compatibility when updating Codex.
 
 The Claude Code profile was added on 2026-09-15 from the same topology. Verified then: the installed CLI documents the `fable` model alias and the `low|medium|high|xhigh|max` effort levels, and all five role files plus the skill parse with their intended `model`/`effort` frontmatter. Not verified: agent discovery in a live session, and that a Fable root or an Opus child actually ran. Confirm the selected model and the child trace before reporting which model executed.
 

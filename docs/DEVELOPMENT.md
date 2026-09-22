@@ -4,7 +4,7 @@
 
 ## Environment
 
-Verified baseline: Ubuntu 24.04 amd64 (including WSL2), Rust 1.98.1 and rustup 1.29.1. On Windows, run the commands below inside Ubuntu. The checkout may live under /mnt/c; a checkout on the Linux filesystem can improve I/O performance.
+Verified baselines: Ubuntu 24.04 and 26.04 amd64 (including WSL2), Rust 1.98.1 and rustup 1.29.1. `tools/environment.toml` pins exact package versions and firmware hashes per release and `tools/environment.py` selects the one the host reports; another release is refused, not resolved to whatever apt offers. CI and the isolated executor stay on 24.04. On Windows, run the commands below inside Ubuntu. The checkout may live under /mnt/c; a checkout on the Linux filesystem can improve I/O performance.
 
 Install the basic tools with apt (administrator privileges required):
 
@@ -71,9 +71,11 @@ python3 tools/environment.py verify
 python3 tools/environment.py fetch-bootloader
 ```
 
-install installs the exact versions in tools/environment.toml; verify rejects different packages or firmware hashes and checks the pc-q35-8.2 machine. fetch-bootloader downloads Limine 12.8.0 and verifies SHA-256 without extracting or running the archive. .cache is excluded from the repository. If a version is no longer available through apt, installation fails: update the baseline with review/evidence rather than silently substituting latest. Ubuntu transitive dependencies and the runner image are not pinned by digest; this baseline does not promise hermetic rebuilds or binary identity.
+install installs the exact versions pinned for the host's Ubuntu release in tools/environment.toml; verify prints the selected baseline and rejects different packages or firmware hashes and checks the pc-q35-8.2 machine. fetch-bootloader downloads Limine 12.8.0 and verifies SHA-256 without extracting or running the archive. .cache is excluded from the repository. If a version is no longer available through apt, installation fails: add or update the release baseline with review/evidence rather than silently substituting latest. Ubuntu transitive dependencies and the runner image are not pinned by digest; this baseline does not promise hermetic rebuilds or binary identity.
 
 The FAT32/UEFI image can already be built and booted. [Boot commands and limits](BOOT.md) cover individual execution and tests for success, panic, hangs and invalid arguments.
+
+The selected release and its pins are recorded in image and measurement metadata. Rebuild images after changing the environment: the latency runner refuses stored images whose environment differs from the current selection. Evidence from different releases must retain its original provenance.
 
 #33 adds [exceptions, time and waits](INTERRUPTS.md), with pure contracts tested on the host and IRQ, CPU fault and double-fault tests inside the guest. It requires no new crates or nightly.
 

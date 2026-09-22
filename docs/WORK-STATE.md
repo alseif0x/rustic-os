@@ -2,7 +2,15 @@
 
 # Current work state
 
-Updated 2026-09-21. Replace this checkpoint rather than appending conversation history.
+Updated 2026-09-22. Replace this checkpoint rather than appending conversation history.
+
+## Development host and orchestration
+
+Current host: native Ubuntu 26.04 amd64. Branch `codex/ubuntu26-opus-deepseek`, based on `d2f2476`, adds reviewed release-specific tool/firmware pins and selects them from the host's `/etc/os-release`; CI and the isolated Docker executor retain their 24.04 baseline. Local `environment.py verify` passes with QEMU 10.2.1 and OVMF 2025.11. Rebuild images before comparing environment metadata. This environment work does not advance or close #51.
+
+The owner selected Opus 5 high orchestration and DeepSeek V4.1 Flash high implementation through Codex Router. Project defaults and the worker role now match that request; support roles retain Luna max and review retains Astra low. Fresh Opus CLI sessions loaded the profile and successfully delegated a bounded read-only task to DeepSeek. The current integrating task remained Astra; configuration changes do not switch a running task. See `docs/ORCHESTRATION.md` for exact IDs, evidence and the failed reverse-handoff probe.
+
+Host checks on 2026-09-22: `cargo xtask check` passed (418 Rust tests, formatting, Clippy and guest builds), and `python3 -m unittest discover -s tools/tests` passed (214 tests). Logs: `artifacts/environment-check-20260922.log` and `artifacts/environment-python-20260922.log`. An Astra low independent review found no material issues. `python3 tools/boot.py test --timeout 45` completed with exit 0 and all 22 scenarios verified, including native recovery's 49 cases and 98 VM boots; evidence is in `artifacts/environment-boot-20260922.log` and `artifacts/boot/suite.json`. These fresh guest results are from Ubuntu 26.04/QEMU 10.2.1; container reconstruction and remote CI have not been run for this increment. The changes are saved locally; publication is still pending.
 
 ## Direction and current increment
 
@@ -66,4 +74,4 @@ Validation for the replay-counter correction: `cargo xtask check` passed (418 Ru
 
 ## Workspace constraints
 
-Never experiment on `artifacts/terminal/data.raw`. Preserve the existing owner modification of `LICENSE`; do not stage it incidentally. Commits are authored as the owner (`alseif0x`) with no AI attribution. Maintained docs remain English. The owner authorizes development commits, pushes and merges: each increment goes on its own branch, opens a PR, and merges through auto-merge once CI passes, with the PR body carrying the evidence and the known limits. Stop and ask before an architecture, ABI or authority decision, before changing an issue's scope, and before adding a dependency. On this Windows host every build and QEMU run goes through WSL Ubuntu and needs `source ~/.cargo/env` first; the host keeps little free RAM, so a guest of 8 GiB or more can fail fixtures for host reasons and must be reported as a host limit, not a kernel result.
+Never experiment on `artifacts/terminal/data.raw`. Preserve any owner modification of `LICENSE`; do not stage it incidentally. Commits are authored as the owner (`alseif0x`) with no AI attribution. Maintained docs remain English. The owner authorizes development commits, pushes and merges: each increment goes on its own branch, opens a PR, and merges through auto-merge once CI passes, with the PR body carrying the evidence and the known limits. Stop and ask before an architecture, ABI or authority decision, before changing an issue's scope, and before adding a dependency. On Ubuntu, activate Rust with `source ~/.cargo/env` when Cargo is not on PATH. Historical memory-profile measurements above came from WSL on a memory-constrained Windows host; this checkout now runs on native Ubuntu 26.04. Re-measure before carrying those host limits over to this machine.

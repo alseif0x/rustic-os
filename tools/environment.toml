@@ -1,5 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-# Ubuntu 24.04 amd64. No floating versions in the reference environment.
+# Ubuntu amd64. No floating versions in the reference environment: every reviewed
+# release pins exact package versions and firmware hashes under [baselines], and a
+# release without a reviewed baseline is refused instead of resolved to whatever
+# apt currently offers.
 rust = "1.98.1"
 target = "x86_64-unknown-none"
 linker = "rust-lld bundled with rustc 1.98.1"
@@ -13,15 +16,29 @@ binding = "limine 0.5.0"
 base_revision = 3
 specification_commit = "da65184e91f80fcb397270121b1e2515a11e01ee"
 
-[packages]
+# The isolated executor image and the GitHub runners stay on this baseline.
+[baselines."24.04".packages]
 qemu-system-x86 = "1:8.2.2+ds-0ubuntu1.18"
 ovmf = "2024.02-2ubuntu0.9"
 mtools = "4.0.43-1build1"
 dosfstools = "4.2-1.1build1"
 xorriso = "1:1.5.6-1.1ubuntu3"
 
-[firmware]
+[baselines."24.04".firmware]
 "/usr/share/OVMF/OVMF_CODE_4M.fd" = "949bfa5389c4c48582737481e7d24f46b3a16b276ef44c4089a56858c6a0a446"
+"/usr/share/OVMF/OVMF_VARS_4M.fd" = "5d2ac383371b408398accee7ec27c8c09ea5b74a0de0ceea6513388b15be5d1e"
+
+# Ubuntu 26.04 amd64: installed package versions and firmware hashes read from
+# that release, not carried over from 24.04.
+[baselines."26.04".packages]
+qemu-system-x86 = "1:10.2.1+ds-1ubuntu3.2"
+ovmf = "2025.11-3ubuntu7.2"
+mtools = "4.0.49-1"
+dosfstools = "4.2-1.2build1"
+xorriso = "1:1.5.6-1.1ubuntu4"
+
+[baselines."26.04".firmware]
+"/usr/share/OVMF/OVMF_CODE_4M.fd" = "50a48d30e35dd0bbba8e78838313ea5b8c9201408ce7fc50495f2f61bc5f12bf"
 "/usr/share/OVMF/OVMF_VARS_4M.fd" = "5d2ac383371b408398accee7ec27c8c09ea5b74a0de0ceea6513388b15be5d1e"
 
 [bootloader]

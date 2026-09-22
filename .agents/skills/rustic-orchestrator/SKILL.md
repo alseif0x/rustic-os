@@ -1,6 +1,6 @@
 ---
 name: rustic-orchestrator
-description: Coordinate nontrivial RusticOS development with Astra medium, Luna max workers, and Astra low review. Use for bounded implementation, cross-module debugging, or independent review; skip trivial edits and simple questions.
+description: Coordinate nontrivial RusticOS development with Opus high orchestration, DeepSeek high implementation, and Astra low review. Use for bounded implementation, cross-module debugging, or independent review; skip trivial edits and simple questions.
 ---
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
@@ -10,8 +10,8 @@ Apply AGENTS.md and the user's current scope. This skill changes development wor
 
 ## Select and delegate
 
-- Root owns decisions, integration and final verification. The configured root is gpt-6-astra / medium; a running task may have a user override.
-- Explorer, worker, tester and researcher use gpt-5.6-luna / max. Reviewer uses gpt-6-astra / low. Preserve these agreed choices; do not automatically lower Luna or raise reviewer effort for kernel work.
+- Root owns decisions, integration and final verification. The configured root is claude-subscription/claude-opus-5 / high through the installed Codex Router; a running task may have a user override.
+- Worker uses deepseek/deepseek-v4.1-flash / high through Codex Router. Explorer, tester and researcher retain gpt-5.6-luna / max. Reviewer retains gpt-6-astra / low. Preserve these choices and report unavailable routes instead of silently substituting models.
 - For nontrivial work, delegate a concrete implementation or independent evidence/review task when it has a useful boundary. Do not instantiate every role mechanically. Limit concurrent children to two.
 - Give each child one objective, exact ownership, relevant source references, constraints, acceptance commands and expected output. Start with fresh minimal context when supported; do not fork the complete project conversation by default.
 - For tools requiring explicit model/effort, pass the selected role values. A configuration file alone does not prove which model actually ran. If delegation is unavailable, report it and continue useful authorized work directly.
