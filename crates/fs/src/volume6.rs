@@ -4,18 +4,55 @@
 //! The control records and the region geometry live in `format6`; the free-space
 //! accounting lives in `extent`. This module is the owner that ties them to a
 //! disk: it writes and verifies the header, the node table and the map, and it
-//! moves file bytes through allocated extents. Copy-on-write publication and the
-//! operation receipts stay with the v5 implementation until they are ported;
-//! this layer is what makes the new layout mountable and testable on its own.
+//! moves file bytes through allocated extents. The production file service still
+//! uses v5; this layer provides standalone v6 publication and bounded receipts.
+//!
+//! # Commit discipline
+//!
+//! One commit reserves payload, writes it, builds the inactive generation, makes
+//! it durable, and only then lets one header sector publish it:
+//!
+//! 1. the free-space map reserves the runs and the payload is written into those
+//!    sectors;
+//! 2. the node table, the map and the receipt block are written into the inactive
+//!    generation;
+//! 3. a successful flush makes steps 1 and 2 durable;
+//! 4. the header sector naming the inactive generation is written;
+//! 5. a second successful flush makes the publication durable, and only then is
+//!    that header adopted in memory.
+//!
+//! Steps 1 and 2 touch nothing the mounted header names, and step 4 cannot run
+//! before step 3 succeeded, so a failure at any point leaves the generation the
+//! header names intact and mountable, as long as the device applies a sector
+//! atomically or reports a failed write before it lands. A failure after the
+//! first sector write can still leave part of the commit on the device, so the
+//! mount is *fenced*: mutations, payload reads and receipt lookup/replay answer
+//! [`Error::Uncertain`] until the caller mounts again. Public fields, `node` and
+//! `free_sectors` remain low-level inspection, not durability evidence.
+//! Mounting is the explicit recovery, and it flushes the device before reading
+//! anything from it: reading a write cache back is not evidence that a state
+//! became durable.
+//!
+//! The layout keeps one header sector and no second copy, so a header torn
+//! between two commits is a `Corrupt` mount rather than a fallback. The
+//! discipline above assumes atomic sector writes; the `Disk` trait does not
+//! guarantee them, and not every medium always leaves a mountable volume.
+//!
+//! Validation refusals that happen before the first write (`Size`, `NotFound`,
+//! `Version`, `Full`, `IdempotencyConflict`, `ExpiredEpoch`, `Lineage`) do not
+//! fence the mount and reserve nothing.
 
 use crate::checksum::crc_update;
-use crate::extent::{Extent, Extents, FreeSpace, MAP_WORDS, MAX_FILE_V6};
-use crate::format6::{
-    GENERATIONS, HEADER_SECTOR, Header6, NODE_BYTES, Node6, PAYLOAD_SECTOR, RECEIPTS_SECTORS,
-    SECTOR_BYTES, map_sector, nodes_sector, receipts_sector,
-};
-use crate::receipt6::{BLOCK_BYTES, RETAINED_V6, Receipt6, Receipts6};
+use crate::extent::{FreeSpace, MAP_WORDS, MAX_FILE_V6};
+use crate::format6::{HEADER_SECTOR, Header6, Node6, PAYLOAD_SECTOR, SECTOR_BYTES};
+use crate::receipt6::{RETAINED_V6, Receipt6, Receipts6};
 use crate::{Disk, Error, Kind, OBJECTS_V6};
+
+/// The mechanisms behind the public entry points: mounting and verification,
+/// payload staging, and the publication transaction.
+mod mount;
+mod payload;
+mod publication;
 
 /// A mounted v6 volume: the verified header, the node table and the free-space
 /// map, all owned in one place. The payload stays on the disk.
@@ -24,6 +61,10 @@ pub struct Volume6 {
     pub nodes: [Node6; OBJECTS_V6],
     pub(crate) map: [u64; MAP_WORDS],
     pub receipts: Receipts6,
+    /// Set while the mounted state may no longer describe the device, because an
+    /// operation wrote part of a commit. Nothing is written or answered until a
+    /// mount succeeds again.
+    poisoned: bool,
 }
 
 impl Volume6 {
@@ -35,6 +76,7 @@ impl Volume6 {
         nodes: [Node6::EMPTY; OBJECTS_V6],
         map: [0; MAP_WORDS],
         receipts: Receipts6::EMPTY,
+        poisoned: false,
     };
 }
 
@@ -47,6 +89,7 @@ pub(crate) fn blank(lineage: [u8; 16]) -> Result<Volume6, Error> {
         nodes: [Node6::EMPTY; OBJECTS_V6],
         map: [0; MAP_WORDS],
         receipts: Receipts6::new(lineage)?,
+        poisoned: false,
     };
     for (index, name) in [b"system".as_slice(), b"data", b"config", b"workspaces"]
         .iter()
@@ -88,58 +131,23 @@ fn header(disk: &mut impl Disk) -> Result<Header6, Error> {
 }
 
 impl Volume6 {
-    /// Mount into this value, decoding each structure straight into its field so
-    /// no copy of the node table or the map is built on the stack. A failure
-    /// leaves the structures only as far as they were read, never trusted: the
-    /// checksums are compared last.
-    pub fn mount_into(&mut self, disk: &mut impl Disk) -> Result<(), Error> {
-        let header = header(disk)?;
-        let nodes_base = nodes_sector(header.active);
-        let mut sector = [0u8; 512];
-        // One read per sector, four records per read: the guest pays a real block
-        // round trip for each of these.
-        for (chunk, window) in self.nodes.chunks_mut(512 / NODE_BYTES).enumerate() {
-            disk.read(nodes_base + chunk as u64, &mut sector)?;
-            for (offset, node) in window.iter_mut().enumerate() {
-                let at = offset * NODE_BYTES;
-                let mut record = [0u8; NODE_BYTES];
-                record.copy_from_slice(&sector[at..at + NODE_BYTES]);
-                *node = Node6::decode(&record)?;
-            }
-        }
-        let map_base = map_sector(header.active);
-        for (index, word) in self.map.iter_mut().enumerate() {
-            if index % 64 == 0 {
-                disk.read(map_base + (index / 64) as u64, &mut sector)?;
-            }
-            let at = (index % 64) * 8;
-            *word = u64::from_le_bytes(sector[at..at + 8].try_into().unwrap());
-        }
-        let receipts_base = receipts_sector(header.active);
-        let mut block = [0u8; BLOCK_BYTES];
-        for index in 0..RECEIPTS_SECTORS {
-            disk.read(receipts_base + index, &mut sector)?;
-            block[index as usize * 512..(index as usize + 1) * 512].copy_from_slice(&sector);
-        }
-        let receipts = Receipts6::decode_block(&block)?;
-        // The header commits to all three structures, so a corrupt table, map or
-        // receipt block is caught here rather than during a later read.
-        if map_checksum(&self.map) != header.map_checksum
-            || nodes_checksum(&self.nodes) != header.nodes_checksum
-            || receipts.checksum() != header.receipts_checksum
-        {
-            return Err(Error::Corrupt);
-        }
-        self.header = header;
-        self.receipts = receipts;
-        Ok(())
-    }
     /// Retain a receipt and publish it with the next commit.
     pub fn retain_receipt(&mut self, disk: &mut impl Disk, receipt: Receipt6) -> Result<(), Error> {
+        self.ready()?;
+        // Validation first: a foreign lineage, a stale epoch or a full table is
+        // the caller's condition, not an uncertain mount.
         self.receipts.retain(receipt)?;
-        self.flush(disk)
+        // The table now holds a receipt that is not published yet: nothing may be
+        // answered from it until the commit settles.
+        self.fence();
+        self.publish(disk)?;
+        self.unfence();
+        Ok(())
     }
+    /// The retained record for a retry, or `None`. A fenced mount answers
+    /// `Uncertain`: its table may hold a receipt whose commit never settled.
     pub fn find_receipt(&self, retry: crate::recovery::Retry) -> Result<Option<&Receipt6>, Error> {
+        self.ready()?;
         self.receipts.find(retry)
     }
     pub fn node(&self, id: u32) -> Option<&Node6> {
@@ -147,49 +155,21 @@ impl Volume6 {
             .iter()
             .find(|node| node.id == id && node.kind != Kind::Empty)
     }
+    /// The free sectors the in-memory map holds. It is an accounting view of the
+    /// mounted volume, not a durability claim.
     pub fn free_sectors(&self) -> u64 {
         self.map
             .iter()
             .map(|word| u64::from(word.count_zeros()))
             .sum()
     }
-    /// Persist the node table, the map and the header, in that order, so a torn
-    /// write leaves the old checksums describing the old structures.
+    /// Publish the current in-memory structures: build the inactive generation,
+    /// make it durable, then let one header sector name it.
     pub fn flush(&mut self, disk: &mut impl Disk) -> Result<(), Error> {
-        // Commit discipline: build the inactive generation completely, then let
-        // one header sector publish it. Before that write the mounted generation
-        // is still the active one, so a torn commit cannot be mounted as truth.
-        let next = (self.header.active + 1) % GENERATIONS;
-        let nodes_base = nodes_sector(next);
-        let map_base = map_sector(next);
-        for (index, node) in self.nodes.iter().enumerate() {
-            let sector = nodes_base + (index * NODE_BYTES / 512) as u64;
-            let offset = index * NODE_BYTES % 512;
-            let mut block = [0u8; 512];
-            disk.read(sector, &mut block)?;
-            block[offset..offset + NODE_BYTES].copy_from_slice(&node.encode());
-            disk.write(sector, &block)?;
-        }
-        for (index, chunk) in self.map.as_chunks::<64>().0.iter().enumerate() {
-            let mut sector = [0u8; 512];
-            for (word, value) in chunk.iter().enumerate() {
-                sector[word * 8..word * 8 + 8].copy_from_slice(&value.to_le_bytes());
-            }
-            disk.write(map_base + index as u64, &sector)?;
-        }
-        let block = self.receipts.encode_block();
-        for index in 0..RECEIPTS_SECTORS {
-            let mut sector = [0u8; 512];
-            sector.copy_from_slice(&block[index as usize * 512..(index as usize + 1) * 512]);
-            disk.write(receipts_sector(next) + index, &sector)?;
-        }
-        self.header.nodes_checksum = nodes_checksum(&self.nodes);
-        self.header.map_checksum = map_checksum(&self.map);
-        self.header.receipts_checksum = self.receipts.checksum();
-        self.header.active = next;
-        self.header.sequence = self.header.sequence.saturating_add(1);
-        disk.write(HEADER_SECTOR, &self.header.encode())?;
-        disk.flush()
+        self.ready()?;
+        self.publish(disk)?;
+        self.unfence();
+        Ok(())
     }
     /// Write `bytes` into a node and record the extents that hold them, refusing
     /// a node whose current version is not `expected` so a stale writer cannot
@@ -202,6 +182,7 @@ impl Volume6 {
         expected: u64,
         bytes: &[u8],
     ) -> Result<u64, Error> {
+        self.ready()?;
         if index >= OBJECTS_V6 || bytes.len() > MAX_FILE_V6 {
             return Err(Error::Size);
         }
@@ -211,11 +192,17 @@ impl Volume6 {
         if self.nodes[index].version != expected {
             return Err(Error::Version);
         }
-        self.stage_bytes(disk, index, bytes)?;
+        if let Err(error) = self.stage(disk, index, bytes) {
+            return Err(self.outcome(error));
+        }
+        // The staged state is not published yet: nothing may be answered until
+        // the version, the map and the payload are one durable generation.
+        self.fence();
         let node = &mut self.nodes[index];
         node.version = node.version.saturating_add(1);
         let version = node.version;
-        self.flush(disk)?;
+        self.publish(disk)?;
+        self.unfence();
         Ok(version)
     }
     /// Write `bytes` and retain the operation identity that produced them, so
@@ -233,6 +220,7 @@ impl Volume6 {
         retry: crate::recovery::Retry,
         bytes: &[u8],
     ) -> Result<Receipt6, Error> {
+        self.ready()?;
         if index >= OBJECTS_V6 || bytes.len() > MAX_FILE_V6 {
             return Err(Error::Size);
         }
@@ -253,7 +241,10 @@ impl Volume6 {
         if self.receipts.len() >= RETAINED_V6 {
             return Err(Error::Full);
         }
-        self.stage_bytes(disk, index, bytes)?;
+        if let Err(error) = self.stage(disk, index, bytes) {
+            return Err(self.outcome(error));
+        }
+        self.fence();
         let node = &mut self.nodes[index];
         node.version = node.version.saturating_add(1);
         let receipt = Receipt6 {
@@ -263,72 +254,36 @@ impl Volume6 {
             committed: node.version,
             length: bytes.len() as u32,
         };
-        self.receipts.retain(receipt)?;
-        self.flush(disk)?;
+        // The table was checked above, so a refusal here can only mean the
+        // in-memory state no longer matches what was validated.
+        if self.receipts.retain(receipt).is_err() {
+            return Err(Error::Uncertain);
+        }
+        self.publish(disk)?;
+        self.unfence();
         Ok(receipt)
     }
     /// Allocate extents for `bytes`, write the payload and record it on the node.
     /// The version and the commit stay with the caller so a migration can keep
     /// the version it read; a failure before the payload is written leaves the
-    /// node untouched, and only payload sectors are written until `flush`.
+    /// node untouched and the map unchanged, and only payload sectors are
+    /// written until `flush`.
     pub(crate) fn stage_bytes(
         &mut self,
         disk: &mut impl Disk,
         index: usize,
         bytes: &[u8],
     ) -> Result<(), Error> {
+        self.ready()?;
         if index >= OBJECTS_V6 || bytes.len() > MAX_FILE_V6 {
             return Err(Error::Size);
         }
         if self.nodes[index].kind == Kind::Empty {
             return Err(Error::NotFound);
         }
-        let previous = self.nodes[index].extents;
-        let previous_used = self.nodes[index].extents_used;
-        let sectors = (bytes.len() as u64).div_ceil(SECTOR_BYTES);
-        let mut plan = Extents::new();
-        let mut allocated: [Extent; 8] = [Extent::new(0, 0); 8];
-        let mut used = 0;
-        let mut remaining = sectors;
-        while remaining > 0 {
-            let want = remaining.min(64);
-            let run = {
-                let mut space = FreeSpace::new(&mut self.map).expect("map size is fixed");
-                space.allocate(want)?
-            };
-            plan.push(run)?;
-            allocated[used] = run;
-            used += 1;
-            remaining -= run.sectors;
-        }
-        // Payload first, then the record that points at it.
-        let mut written = 0usize;
-        for run in allocated[..used].iter() {
-            for sector in 0..run.sectors {
-                let mut block = [0u8; 512];
-                let take = (bytes.len() - written).min(512);
-                block[..take].copy_from_slice(&bytes[written..written + take]);
-                written += take;
-                disk.write(PAYLOAD_SECTOR + run.start + sector, &block)?;
-            }
-        }
-        // The record is moved to the new runs only after the payload exists, and
-        // the runs it held before are released in the same step: a rewrite that
-        // kept the old allocation would leak it until the volume filled.
-        {
-            let mut space = FreeSpace::new(&mut self.map).expect("map size is fixed");
-            for run in previous[..previous_used as usize].iter() {
-                space.release(*run)?;
-            }
-        }
-        let node = &mut self.nodes[index];
-        node.length = bytes.len() as u32;
-        node.extents = [Extent::new(0, 0); 8];
-        for (slot, run) in allocated[..used].iter().enumerate() {
-            node.extents[slot] = *run;
-        }
-        node.extents_used = used as u8;
-        Ok(())
+        // The migration owns a fresh target it discards on failure, so staging
+        // reports what the disk said while the target is fenced against use.
+        self.stage(disk, index, bytes)
     }
     /// Read a node's bytes into `out`, returning how many were copied. A record
     /// whose extents cannot hold its length is refused before any read.
@@ -338,6 +293,7 @@ impl Volume6 {
         node: &Node6,
         out: &mut [u8],
     ) -> Result<usize, Error> {
+        self.ready()?;
         let length = node.length as usize;
         if out.len() < length {
             return Err(Error::Size);
@@ -355,6 +311,7 @@ impl Volume6 {
         offset: u64,
         out: &mut [u8],
     ) -> Result<usize, Error> {
+        self.ready()?;
         let length = u64::from(node.length);
         if offset > length {
             return Err(Error::Size);
@@ -395,15 +352,31 @@ impl Volume6 {
         }
         Ok(written)
     }
+    /// Remove a record and give its runs back.
     pub fn remove_file(&mut self, disk: &mut impl Disk, index: usize) -> Result<(), Error> {
+        self.ready()?;
+        if index >= OBJECTS_V6 {
+            return Err(Error::Size);
+        }
+        if self.nodes[index].kind == Kind::Empty {
+            return Err(Error::NotFound);
+        }
+        // Validation is done; the record and the accounting change from here, so
+        // the mount is fenced until the removal is published.
+        self.fence();
         let runs = self.nodes[index].extents;
         let used = self.nodes[index].extents_used as usize;
         for run in runs[..used].iter() {
             let mut space = FreeSpace::new(&mut self.map).expect("map size is fixed");
-            space.release(*run)?;
+            if space.release(*run).is_err() {
+                // The record and the map disagree: neither can be trusted.
+                return Err(Error::Uncertain);
+            }
         }
         self.nodes[index] = Node6::EMPTY;
-        self.flush(disk)
+        self.publish(disk)?;
+        self.unfence();
+        Ok(())
     }
 }
 
