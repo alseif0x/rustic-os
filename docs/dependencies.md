@@ -10,9 +10,9 @@ Cargo.lock contains the original workspace packages, limine 0.5.0, bitflags 2.13
 | --- | --- | --- |
 | Rust/Cargo/rust-lld | Rust 1.98.1, commit 48a229ceaefd4985c50990b14116b6d856af0985; LLVM 22.1.8; static.rust-lang.org | External toolchain; not redistributed in the repo. Rust uses MIT/Apache-2.0; LLVM retains its terms and exceptions. |
 | rustup | 1.29.1, official installation | External manager, not distributed. |
-| QEMU | 1:8.2.2+ds-0ubuntu1.18, Ubuntu noble | External executor, GPL-2.0 and components with their own notices; not distributed or linked into the kernel. |
-| OVMF | 2024.02-2ubuntu0.9, Ubuntu noble | External firmware; component notices in Ubuntu/EDK II packages. Not distributed. |
-| mtools / dosfstools / xorriso | Exact versions in tools/environment.toml, Ubuntu noble | External utilities; preserve their terms if distributed in future. |
+| QEMU | 1:8.2.2+ds-0ubuntu1.18 on Ubuntu noble; 1:10.2.1+ds-1ubuntu3.2 on Ubuntu resolute | External executor, GPL-2.0 and components with their own notices; not distributed or linked into the kernel. |
+| OVMF | 2024.02-2ubuntu0.9 on Ubuntu noble; 2025.11-3ubuntu7.2 on Ubuntu resolute | External firmware; component notices in Ubuntu/EDK II packages. Not distributed. |
+| mtools / dosfstools / xorriso | Exact versions per Ubuntu release in tools/environment.toml (24.04/noble and 26.04/resolute) | External utilities; preserve their terms if distributed in future. |
 | Limine | 12.8.0, [official release](https://github.com/Limine-Bootloader/Limine/releases/tag/v12.8.0) | BOOTX64.EFI extracted from the verified archive and included in the image. The complete BSD-2-Clause LICENSE from Mintsuki and contributors is copied to /licenses/LIMINE.txt. |
 | checkout / upload-artifact | SHA in workflow; official actions repositories | Remote CI actions, not vendored. They do not license the project's code. |
 | Docker Engine / Ubuntu container | Engine 29.7.2 validated locally; Ubuntu 24.04 amd64 with digest in tools/sandbox_support/prepare.py | External #21 tools. Image built locally, without registry publication; each package retains its notices. Final identity is stored per job. |

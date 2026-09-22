@@ -88,7 +88,7 @@ The [systems research agenda](docs/architecture/systems-roadmap.md) explores a f
 
 ## Get started
 
-Use **Ubuntu 24.04 amd64**, directly or through WSL2. Ubuntu hosts the compiler and QEMU; the guest runs RusticOS's own kernel. Install Rust and the base tools using the [development guide](docs/DEVELOPMENT.md), then run:
+Use **Ubuntu 24.04 or 26.04 amd64**, directly or through WSL2. Ubuntu hosts the compiler and QEMU; the guest runs RusticOS's own kernel. Install Rust and the base tools using the [development guide](docs/DEVELOPMENT.md), then run:
 
 ```sh
 git clone https://github.com/alseif0x/rustic-os.git

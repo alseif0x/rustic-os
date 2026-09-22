@@ -2,7 +2,7 @@
 
 # Booting RusticOS
 
-This experimental image targets the R0 virtual machine. Acceptance modes validate behavior and end the test. The [native terminal launcher](TERMINAL.md) provides an interactive session with a persistent dedicated disk. QEMU and host tools run in Ubuntu/WSL2 as the reference environment; the guest runs its own kernel.
+This experimental image targets the R0 virtual machine. Acceptance modes validate behavior and end the test. The [native terminal launcher](TERMINAL.md) provides an interactive session with a persistent dedicated disk. QEMU and host tools run on a reviewed Ubuntu amd64 baseline, 24.04 or 26.04, natively or through WSL2; another release is refused by the [development tools](DEVELOPMENT.md). The guest runs its own kernel.
 
 ## Run
 
