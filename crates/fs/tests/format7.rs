@@ -733,6 +733,77 @@ fn every_record_state_round_trips_with_its_own_arithmetic() {
 }
 
 #[test]
+fn a_replaced_metadata_version_is_never_zero() {
+    // Every state replaces a metadata version it actually had: zero names no
+    // version, which is the rule the v5 recovery codec and the ABI version type
+    // already keep, so v7 refuses it locally in encode and in decode.
+    for record in [
+        direct_committed(),
+        admitted(),
+        cancelled(),
+        admitted_committed(),
+    ] {
+        let fixture = record.encode().unwrap();
+        assert_eq!(Record7::decode(&fixture), Ok(record));
+        // The replaced version really is read: the same fixture with the smallest
+        // real version decodes as that record.
+        assert_eq!(
+            Record7::decode(&tamper(&fixture, 40, &1u64.to_le_bytes())),
+            Ok(Record7 {
+                previous: 1,
+                ..record
+            })
+        );
+        // Zero is refused through the bytes and through the struct.
+        assert_eq!(
+            Record7::decode(&tamper(&fixture, 40, &0u64.to_le_bytes())),
+            Err(Error::Corrupt),
+            "{:?}",
+            record.state
+        );
+        assert_eq!(
+            Record7 {
+                previous: 0,
+                ..record
+            }
+            .encode(),
+            Err(Error::Corrupt),
+            "{:?}",
+            record.state
+        );
+        // The contextual path refuses it too, and the boundary value passes there
+        // as well.
+        assert_eq!(
+            Record7 {
+                previous: 0,
+                ..record
+            }
+            .validate(9, 100),
+            Err(Error::Corrupt),
+            "{:?}",
+            record.state
+        );
+        assert!(
+            Record7 {
+                previous: 1,
+                ..record
+            }
+            .validate(9, 100)
+            .is_ok(),
+            "{:?}",
+            record.state
+        );
+    }
+    // A zero version is not rescued by a state that would otherwise be legal: the
+    // guard sits with the scope checks, not with the state arithmetic.
+    assert_eq!(
+        direct_committed().validate(9, 100),
+        Ok(()),
+        "the fixture itself stays valid"
+    );
+}
+
+#[test]
 fn a_direct_commit_terminal_sequence_is_the_committed_one() {
     let fixture = direct_committed().encode().unwrap();
     assert_eq!(Record7::decode(&fixture), Ok(direct_committed()));

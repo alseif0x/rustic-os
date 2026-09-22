@@ -185,9 +185,11 @@ impl Record7 {
     }
 
     /// What one record can prove about itself: a scoped identity, a retry with a
-    /// key and an epoch no newer than the operation it belongs to, a prevention
-    /// cause exactly where the state allows one, the state's own arithmetic, and
-    /// payload runs that describe the length exactly.
+    /// key and an epoch no newer than the operation it belongs to, a metadata
+    /// version it actually replaces, a prevention cause exactly where the state
+    /// allows one, the state's own arithmetic, and payload runs that describe the
+    /// length exactly. The replaced version is never zero, the rule the v5
+    /// recovery codec and the ABI version type already keep.
     fn check_local(&self) -> Result<(), Error> {
         if self.subject == 0
             || self.workspace == 0
@@ -196,6 +198,7 @@ impl Record7 {
             || self.object == self.workspace
             || self.retry_key == 0
             || self.retry_epoch == 0
+            || self.previous == 0
         {
             return Err(Error::Corrupt);
         }

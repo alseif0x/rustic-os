@@ -72,7 +72,7 @@ Retained record offsets:
 | 188 | CRC over bytes 0..188 |
 
 Other bytes are reserved zero. Lineage is shared through the header. Subject,
-workspace, instance and retry fields are nonzero; object is above the four root
+workspace, instance, previous version and retry fields are nonzero; object is above the four root
 identities and differs from workspace. Contextual validation requires both
 identities below the watermark and all sequences within the header sequence.
 
