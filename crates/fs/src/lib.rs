@@ -7,6 +7,7 @@ mod checksum;
 mod extent;
 mod format;
 mod format6;
+pub mod format7;
 mod mutations;
 mod namespace;
 mod provision;

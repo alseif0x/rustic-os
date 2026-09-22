@@ -41,6 +41,7 @@ pub const INSPECT_RIGHT: u8 = 4;
 pub mod read;
 pub mod recovery;
 pub mod reference;
+pub mod workspace;
 pub const GRANT: u8 = 32;
 /// Private administrative follow-up to GRANT: attach the one additional object
 /// scope of the grant just installed, naming its slot and generation. It never

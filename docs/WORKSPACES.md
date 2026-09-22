@@ -108,6 +108,11 @@ The failure model distinguishes ordered durability from sector atomicity: the si
 
 ## Next stages of #51
 
-1. Implement the v6 layout with typed limits, honest exhaustion and upgrade behavior; never silently rotate an epoch or evict unresolved outcomes. Implemented in the tree, host-tested (stage three above); the file service does not mount it yet.
-2. Extend the admission and reclamation rules to the new capacity, preserving unresolved evidence. Not started; v6 currently refuses to migrate a volume that still retains recovery evidence.
-3. Run the selected consumer on a disposable volume above today's limits and verify data, versions and operation identity independently, with interrupted publication, reboot/remount, corrupt input and bounded RAM. Not started; it needs stage one of the two above.
+The production successor is now specified separately in
+[format 7 and native payload profile 2](WORKSPACE-FORMAT7.md). Its codecs persist
+the identity watermark and scoped candidate extent snapshots that v6 lacks.
+This is not a v7 mount or a service integration; the v5/v6 formats remain frozen.
+
+1. Implement v7 namespace/allocation ownership and mount/publication validation, retaining both live and recovery payload. The v6 direct probe remains a separate tested precursor, not the production backend.
+2. Implement bounded staged writes, durable admission, pollable cancellation and explicit reclamation without evicting unresolved evidence. Add deliberate compatibility/upgrade behavior on disposable copies.
+3. Integrate the service and explicitly selected native profile, then run the selected consumer above today's limits. Independently verify data, versions and operation identity under full storage/retention, interrupted publication, reboot/remount, corrupt input and bounded RAM/control latency.
