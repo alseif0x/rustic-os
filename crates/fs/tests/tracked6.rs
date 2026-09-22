@@ -172,11 +172,14 @@ fn a_failed_commit_publishes_neither_the_data_nor_the_receipt() {
         .expect("first write");
     let mut disk = disk.recover();
 
-    disk.fail_at = Some(0);
     let mut volume = mount6(&mut disk).expect("mount");
+    // Mounting flushes the device (its recovery boundary), so the failure is
+    // armed against the commit alone.
+    disk.operations = 0;
+    disk.fail_at = Some(0);
     assert_eq!(
         volume.write_tracked(&mut disk, 4, 2, retry(11), b"never published"),
-        Err(Error::Io)
+        Err(Error::Uncertain)
     );
     disk.fail_at = None;
     let mut disk = disk.recover();

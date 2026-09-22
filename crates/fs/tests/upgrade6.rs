@@ -105,9 +105,13 @@ fn upgrade_refuses_while_the_volume_retains_recovery_evidence() {
 
     // The v5 record snapshots the original bytes and v6 has no such snapshot, so
     // the upgrade refuses instead of dropping evidence, and writes nothing.
+    // The probe mount flushes once (its recovery boundary); the content is what
+    // the refusal must leave alone.
+    let before = disk.live.clone();
     let operations = disk.operations;
     assert_eq!(upgrade6(&mut disk, LINEAGE).err(), Some(Error::Unsupported));
-    assert_eq!(disk.operations, operations);
+    assert_eq!(disk.operations, operations + 1);
+    assert_eq!(disk.live, before, "a refused upgrade must not write");
 
     let source = Volume::mount(&mut disk).expect("the v5 volume is untouched");
     assert_eq!(source.receipt(u64::from(file.id), retry), Ok(receipt));
@@ -136,8 +140,9 @@ fn a_failure_while_staging_leaves_the_v5_volume_mountable() {
     let mut disk = disk.recover();
 
     // Payload is staged above the v5 layout before anything is published, so a
-    // failed write there costs nothing.
-    disk.fail_at = Some(0);
+    // failed write there costs nothing. The migration first probes for a v6
+    // volume, and that mount flushes once, so the payload write is operation 1.
+    disk.fail_at = Some(1);
     assert_eq!(upgrade6(&mut disk, LINEAGE).err(), Some(Error::Io));
     disk.fail_at = None;
     let source = Volume::mount(&mut disk).expect("v5 still mounts");
@@ -160,8 +165,10 @@ fn a_torn_publish_never_presents_a_v6_volume() {
     // magic, so no half v6 volume mounts. What is left is the v5 header over
     // data the structure writes have begun to overwrite, which is why the
     // migration needs a caller-owned backup.
-    disk.fail_at = Some(3);
-    assert_eq!(upgrade6(&mut disk, LINEAGE).err(), Some(Error::Io));
+    // Operation 0 is the migration's probe flush, 1 the payload write and 2 the
+    // bank clear, so 4 is the first structure write of the publish.
+    disk.fail_at = Some(4);
+    assert_eq!(upgrade6(&mut disk, LINEAGE).err(), Some(Error::Uncertain));
     disk.fail_at = None;
     assert_eq!(mount6(&mut disk).err(), Some(Error::Corrupt));
 }
