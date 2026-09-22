@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
-//! v7 immutable-content workspace contract: pure encoding and decoding.
+//! v7 immutable-content workspace contract: codecs and structural validation.
 //!
-//! This is the codec half of the #51 successor. It fixes the on-disk shapes and
-//! the invariants one record can prove, and nothing else: it does not mount a
-//! volume, allocate identities, enforce the namespace, read payload or serve a
-//! request. The v5 and v6 layouts stay frozen, and no type here replaces them or
-//! claims service support. Mounting, publication and upgrade are later stages
-//! that must not be inferred from these types.
+//! This is the format and structural-validation half of the #51 successor. It
+//! fixes the on-disk shapes, checks each record and a decoded generation's
+//! namespace and allocation ownership. It does not mount a volume, allocate
+//! identities, read payload bytes or serve a request. The v5 and v6 layouts stay
+//! frozen, and no type here replaces them or claims service support. Mounting,
+//! publication and upgrade are later stages that must not be inferred from these
+//! types.
 //!
 //! Sectors are 512 bytes, numbered from the volume start:
 //!
@@ -23,14 +24,14 @@
 //! That is the layout an atomic publication is meant to use, writing the inactive
 //! generation before its header. Nothing here publishes, mounts or reclaims, so
 //! this module does not establish crash safety: ordering the flushes, retaining
-//! the payload a superseded generation still mentions, and validating a chosen
-//! generation on mount all remain future work.
+//! the payload a superseded generation still mentions, and invoking generation
+//! validation when mounting a chosen generation all remain future work.
 //!
 //! Validation is split on purpose. [`Node7`] and [`Record7`] check what a single
-//! record can prove about itself, which is all a per-record codec may assume.
-//! [`Header7::validate`] and [`Record7::validate`] add the contextual bounds that
-//! need the volume sequence and the identity watermark. Neither level validates a
-//! whole volume: no type here reads the node table, the map or the payload.
+//! record can prove about itself. [`Header7::validate`] and [`Record7::validate`]
+//! add contextual bounds, and [`validate_generation`] checks namespace and
+//! allocation ownership across decoded structures. It is read-only: it does not
+//! read disk sectors or payload bytes and does not establish payload integrity.
 
 use crate::Error;
 use crate::checksum::crc;
@@ -42,10 +43,12 @@ use crate::receipt6::RETAINED_V6;
 mod header;
 mod node;
 mod record;
+mod validation;
 
 pub use header::{Header7, NEXT_EXHAUSTED, NEXT_MIN};
 pub use node::{NAME_BYTES, Node7};
 pub use record::{Record7, RecordState, receipt_slots};
+pub use validation::validate_generation;
 
 /// Distinct from v5's `RUSTFS1` and v6's `RUSTFS2`, so no older volume is
 /// misread as v7.

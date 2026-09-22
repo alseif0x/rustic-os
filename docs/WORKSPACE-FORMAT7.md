@@ -90,6 +90,29 @@ direct record, admission sequence otherwise. Causes are absent outside cancelled
 records. Empty receipt slots are all zero, distinct from a decoded live record.
 CRCs detect corruption; they do not authenticate storage or prove payload equality.
 
+## Whole-generation validation
+
+`format7::validate_generation` checks decoded structures together before a future
+mount owner trusts them. It requires the four named roots, unique live identities
+and sibling names, same-space directory ancestry without cycles, and live IDs and
+versions below the header watermarks. Retained records must belong to the current
+retry epoch, have unique retry identities and event sequences, and agree with any
+still-live target's kind and version history. Successful records for the same
+object must form a monotonic commit history, and all retained version
+observations must be nondecreasing by event sequence. An admitted commit also
+requires every retained observation between its admission and commit to see the
+same previous version. An unresolved admission may become stale after a later
+commit, but a still-live target cannot have advanced past its recorded previous
+version before that admission's sequence.
+
+The persisted allocation map must exactly equal ownership by live file extents
+and retained payload snapshots. The only shared ownership allowed is one exact
+committed snapshot that aliases its current live file version. The caller supplies
+the bitmap scratch space, which is cleared before validation and may contain
+partial marks on failure. This function receives decoded values: it does not
+verify serialized aggregate checksums, read disk, or check payload bytes against
+their CRCs. It neither mounts nor publishes a generation.
+
 ## Native payload profile
 
 `rustic_abi::files::workspace` provides profile 2 codecs separately from the
@@ -113,12 +136,13 @@ and schema hashes retain their original meaning and 1 KiB limit.
 
 ## Required next implementation
 
-The dual-header geometry is not evidence of crash atomicity. A mount/publication
-owner must validate namespace and unique identities, header-region checksums,
-allocation ownership and payload integrity; retain the selected generation's
-payload until replacement is durable; flush staged payload and inactive metadata
-before publishing its header; and fence uncertain results. Recovery selection
-must be tested against torn sectors and failed flushes, not inferred from CRCs.
+The dual-header geometry is not evidence of crash atomicity. A mount owner must
+read and decode the selected generation, verify its header-region aggregate
+checksums, call whole-generation validation, and check payload integrity; retain
+the selected generation's payload until replacement is durable; flush staged
+payload and inactive metadata before publishing its header; and fence uncertain
+results. Recovery selection must be tested against torn sectors and failed
+flushes, not inferred from CRCs.
 
 Allocation must account for both live nodes and retained candidate snapshots.
 Shared immutable runs require consistent ownership, and unresolved records must
