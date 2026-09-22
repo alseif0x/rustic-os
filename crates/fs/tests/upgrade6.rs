@@ -4,7 +4,8 @@
 mod support;
 
 use rustic_fs::{
-    DATA_SECTORS, Disk, Error, Kind, MAX_FILE, Retry, Volume, mount6, provision6, upgrade6,
+    DATA_SECTORS, Disk, Error, Kind, MAX_FILE, OBJECTS_V6, Retry, Volume, mount6, provision6,
+    upgrade6,
 };
 use support::Sparse;
 
@@ -75,6 +76,91 @@ fn upgrade_preserves_identity_versions_names_bytes_and_deletions() {
 
     // The upgrade is deliberate and one-way: a v6 volume is not an input.
     assert_eq!(upgrade6(&mut disk, LINEAGE).err(), Some(Error::Exists));
+}
+
+#[test]
+fn a_migrated_volume_tracks_a_live_identity_above_the_object_capacity() {
+    let mut disk = Sparse::default();
+    let mut source = Volume::initialize(&mut disk).unwrap();
+    source.enable_recovery(&mut disk, LINEAGE).unwrap();
+    // v5 issues a monotonic identity per create while a slot lasts only as long
+    // as an object is live, so cycling one record drives the next live identity
+    // past the number of v6 objects without ever exceeding the v5 table.
+    let mut probe = source.create(&mut disk, 4, b"probe", Kind::File).unwrap();
+    while probe.id < OBJECTS_V6 as u32 {
+        source.remove(&mut disk, probe.id).unwrap();
+        probe = source.create(&mut disk, 4, b"probe", Kind::File).unwrap();
+    }
+    source.remove(&mut disk, probe.id).unwrap();
+    let live = source
+        .create(&mut disk, 4, b"live", Kind::File)
+        .expect("live identity");
+    assert_eq!(live.id, OBJECTS_V6 as u32 + 1);
+
+    // The migration preserves the identity instead of renumbering it, and the
+    // v5 watermark travels out of band because a v6 volume does not carry it.
+    let mut disk = disk.recover();
+    let upgraded = upgrade6(&mut disk, LINEAGE).expect("upgrade");
+    assert_eq!(upgraded.report.next, live.id + 1);
+
+    // The migrated volume tracks the live identity: identity, previous version,
+    // committed version and length are published by the one commit.
+    let retry = Retry {
+        lineage: LINEAGE,
+        epoch: 1,
+        key: 21,
+    };
+    let mut disk = disk.recover();
+    let mut volume = mount6(&mut disk).expect("mount migrated volume");
+    let slot = volume
+        .nodes
+        .iter()
+        .position(|node| node.id == live.id)
+        .expect("live slot");
+    let expected = volume.nodes[slot].version;
+    let receipt = volume
+        .write_tracked(&mut disk, slot, expected, retry, b"tracked after migration")
+        .expect("tracked write");
+    assert_eq!(
+        (receipt.id, receipt.previous, receipt.committed),
+        (live.id, expected, expected + 1)
+    );
+    assert_eq!(receipt.length, b"tracked after migration".len() as u32);
+
+    // Reading that receipt back is what an identity bound against the live
+    // capacity refused: the evidence is retained, not corrupt.
+    let mut disk = disk.recover();
+    let mut volume = mount6(&mut disk).expect("remount after reboot");
+    let node = *volume.node(live.id).expect("live node survives the reboot");
+    assert_eq!(node.version, receipt.committed);
+    let mut bytes = vec![0; node.length as usize];
+    assert_eq!(
+        volume.read_file(&mut disk, &node, &mut bytes),
+        Ok(bytes.len())
+    );
+    assert_eq!(bytes, b"tracked after migration");
+    assert_eq!(volume.find_receipt(retry), Ok(Some(&receipt)));
+
+    // A resubmission of the same operation is answered from the retained record
+    // with no further write and no further flush.
+    let slot = volume
+        .nodes
+        .iter()
+        .position(|node| node.id == live.id)
+        .expect("live slot");
+    let operations = disk.operations;
+    assert_eq!(
+        volume.write_tracked(&mut disk, slot, expected, retry, b"tracked after migration"),
+        Ok(receipt)
+    );
+    assert_eq!(disk.operations, operations);
+    assert_eq!(volume.nodes[slot].version, receipt.committed);
+    let mut replayed = vec![0; node.length as usize];
+    assert_eq!(
+        volume.read_file(&mut disk, &node, &mut replayed),
+        Ok(replayed.len())
+    );
+    assert_eq!(replayed, b"tracked after migration");
 }
 
 #[test]

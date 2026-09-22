@@ -4,6 +4,14 @@
 
 Updated 2026-09-22. Replace this checkpoint rather than appending conversation history.
 
+## Current foundation checkpoint
+
+PR [#89](https://github.com/alseif0x/rustic-os/pull/89), tested head `5311dcb`, merged as `c077886` after its authoritative PR CI [35721138519](https://github.com/alseif0x/rustic-os/actions/runs/35721138519) passed all four jobs. Its publication-failure discipline is described below. The duplicate push workflow was cancelled, not counted as a passing check.
+
+Follow-up branch `codex/v6-receipt-identities` is rebased onto `c077886` with an identical tested code tree. It fixes a compatibility defect without changing the format: receipt decoding confused the 256 live-object capacity with the maximum monotonic object ID. A real v5 create/delete sequence produces ID 257; after migration, a tracked write previously succeeded but remount rejected its receipt. The new regression covers migration, tracked commit, durable remount and replay without additional writes/flushes, plus codec boundaries through `u32::MAX` and checksum-valid zero refusal. Both new tests fail with the original bound. Root `cargo xtask check` passed 433 Rust tests, formatting, Clippy and guest builds (`artifacts/v6-identity-check.log`); the independent image/migration oracle passed (`artifacts/v6-identity-oracle.log`). Astra low review found no material issues. The previous guest run below belongs to #89; no new guest execution is claimed for this decoder-only follow-up.
+
+The next production-service integration needs an explicit format/protocol decision, not a direct substitution of `Volume6` for `Volume`: current native receipts use `u16` sizes and refuse more than 1 KiB, and v6 lacks the persisted identity watermark and scoped durable admission/content records. Owner approval was requested for versioned storage/protocol evolution with explicit migration and no automatic conversion of the real data volume. Await the answer before adopting those semantics. Local decision-preparation draft: `artifacts/workspace-service-next.md`; it is a proposal, not implementation or approval. The existing #51 scope and authority/recovery guarantees remain unchanged.
+
 ## Development host and orchestration
 
 Publication update: PR #88 merged the Ubuntu/orchestration work as `705f750`, including upstream `9dca326`. The integrated host checks passed 418 Rust and 263 Python tests. Main CI [35719179595](https://github.com/alseif0x/rustic-os/actions/runs/35719179595) passed all four jobs (check, boot, sandbox and measurements), establishing the integrated 24.04 guest/container checks. `gh pr merge --auto` merged immediately without waiting for those checks, so future PRs must explicitly observe successful checks before calling merge.

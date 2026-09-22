@@ -8,9 +8,9 @@
 //! retained record would be dropped, because that would make a client's
 //! unresolved outcome look like it never happened.
 
+use crate::Error;
 use crate::checksum::{crc, crc_update};
 use crate::recovery::Retry;
-use crate::{Error, OBJECTS_V6};
 
 /// Receipts the v6 volume retains.
 pub const RETAINED_V6: usize = 8;
@@ -62,7 +62,11 @@ impl Receipt6 {
             return Err(Error::Corrupt);
         }
         let id = u32::from_le_bytes(b[32..36].try_into().unwrap());
-        if id == 0 || id > OBJECTS_V6 as u32 {
+        // An identity is a monotonic object id, not a slot index: v5 issues one
+        // per create, so a volume that has cycled more objects than it can hold
+        // at once carries live identities above the v6 capacity, and a migration
+        // preserves them. Zero names no object, which is the only refusal here.
+        if id == 0 {
             return Err(Error::Corrupt);
         }
         let previous = u64::from_le_bytes(b[36..44].try_into().unwrap());

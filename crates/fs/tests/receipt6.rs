@@ -117,6 +117,26 @@ fn a_receipt_round_trips_and_a_corrupt_one_is_refused() {
 }
 
 #[test]
+fn a_receipt_identity_is_any_nonzero_u32_not_a_live_capacity_bound() {
+    // 256 is the v6 object capacity and 257 the first identity a v5 volume hands
+    // out once create/delete cycles have moved its monotonic watermark past it;
+    // a migrated volume can carry such an identity, and it is live, not corrupt.
+    for id in [1u32, 4, 256, 257, u32::MAX] {
+        let mut value = receipt(3, 9);
+        value.id = id;
+        let bytes = value.encode();
+        assert_eq!(Receipt6::decode(&bytes), Ok(value), "identity {id}");
+    }
+    // Zero still names no object, so a record claiming it is refused even with a
+    // checksum that agrees with the bytes.
+    let mut zero = receipt(3, 9).encode();
+    zero[32..36].copy_from_slice(&0u32.to_le_bytes());
+    let checksum = recompute(&zero);
+    zero[RECEIPT_BYTES - 4..].copy_from_slice(&checksum.to_le_bytes());
+    assert_eq!(Receipt6::decode(&zero), Err(Error::Corrupt));
+}
+
+#[test]
 fn a_whole_table_round_trips_and_keeps_its_identity() {
     let mut table = Receipts6::new(LINEAGE).unwrap();
     let epoch = table.epoch();
