@@ -111,8 +111,11 @@ The failure model distinguishes ordered durability from sector atomicity: the si
 The production successor is now specified separately in
 [format 7 and native payload profile 2](WORKSPACE-FORMAT7.md). Its codecs persist
 the identity watermark and scoped candidate extent snapshots that v6 lacks.
-This is not a v7 mount or a service integration; the v5/v6 formats remain frozen.
+The separate `Volume7` owner now destructively provisions fresh/disposable media
+and verifies a read-only mount; it is not a migration path. V7 publication,
+migration and service integration remain unimplemented. The v5/v6 formats remain
+frozen.
 
-1. Implement v7 namespace/allocation ownership and mount/publication validation, retaining both live and recovery payload. The v6 direct probe remains a separate tested precursor, not the production backend.
+1. Read-only provision/mount validation now checks v7 namespace/allocation ownership, aggregates and live/retained payload integrity. Add copy-on-write publication while preserving the selected generation through durable replacement; the v6 direct probe remains a separate tested precursor, not the production backend.
 2. Implement bounded staged writes, durable admission, pollable cancellation and explicit reclamation without evicting unresolved evidence. Add deliberate compatibility/upgrade behavior on disposable copies.
 3. Integrate the service and explicitly selected native profile, then run the selected consumer above today's limits. Independently verify data, versions and operation identity under full storage/retention, interrupted publication, reboot/remount, corrupt input and bounded RAM/control latency.

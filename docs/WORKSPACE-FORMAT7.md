@@ -4,8 +4,10 @@
 
 Decision for [#51](https://github.com/alseif0x/rustic-os/issues/51), adopted
 2026-09-22 under the owner's authorization to continue implementation and
-versioned storage/protocol decisions. This increment implements **codecs only**.
-There is no v7 mount, publication engine, migration, service backend or capability
+versioned storage/protocol decisions. The format defines the codecs, and the
+current increment adds a read-only v7 provision/mount owner that checks aggregate
+metadata checksums, generation structure and live/retained payload CRCs. There is
+no v7 mutation/publication engine, migration, service backend or capability
 advertisement. Production remains v5-backed; the v6 direct probe remains separate.
 
 ## Why a successor
@@ -113,6 +115,25 @@ partial marks on failure. This function receives decoded values: it does not
 verify serialized aggregate checksums, read disk, or check payload bytes against
 their CRCs. It neither mounts nor publishes a generation.
 
+## Mount and header selection
+
+The physical slot (sector 8 or 9) must match the generation in its header. Mount
+flushes the device before reading. A CRC-invalid or otherwise invalid header copy
+is not a candidate; if the other copy is valid, mount may select it and must
+report that it recovered from an invalid copy. When both copies are valid, they
+must share lineage, name opposite generations, have adjacent sequences, and have
+nondecreasing epoch and identity watermark; mount selects the higher sequence.
+Stale inactive metadata is not decoded while selecting the head because a
+publication may already have overwritten that generation before replacing its
+old header.
+
+Once the highest valid header is selected, any named-region checksum failure,
+structural inconsistency, or payload CRC mismatch is corruption. Mount must not
+fall back to a lower valid header in that case: doing so could silently discard a
+committed generation. CRCs detect damage; they do not establish atomic sector
+writes. Recovery relies on the device honoring successful flush ordering, as
+required by `Disk`.
+
 ## Native payload profile
 
 `rustic_abi::files::workspace` provides profile 2 codecs separately from the
@@ -136,13 +157,21 @@ and schema hashes retain their original meaning and 1 KiB limit.
 
 ## Required next implementation
 
-The dual-header geometry is not evidence of crash atomicity. A mount owner must
-read and decode the selected generation, verify its header-region aggregate
-checksums, call whole-generation validation, and check payload integrity; retain
-the selected generation's payload until replacement is durable; flush staged
-payload and inactive metadata before publishing its header; and fence uncertain
-results. Recovery selection must be tested against torn sectors and failed
-flushes, not inferred from CRCs.
+`Volume7::provision_into` destructively formats a fresh or disposable volume; it
+is not an upgrade path and does not preserve existing metadata. Together with
+`Volume7::mount_into`, it establishes only the initial disk-backed owner. It
+provisions canonical generation 0 or flushes, selects and verifies the highest
+valid header's regions, whole-generation structure and all live/retained payload
+CRCs. A torn invalid header copy can recover the other header and reports that
+condition; corruption named by a valid newest header is refused instead of
+silently rolling back. This is host-tested read-only mount behavior, not a
+mutation path.
+
+The dual-header geometry is not evidence of crash-atomic publication. A commit
+owner must retain the selected generation's payload until its replacement is
+durable, flush staged payload and inactive metadata before publishing the new
+header, and fence uncertain results. Publication fault cuts and reboot/remount
+selection still need tests; they cannot be inferred from CRCs.
 
 Allocation must account for both live nodes and retained candidate snapshots.
 Shared immutable runs require consistent ownership, and unresolved records must
@@ -159,6 +188,8 @@ be tested separately from executable rollback. Never experiment on the owner's
 
 Host codec tests cover byte offsets, independently computed CRCs, checksum-valid
 malformed records, temporal states, high monotonic identities, size boundaries
-through 256 KiB, and mutually incompatible wire profiles. They do not demonstrate
-disk I/O, new guest behavior, service integration, bounded control latency or
-the consuming workload. Those remain #51 acceptance obligations.
+through 256 KiB, and mutually incompatible wire profiles. Sparse host-disk tests
+also cover v7 provision/remount, raw-region corruption, header recovery, structural
+refusal and live/retained payload CRCs. They do not demonstrate v7 publication,
+crash atomicity, new guest behavior, service integration, bounded control latency
+or the consuming workload. Those remain #51 acceptance obligations.
