@@ -4,11 +4,13 @@
 
 Decision for [#51](https://github.com/alseif0x/rustic-os/issues/51), adopted
 2026-09-22 under the owner's authorization to continue implementation and
-versioned storage/protocol decisions. The format defines the codecs, and the
-current increment adds a read-only v7 provision/mount owner that checks aggregate
-metadata checksums, generation structure and live/retained payload CRCs. There is
-no v7 mutation/publication engine, migration, service backend or capability
-advertisement. Production remains v5-backed; the v6 direct probe remains separate.
+versioned storage/protocol decisions. The current increment adds a narrowly
+scoped tracked replacement for existing files: expected-version conflict checks,
+bounded streaming into fresh extents, one immutable `DirectCommitted` snapshot,
+exact-byte retry comparison, and dual-generation copy-on-write publication. There
+is no staged admission/cancellation, retention maintenance, v5 migration, service
+backend or capability advertisement. Production remains v5-backed; the v6 direct
+probe remains separate.
 
 ## Why a successor
 
@@ -155,7 +157,7 @@ integration must explicitly select the new profile and preserve authority,
 bounded transfer, conflict, cancellation and recovery semantics. Existing clients
 and schema hashes retain their original meaning and 1 KiB limit.
 
-## Required next implementation
+## Direct tracked replacement
 
 `Volume7::provision_into` destructively formats a fresh or disposable volume; it
 is not an upgrade path and does not preserve existing metadata. Together with
@@ -164,20 +166,26 @@ provisions canonical generation 0 or flushes, selects and verifies the highest
 valid header's regions, whole-generation structure and all live/retained payload
 CRCs. A torn invalid header copy can recover the other header and reports that
 condition; corruption named by a valid newest header is refused instead of
-silently rolling back. This is host-tested read-only mount behavior, not a
-mutation path.
+silently rolling back.
 
-The dual-header geometry is not evidence of crash-atomic publication. A commit
-owner must retain the selected generation's payload until its replacement is
-durable, flush staged payload and inactive metadata before publishing the new
-header, and fence uncertain results. Publication fault cuts and reboot/remount
-selection still need tests; they cannot be inferred from CRCs.
+`replace_tracked` accepts only a live file and a current expected version. It
+preflights identity, epoch, receipt capacity, sequence and extent availability
+before writing. A retry with the same scoped key streams the retained immutable
+snapshot, verifies its CRC and compares exact bytes; a different request conflicts,
+and retry performs no writes or flushes. A new write stages into extents free in the
+selected map, validates the candidate generation, then flushes payload plus
+inactive metadata, writes the matching header and flushes it. Only after that
+barrier does the owner expose the new version and receipt. Old extents remain owned
+while a retained snapshot references them, and the receipt table is never silently
+evicted. A post-write uncertainty fences the owner until remount. If a final flush
+reports an error after making the header durable, remount selects the complete new
+generation; if it did not become durable, the prior head remains selected.
 
-Allocation must account for both live nodes and retained candidate snapshots.
-Shared immutable runs require consistent ownership, and unresolved records must
-never be evicted to reclaim space. Admission, honest Full responses, explicit
-retention maintenance and pollable cancellation remain unimplemented for v7.
-Staging and retry comparison must use bounded buffers, not whole-file copies.
+Payload and retry I/O use one 512-byte sector buffer. The extent planner considers
+the largest free runs first, so early small holes do not hide a later contiguous
+fit; files still require at most eight runs and can honestly receive `Full` when
+available space cannot satisfy that geometry. Explicit retention maintenance,
+staged admission, pollable cancellation and safe reclamation remain unimplemented.
 
 There is no automatic upgrade. A future migration must operate on disposable
 copies, preserve or explicitly refuse retained evidence and identity history, and
@@ -189,7 +197,10 @@ be tested separately from executable rollback. Never experiment on the owner's
 Host codec tests cover byte offsets, independently computed CRCs, checksum-valid
 malformed records, temporal states, high monotonic identities, size boundaries
 through 256 KiB, and mutually incompatible wire profiles. Sparse host-disk tests
-also cover v7 provision/remount, raw-region corruption, header recovery, structural
-refusal and live/retained payload CRCs. They do not demonstrate v7 publication,
-crash atomicity, new guest behavior, service integration, bounded control latency
-or the consuming workload. Those remain #51 acceptance obligations.
+cover provision/remount, tracked commit and replay, conflicts and pre-write
+refusals, retained snapshots across replacement/remount, later contiguous and
+maximum-size payloads, torn headers, and every write/flush cut for three-sector
+first and reused-generation publication. A post-durable flush error is also
+recovered by remount. These tests do not demonstrate new guest behavior, service
+integration, bounded control latency or the consuming workload. Those remain #51
+acceptance obligations.

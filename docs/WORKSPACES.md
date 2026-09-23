@@ -112,10 +112,12 @@ The production successor is now specified separately in
 [format 7 and native payload profile 2](WORKSPACE-FORMAT7.md). Its codecs persist
 the identity watermark and scoped candidate extent snapshots that v6 lacks.
 The separate `Volume7` owner now destructively provisions fresh/disposable media
-and verifies a read-only mount; it is not a migration path. V7 publication,
-migration and service integration remain unimplemented. The v5/v6 formats remain
+and verifies mounts, and its first write path replaces an existing file with a
+tracked direct commit. It allocates fresh extents, retains an exact-byte snapshot,
+and publishes through the inactive metadata generation and matching header; this
+is not a migration path or production service backend. The v5/v6 formats remain
 frozen.
 
-1. Read-only provision/mount validation now checks v7 namespace/allocation ownership, aggregates and live/retained payload integrity. Add copy-on-write publication while preserving the selected generation through durable replacement; the v6 direct probe remains a separate tested precursor, not the production backend.
+1. The host-tested v7 owner provisions and validates mounts, then publishes a narrow `DirectCommitted` replacement with version conflicts, exact-byte retry and dual-generation copy-on-write. The v6 direct probe remains a separate tested precursor, not the production backend.
 2. Implement bounded staged writes, durable admission, pollable cancellation and explicit reclamation without evicting unresolved evidence. Add deliberate compatibility/upgrade behavior on disposable copies.
 3. Integrate the service and explicitly selected native profile, then run the selected consumer above today's limits. Independently verify data, versions and operation identity under full storage/retention, interrupted publication, reboot/remount, corrupt input and bounded RAM/control latency.

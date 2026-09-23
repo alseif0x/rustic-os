@@ -3,6 +3,8 @@
 #[path = "volume7/failures.rs"]
 mod failures;
 mod support;
+#[path = "volume7/tracked.rs"]
+mod tracked;
 
 use rustic_fs::format7::{
     self, Header7, MAP_WORDS, MAX_EXTENTS, NAME_BYTES, NODES, Node7, RECEIPT_BLOCK_BYTES,
