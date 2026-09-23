@@ -5,6 +5,9 @@ use rustic_abi::files::*;
 impl<P: crate::rpc::Progress> Client<P> {
     pub(super) fn operation_exchange(&mut self, mut p: Packet) -> Result<Packet, Error> {
         self.require_binding()?;
+        if self.active_range.is_some() || self.pending.is_some() || self.rpc.pending() {
+            return Err(Error::Busy);
+        }
         p.context = self.context;
         let durable = p.op == REPLACE_COMMIT
             || admission::controlled(p.op)
@@ -32,6 +35,9 @@ impl<P: crate::rpc::Progress> Client<P> {
     /// One asynchronous request; the client owns the original opcode/context until collection.
     pub fn submit(&mut self, mut p: Packet) -> Result<(), Error> {
         self.require_binding()?;
+        if self.active_range.is_some() {
+            return Err(Error::Busy);
+        }
         p.context = self.context;
         self.rpc.begin(&p.encode()).map_err(|e| match e {
             crate::Error::Ipc(crate::abi::ipc::Error::WouldBlock) => Error::Busy,
@@ -41,9 +47,15 @@ impl<P: crate::rpc::Progress> Client<P> {
         Ok(())
     }
     pub fn poll(&mut self) -> Result<Option<Packet>, Error> {
+        if self.active_range.is_some() {
+            return Err(Error::Busy);
+        }
         let Some(p) = self.pending else {
             return Ok(None);
         };
+        if super::range::is_pending_marker(p) {
+            return Err(Error::Busy);
+        }
         let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT | REPLACE_COMMIT)
             || admission::controlled(p.op)
             || matches!(
@@ -69,6 +81,9 @@ impl<P: crate::rpc::Progress> Client<P> {
     }
     pub fn request(&mut self, mut p: Packet) -> Result<Packet, Error> {
         self.require_binding()?;
+        if self.active_range.is_some() || self.pending.is_some() || self.rpc.pending() {
+            return Err(Error::Busy);
+        }
         p.context = self.context;
         let durable = matches!(p.op, CREATE | MKDIR | REMOVE | COMMIT | REPLACE_COMMIT)
             || admission::controlled(p.op)
