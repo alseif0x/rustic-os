@@ -30,7 +30,12 @@ impl Mount {
         close(me, self.owner[0]);
         close(state.shell, self.shell[1]);
     }
-    pub fn poll(&mut self, state: &mut State, initialize: bool) -> Result<Option<[u64; 8]>, u64> {
+    pub fn poll(
+        &mut self,
+        state: &mut State,
+        initialize: bool,
+        profile: FileProfile,
+    ) -> Result<Option<[u64; 8]>, u64> {
         let me = process::id().map_err(|_| 4u64)?;
         match self.phase {
             0 => {
@@ -40,7 +45,13 @@ impl Mount {
                 let sectors = call([k::DEVICE, 0, 0, 0, 0, 0, 0, 0]).map_err(|_| 4u64)?[0];
                 let block = call([k::BLOCK_GRANT, state.files, 7, 0, sectors, 0, 0, 0])
                     .map_err(|_| 4u64)?[0];
-                start(state.files, [block, self.admin[1], initialize as u64]).map_err(|_| 4u64)?;
+                let startup = match (profile, initialize) {
+                    (FileProfile::V5, false) => 0,
+                    (FileProfile::V5, true) => 1,
+                    (FileProfile::V7, false) => 2,
+                    (FileProfile::V7, true) => return Err(4),
+                };
+                start(state.files, [block, self.admin[1], startup]).map_err(|_| 4u64)?;
                 self.phase = 1;
             }
             1 => {
@@ -52,10 +63,11 @@ impl Mount {
                     Err(_) => return Err(4),
                 };
                 let w = k::decode(m.payload()).map_err(|_| 4u64)?;
-                if m.sender() != state.files
-                    || m.correlation() != 0
-                    || w != [0, 1, 32, 1024, 0, 0, 0, 0]
-                {
+                let ready = match profile {
+                    FileProfile::V5 => [0, 1, 32, 1024, 0, 0, 0, 0],
+                    FileProfile::V7 => [0, 2, 256, 262144, 8, 0, 0, 0],
+                };
+                if m.sender() != state.files || m.correlation() != 0 || w != ready {
                     return Err(4);
                 }
                 state.admin = Rpc::new(self.admin[0], state.files);
@@ -63,24 +75,33 @@ impl Mount {
                 self.phase = 2;
             }
             2 => {
+                let rights = if profile == FileProfile::V5 { 7 } else { 1 };
+                let subject = if profile == FileProfile::V5 { 1 } else { 0 };
                 if let Some(generation) =
-                    self.grant(state, [32, 1, me, self.owner[1], 0, 7, 0, 1])?
+                    self.grant(state, [32, 1, me, self.owner[1], 0, rights, 0, subject])?
                 {
                     state.owner = Client::new(self.owner[0], state.files, generation);
                     self.phase = 3;
                 }
             }
             3 => {
-                if let Some(policy) = self.policy.poll(&mut state.owner) {
+                if profile == FileProfile::V7 {
+                    state.policy = 0;
+                    self.shell = connect(state.files, state.shell).map_err(|_| 3u64)?;
+                    self.phase = 4;
+                } else if let Some(policy) = self.policy.poll(&mut state.owner) {
                     state.policy = policy;
                     self.shell = connect(state.files, state.shell).map_err(|_| 3u64)?;
                     self.phase = 4;
                 }
             }
             4 => {
-                if let Some(generation) =
-                    self.grant(state, [32, 0, state.shell, self.shell[0], 0, 15, 0, 1])?
-                {
+                let rights = if profile == FileProfile::V5 { 15 } else { 1 };
+                let subject = if profile == FileProfile::V5 { 1 } else { 0 };
+                if let Some(generation) = self.grant(
+                    state,
+                    [32, 0, state.shell, self.shell[0], 0, rights, 0, subject],
+                )? {
                     return Ok(Some([
                         0,
                         state.files,

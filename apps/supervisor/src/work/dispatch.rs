@@ -45,15 +45,17 @@ impl State {
                 let _ = c.control.endpoint.close();
             }
         }
-        self.work
-            .start(s::RESTART, Task::Restart(Restart::new(initialize)))
+        self.work.start(
+            s::RESTART,
+            Task::Restart(Restart::new(initialize, self.profile)),
+        )
     }
     pub(in super::super) fn start_admin(
         &mut self,
         kind: u64,
         words: [u64; 8],
     ) -> Result<[u64; 8], u64> {
-        if !self.administrative_ready() {
+        if self.profile != super::super::services::FileProfile::V5 || !self.administrative_ready() {
             return Err(3);
         }
         if !self.work.can_start() {

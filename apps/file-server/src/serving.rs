@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Fair bounded dispatch: one request per client per pass, owned pending replies.
 mod control;
+pub(crate) mod v7;
 use rustic_file_service::{CLIENTS, Caller, ExecutionQueue, Server};
 use rustic_sdk::{
     abi::{

@@ -7,7 +7,13 @@ use rustic_sdk::{
     rpc::Rpc,
     runtime::{self, abi as k},
 };
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileProfile {
+    V5,
+    V7,
+}
 pub struct State {
+    pub profile: FileProfile,
     pub files: u64,
     pub shell: u64,
     pub admin: Rpc,

@@ -17,6 +17,8 @@ mod read;
 mod recovery;
 mod reply;
 mod transfer;
+mod v7_read;
 pub use authority::{CLIENTS, Grant};
 pub use dispatch::Server;
+pub use v7_read::{READ_CLIENTS7, ReadGrant7, ReadServer7};
 mod validation;

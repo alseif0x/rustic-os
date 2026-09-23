@@ -26,11 +26,7 @@ pub(super) fn dispatch(
         _ => Action::Return(Error::Invalid.code()),
     }
 }
-pub(crate) fn run(
-    memory: &mut Memory,
-    interrupts: &mut interrupts::Controller,
-    initialize: bool,
-) -> ! {
+pub(crate) fn run(memory: &mut Memory, interrupts: &mut interrupts::Controller, startup: u64) -> ! {
     let before = memory.free_frames();
     let mut manager = Manager::new();
     manager
@@ -39,7 +35,7 @@ pub(crate) fn run(
         .expect("native managed block device");
     let pid = catalog::launch(&mut manager, memory, 0).expect("supervisor executable");
     manager.session.supervisor = pid.0;
-    manager.bootstrap(pid, [initialize as u64, 0, 0]);
+    manager.bootstrap(pid, [startup, 0, 0]);
     loop {
         if manager.session.shutdown {
             break;

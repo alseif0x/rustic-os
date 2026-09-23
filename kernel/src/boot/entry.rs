@@ -44,11 +44,17 @@ pub(crate) fn run() -> ! {
         .unwrap_or_else(|error| panic!("memory initialization: {error:?}"));
     match mode {
         #[cfg(feature = "sdk-test")]
-        BootMode::Terminal | BootMode::TerminalInit => {
-            crate::process::terminal(&mut memory, &mut interrupts, mode == BootMode::TerminalInit)
+        BootMode::Terminal | BootMode::TerminalInit | BootMode::TerminalV7 => {
+            let startup = match mode {
+                BootMode::Terminal => 0,
+                BootMode::TerminalInit => 1,
+                BootMode::TerminalV7 => 2,
+                _ => unreachable!(),
+            };
+            crate::process::terminal(&mut memory, &mut interrupts, startup)
         }
         #[cfg(not(feature = "sdk-test"))]
-        BootMode::Terminal | BootMode::TerminalInit => {
+        BootMode::Terminal | BootMode::TerminalInit | BootMode::TerminalV7 => {
             panic!("terminal requires native applications")
         }
         #[cfg(not(feature = "sdk-test"))]

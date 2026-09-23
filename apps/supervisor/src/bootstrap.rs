@@ -2,11 +2,18 @@
 //! Make owner control available before mounting files. Catalog processes start explicitly.
 use super::services::*;
 use rustic_sdk::{files::Client, ipc::Endpoint, process, rpc::Rpc, runtime::abi as k};
-pub fn start(initialize: bool) -> Result<State, ()> {
+pub fn start(startup: u64) -> Result<State, ()> {
+    let (profile, initialize) = match startup {
+        0 => (FileProfile::V5, false),
+        1 => (FileProfile::V5, true),
+        2 => (FileProfile::V7, false),
+        _ => return Err(()),
+    };
     let me = process::id().map_err(|_| ())?;
     let shell = spawn(k::SHELL)?;
     let control = connect(me, shell)?;
     let mut state = State {
+        profile,
         files: 0,
         shell,
         admin: Rpc::new(0, 0),

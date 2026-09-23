@@ -1,27 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Native copied-sector adapter; completion identity and effects stay explicit.
+use rustic_file_server::Poller;
 use rustic_fs::Error;
 use rustic_sdk::block::{Device, Operation, Status};
 mod poll;
 pub struct Disk {
     device: Device,
-    pending: Option<poll::Pending>,
-    fenced: bool,
+    poller: Poller,
 }
 impl Disk {
     pub fn new(token: u64) -> Self {
         Self {
             device: Device::from_bootstrap(token),
-            pending: None,
-            fenced: false,
+            poller: Poller::default(),
         }
     }
     fn ready(&self) -> Result<(), Error> {
-        if self.fenced || self.pending.is_some() {
-            Err(Error::Uncertain)
-        } else {
-            Ok(())
-        }
+        self.poller.ready()
     }
     fn complete(
         &self,

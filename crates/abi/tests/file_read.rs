@@ -221,6 +221,44 @@ fn range_header_pins_version_and_derives_eof_without_inventing_progress() {
 }
 
 #[test]
+fn range_header_accepts_profile2_file_size_without_widening_each_range() {
+    let max = rustic_abi::files::workspace::MAX_FILE_BYTES;
+    let header = Header {
+        id: 42,
+        size: u64::from(max),
+        version: Version::new(9).unwrap(),
+        range_sha256: [0x5a; 32],
+        retry_epoch: Epoch::new(3).unwrap(),
+    };
+    let packet = header.packet(7).unwrap();
+    assert_eq!(packet.arg, max);
+    assert_eq!(Header::decode(&packet), Ok(header));
+
+    let request = Request {
+        offset: u64::from(max) - 1,
+        length: 1,
+        ..request()
+    };
+    let info = Info::from_header(request, header).unwrap();
+    assert_eq!(
+        (info.size, info.length, info.eof),
+        (u64::from(max), 1, true)
+    );
+
+    let too_large = Header {
+        size: u64::from(max) + 1,
+        ..header
+    };
+    assert_eq!(too_large.packet(7), Err(Error::Invalid));
+    let oversized_packet = Packet {
+        arg: max + 1,
+        ..packet
+    };
+    assert_eq!(Header::decode(&oversized_packet), Err(Error::Protocol));
+    assert!(Info::from_header(request, too_large).is_err());
+}
+
+#[test]
 fn errors_must_be_complete_correlated_envelopes_without_residual_results() {
     let mut denied = Packet::new(READ_OPEN);
     denied.context = 7;
