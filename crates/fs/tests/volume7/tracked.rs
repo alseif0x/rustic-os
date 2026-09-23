@@ -4,6 +4,9 @@
 use super::*;
 use rustic_fs::WriteIdentity7;
 
+#[path = "maintenance.rs"]
+mod maintenance;
+
 fn identity(key: u64) -> WriteIdentity7 {
     WriteIdentity7 {
         subject: 9,

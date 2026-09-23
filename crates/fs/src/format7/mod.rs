@@ -3,11 +3,11 @@
 //!
 //! This module fixes the on-disk shapes, checks each record and a decoded
 //! generation's namespace and allocation ownership. It stays pure: the separate
-//! `Volume7` owner provisions and verifies mounts, and currently publishes a
-//! direct tracked replacement for an existing file. Staged admission,
-//! cancellation, retention maintenance, migration and service support remain
-//! later stages. The v5 and v6 layouts stay frozen, and these codecs do not claim
-//! service support.
+//! `Volume7` owner provisions and verifies mounts, publishes direct tracked
+//! replacements for existing files, and explicitly advances retry epochs while
+//! reclaiming terminal snapshots. Staged admission, cancellation, migration and
+//! service support remain later stages. The v5 and v6 layouts stay frozen, and
+//! these codecs do not claim service support.
 //!
 //! Sectors are 512 bytes, numbered from the volume start:
 //!
@@ -24,7 +24,9 @@
 //! The direct-commit publisher writes the inactive generation before its header.
 //! This codec module does not perform I/O or establish crash safety. The
 //! `Volume7` owner validates the candidate and enforces payload/metadata and
-//! header flush ordering; safe outcome reclamation remains future work.
+//! header flush ordering. It only reclaims terminal outcomes on explicit epoch
+//! maintenance after the service has resolved them; unresolved admissions block
+//! that transition.
 //!
 //! Validation is split on purpose. [`Node7`] and [`Record7`] check what a single
 //! record can prove about itself. [`Header7::validate`] and [`Record7::validate`]
