@@ -9,6 +9,8 @@ mod ipc;
 mod loading;
 #[cfg(feature = "sdk-test")]
 mod sdk;
+#[cfg(feature = "sdk-test")]
+mod staged;
 use super::{Error, manager::Manager};
 use crate::arch::{Serial, memory::Memory};
 use core::fmt::Write;

@@ -129,7 +129,17 @@ impl<'a> FrameAllocator<'a> {
 
     /// Bounded contiguous DMA allocation. Search and validation precede mutation.
     pub fn allocate_contiguous(&mut self, count: usize) -> Result<u64, FrameError> {
-        if count == 0 || count > 4 {
+        self.allocate_contiguous_bounded(count, 4)
+    }
+
+    /// Allocate one contiguous run up to a caller-supplied, explicit bound.
+    /// Search and validation precede mutation, so exhaustion is atomic.
+    pub fn allocate_contiguous_bounded(
+        &mut self,
+        count: usize,
+        maximum: usize,
+    ) -> Result<u64, FrameError> {
+        if count == 0 || count > maximum || maximum > 128 {
             return Err(FrameError::InvalidRange);
         }
         let mut run = 0;

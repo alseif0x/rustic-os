@@ -17,6 +17,7 @@ impl Manager {
         Ok(p)
     }
     pub(in super::super) fn control(&mut self, pid: Pid, memory: &mut Memory) -> Action {
+        let mut request_words = None;
         let result = (|| {
             if pid.0 != self.session.supervisor || pid.0 == 0 {
                 return Err(Error::Denied);
@@ -33,13 +34,26 @@ impl Manager {
             memory
                 .copy_from_user(&process.space, address, &mut bytes)
                 .map_err(|_| Error::Address)?;
-            let output = self.operation(decode(&bytes)?, memory)?;
+            let words = decode(&bytes)?;
+            request_words = Some(words);
+            let output = self.operation(words, memory)?;
             let process = self.process(pid).map_err(|_| Error::NotFound)?;
             memory
                 .copy_to_user(&process.space, address, &encode(output))
                 .map_err(|_| Error::Address)?;
             Ok(64)
         })();
+        if result.is_err() && pid.0 != 0 && pid.0 == self.session.supervisor {
+            let failed_stage = request_words.is_some_and(|words| {
+                matches!(
+                    words[0],
+                    STAGE_BEGIN | STAGE_COPY | STAGE_COMMIT | STAGE_ABORT
+                ) && !self.preserve_stage_on_refusal(words)
+            });
+            if failed_stage {
+                self.clear_image_stage(memory);
+            }
+        }
         Action::Return(result.unwrap_or_else(Error::code))
     }
     fn operation(&mut self, w: [u64; 8], memory: &mut Memory) -> Result<[u64; 8], Error> {
@@ -166,7 +180,10 @@ impl Manager {
                     r[1] = code;
                 }
             }
-            SHUTDOWN => self.session.shutdown = true,
+            SHUTDOWN => {
+                self.clear_image_stage(memory);
+                self.session.shutdown = true;
+            }
             #[cfg(feature = "sdk-test")]
             HOLD_COMPLETION => {
                 let owner = self.owned(w[1])?;
@@ -177,6 +194,9 @@ impl Manager {
             }
             #[cfg(feature = "sdk-test")]
             OBSERVATION_STATUS => r = self.block.observation.status(),
+            STAGE_BEGIN | STAGE_COPY | STAGE_COMMIT | STAGE_ABORT => {
+                r = self.staging_operation(self.session.supervisor, w, memory)?;
+            }
             DEVICE => {
                 let g = self.block.geometry().map_err(|_| Error::NotFound)?;
                 r[0] = g.sectors;

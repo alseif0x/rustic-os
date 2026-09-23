@@ -37,3 +37,26 @@ fn fragmented_failure_is_atomic_and_does_not_cross_reserved_pages() {
         assert_eq!(frames.allocate().unwrap(), i * 4096);
     }
 }
+
+#[test]
+fn bounded_image_run_covers_the_declared_128_page_maximum() {
+    let mut managed = [0; 2];
+    let mut allocated = [0; 2];
+    let mut frames = FrameAllocator::new(&mut managed, &mut allocated).unwrap();
+    frames.import([(0, 128 * 4096, true)].into_iter()).unwrap();
+    let start = frames.allocate_contiguous_bounded(128, 128).unwrap();
+    assert_eq!(start, 0);
+    assert_eq!(frames.free_count(), 0);
+    assert_eq!(
+        frames.allocate_contiguous_bounded(129, 128),
+        Err(FrameError::InvalidRange)
+    );
+    assert_eq!(
+        frames.allocate_contiguous_bounded(1, 129),
+        Err(FrameError::InvalidRange)
+    );
+    for page in 0..128 {
+        frames.release(start + page * 4096).unwrap();
+    }
+    assert_eq!(frames.free_count(), 128);
+}

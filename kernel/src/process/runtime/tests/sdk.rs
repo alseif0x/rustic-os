@@ -3,14 +3,22 @@ use super::super::application::{self, Error};
 use super::{Exit, Manager, Memory, State};
 use rustic_abi::application as abi;
 use sha2::{Digest, Sha256};
-static ELF: &[u8] = include_bytes!(concat!(
+pub(super) static ELF: &[u8] = include_bytes!(concat!(
     env!("RUSTIC_APPLICATION_DIRECTORY"),
     "/sdk-probe.elf"
 ));
-static MANIFEST: &[u8] = include_bytes!(concat!(
+pub(super) static MANIFEST: &[u8] = include_bytes!(concat!(
     env!("RUSTIC_APPLICATION_DIRECTORY"),
     "/app.manifest"
 ));
+
+pub(super) fn launch_fixture(
+    manager: &mut Manager,
+    memory: &mut Memory,
+) -> rustic_kernel::process::lifecycle::Pid {
+    application::launch(manager, memory, MANIFEST, "sdk-probe.elf", ELF, abi::KNOWN).unwrap()
+}
+
 pub(super) fn verify(manager: &mut Manager, memory: &mut Memory) {
     let before = memory.free_frames();
     for (offset, expected) in [
@@ -85,6 +93,7 @@ pub(super) fn verify(manager: &mut Manager, memory: &mut Memory) {
         Err(Error::Process(super::super::Error::Elf(_)))
     ));
     assert_eq!(memory.free_frames(), before);
+    super::staged::verify(manager, memory);
     let a =
         application::launch(manager, memory, MANIFEST, "sdk-probe.elf", ELF, abi::KNOWN).unwrap();
     let b =
@@ -121,7 +130,7 @@ pub(super) fn verify(manager: &mut Manager, memory: &mut Memory) {
     assert_eq!(memory.free_frames(), before);
     let mut serial = crate::arch::Serial::take().unwrap();
     use core::fmt::Write;
-    writeln!(serial, "RUSTIC SDK verified=1 ring=3 applications=2 exchanges=4 admission_rejected=12 parameters_rejected=4 reports=4 reclaimed=1 elf_bytes={} peak_frames={peak_frames} heap_limit={} heap_peak_pages={} heap_peak_bytes={} heap_full=1 heap_reuse=1 heap_zeroed=1 heap_guarded=1 heap_final_pages=0 free_before={before} free_after={}", ELF.len(), heap.limit, heap.peak_pages, heap.peak_bytes, memory.free_frames()).unwrap();
+    writeln!(serial, "RUSTIC SDK verified=1 ring=3 applications=2 exchanges=4 admission_rejected=12 parameters_rejected=4 reports=4 reclaimed=1 elf_bytes={} peak_frames={peak_frames} heap_limit={} heap_peak_pages={} heap_peak_bytes={} heap_full=1 heap_reuse=1 heap_zeroed=1 heap_guarded=1 heap_final_pages=0 staged_images=1 stage_generation_bound=1 stage_duplicate_preserved=1 stage_stale_preserved=1 stage_unauthorized=1 stage_refusal_cleanup=1 stage_abort=1 stage_full=1 stage_digest=1 stage_loader=1 dormant=1 stage_limit={} free_before={before} free_after={}", ELF.len(), heap.limit, heap.peak_pages, heap.peak_bytes, rustic_abi::runtime::MAX_STAGED_IMAGE_BYTES, memory.free_frames()).unwrap();
     serial.flush();
 }
 

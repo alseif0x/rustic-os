@@ -23,6 +23,13 @@ pub const MOVE_ENDPOINT: u64 = 13;
 // Explicit owner-only native fault diagnostics, outside ordinary block grants.
 pub const HOLD_COMPLETION: u64 = 14;
 pub const OBSERVATION_STATUS: u64 = 15;
+pub const STAGE_BEGIN: u64 = 16;
+pub const STAGE_COPY: u64 = 17;
+pub const STAGE_COMMIT: u64 = 18;
+pub const STAGE_ABORT: u64 = 19;
+pub const DYNAMIC_IMAGE: u64 = 5;
+pub const MAX_STAGED_IMAGE_BYTES: usize = 512 * 1024;
+pub const STAGE_CHUNK_BYTES: usize = 4096;
 pub const FILES: u64 = 1;
 pub const SHELL: u64 = 2;
 pub const UTILITY: u64 = 3;
@@ -74,9 +81,10 @@ pub fn validate_control(w: [u64; 8]) -> Result<(), Error> {
     let end = match w[0] {
         INFO | SHUTDOWN | DEVICE | OBSERVATION_STATUS => 1,
         HOLD_COMPLETION => 4,
-        SPAWN | CONSOLE_GRANT | PROCESS | KILL | REAP => 2,
+        SPAWN | CONSOLE_GRANT | PROCESS | KILL | REAP | STAGE_COMMIT | STAGE_ABORT => 2,
         CONNECT | CLOSE_ENDPOINT => 3,
-        START | BLOCK_GRANT | MOVE_ENDPOINT => 5,
+        STAGE_BEGIN => 4,
+        START | BLOCK_GRANT | MOVE_ENDPOINT | STAGE_COPY => 5,
         _ => return Err(Error::Invalid),
     };
     if w[end..].iter().any(|v| *v != 0) {
