@@ -3,9 +3,11 @@
 //!
 //! This module fixes the on-disk shapes, checks each record and a decoded
 //! generation's namespace and allocation ownership. It stays pure: the separate
-//! `Volume7` owner provisions and verifies mounts, while publication, allocation,
-//! migration and service support remain later stages. The v5 and v6 layouts stay
-//! frozen, and these codecs do not claim service support.
+//! `Volume7` owner provisions and verifies mounts, and currently publishes a
+//! direct tracked replacement for an existing file. Staged admission,
+//! cancellation, retention maintenance, migration and service support remain
+//! later stages. The v5 and v6 layouts stay frozen, and these codecs do not claim
+//! service support.
 //!
 //! Sectors are 512 bytes, numbered from the volume start:
 //!
@@ -19,11 +21,10 @@
 //!
 //! A header is keyed by generation: the copy in sector `8 + generation` names the
 //! checksums of that generation's node table, free-space map and receipt block.
-//! That is the layout an atomic publication is meant to use, writing the inactive
-//! generation before its header. This module does not publish or reclaim, so it
-//! does not establish crash safety. The `Volume7` owner selects and verifies a
-//! mounted generation; retaining payload while publishing a replacement and
-//! ordering the flushes remain future work.
+//! The direct-commit publisher writes the inactive generation before its header.
+//! This codec module does not perform I/O or establish crash safety. The
+//! `Volume7` owner validates the candidate and enforces payload/metadata and
+//! header flush ordering; safe outcome reclamation remains future work.
 //!
 //! Validation is split on purpose. [`Node7`] and [`Record7`] check what a single
 //! record can prove about itself. [`Header7::validate`] and [`Record7::validate`]

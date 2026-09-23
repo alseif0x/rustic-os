@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-//! In-place owner for mounting and provisioning v7 volumes.
+//! In-place owner for provisioning, mounting and tracked v7 file replacement.
 //!
-//! This first disk-backed stage verifies both header copies, raw aggregate
-//! checksums, the decoded generation, and every live or retained payload CRC.
-//! It deliberately has no mutation, commit, migration, service, or publication
-//! path. The selected generation's bytes are read-only through this API.
+//! Mount verifies both header copies, raw aggregate checksums, the decoded
+//! generation, and every live or retained payload CRC. The only mutation path
+//! currently supported is an existing-file direct commit with a retained exact
+//! payload snapshot. Staged admission/cancellation, retention maintenance,
+//! migration, service integration and capability advertisement remain separate
+//! work.
 
 use crate::extent::MAP_WORDS;
 use crate::format7::{Header7, MAP_WORDS as FORMAT_MAP_WORDS, NODES, Node7, RETAINED, Record7};
@@ -13,11 +15,27 @@ use crate::{Error, Kind};
 mod mount;
 mod payload;
 mod provision;
+mod publication;
+mod replacement;
+
+/// Scoped retry identity for one direct v7 file replacement.
+///
+/// The service owns the meaning and authority of these identifiers. The volume
+/// persists them and enforces their nonzero and version-domain constraints.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WriteIdentity7 {
+    pub subject: u64,
+    pub workspace: u32,
+    pub object: u32,
+    pub instance: u64,
+    pub retry_epoch: u64,
+    pub retry_key: u64,
+}
 
 /// A v7 volume owner. Its decoded state and validator workspace are private;
-/// callers use read-only accessors only after a successful provision or mount.
-/// Keep this fixed, multi-array storage in a long-lived owner rather than a
-/// constrained kernel stack frame; `EMPTY` can initialize static storage.
+/// callers use accessors and mutation methods only after a successful provision
+/// or mount. Keep this fixed, multi-array storage in a long-lived owner rather
+/// than a constrained kernel stack frame; `EMPTY` can initialize static storage.
 pub struct Volume7 {
     pub(super) header: Header7,
     pub(super) nodes: [Node7; NODES],
