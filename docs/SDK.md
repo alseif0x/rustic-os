@@ -75,16 +75,16 @@ The first product consumer is the tasks-owner child of `apps/utility`: the candi
 
 A later service adds a cohesive client module when its actual contract exists, conforming to the [versioned service schemas](SERVICE-CONTRACTS.md) from #6. The initial schemas and host descriptors do not add native service calls. #44 supplies the lower-level [block API](BLOCK-ACCESS.md); The [bounded file-service protocol and clients](FILES.md) now support the terminal; [native tracked replacements and result lookup](FILE-RECOVERY.md) now recover retained results after restart; complete service-v1 conformance remains in #12/#22. A 512-byte block is separate from the logical file-operation payload limit. Service versions remain separate from the process/IPC ABI. MCP is an adapter above services and does not block native SDK use.
 
-## Manifest schema 1
+## Manifest schema 2
 
-The editable descriptor is [app.toml](../apps/sdk-probe/app.toml). The host encoder rejects unknown fields, unsupported versions, paths, duplicate/unknown requests and malformed versions before compiling. Text input is limited to 4096 bytes.
+The editable descriptor is [app.toml](../apps/sdk-probe/app.toml). The host encoder rejects unknown fields, unsupported versions, paths, duplicate/unknown requests and malformed versions before compiling. It derives the artifact digest from the compiled ELF. Text input is limited to 4096 bytes.
 
-The kernel independently parses exactly 128 bytes with explicit little-endian decoding. No Rust struct layout, references, padding or pointers cross this boundary.
+The kernel independently parses exactly 128 bytes with explicit little-endian decoding and checks the full ELF byte digest before allocating process memory. No Rust struct layout, references, padding or pointers cross this boundary.
 
 | Offset | Bytes | Meaning |
 | --- | --- | --- |
 | 0 | 8 | Magic `RUSTAPP\0` |
-| 8 | 2 | Manifest schema, 1 |
+| 8 | 2 | Manifest schema, 2 |
 | 10 | 2 | Total length, 128 |
 | 12 | 4 | Required process ABI, 65536 (1.0), exact match |
 | 16 | 2 | Required IPC extension, 1, exact match |
@@ -92,11 +92,11 @@ The kernel independently parses exactly 128 bytes with explicit little-endian de
 | 24 | 8 | Capability requests: bit 0 IPC, bit 1 diagnostic, bit 2 block, bit 3 console, bit 4 supervisor control; unknown bits rejected |
 | 32 | 32 | Application identity |
 | 64 | 32 | Executable filename, ending in `.elf` |
-| 96 | 32 | Reserved, all zero |
+| 96 | 32 | SHA-256 of the exact executable bytes |
 
 Names contain 1–31 ASCII bytes, start with a lowercase letter, and otherwise allow lowercase letters, digits, dot, underscore and hyphen. A terminating zero and all-zero remainder are required. Executable names are single filenames; slash and directory traversal paths cannot enter the descriptor.
 
-Admission rejects a mismatch between the manifest's executable name and the trusted launcher's selected name, unavailable requests, invalid manifest/ABI versions and invalid ELF before execution. Name and version are descriptive metadata, not authenticated publisher identity. This manifest provides no signature, package integrity or installation system.
+Admission rejects a mismatch between the manifest's executable name and the trusted launcher's selected name, a mismatched executable digest, unavailable requests, invalid manifest/ABI versions and invalid ELF before execution. The digest binds a manifest to exact bytes; it is not a signature and does not authenticate a publisher. Identity and version remain descriptive metadata, and the manifest does not grant capabilities or provide an installation system.
 
 **Requests never grant authority.** The caller supplies the available feature set for admission and must separately provision actual handles. The test launcher creates an endpoint for each process and supplies its token. Diagnostics are already a bounded ambient syscall; the diagnostic request states a requirement, not a new per-app enforcement mechanism. [ADR-0002](architecture/ADR-0002-authority-and-delegation.md) defines the authority baseline; the [native runtime](NATIVE-RUNTIME.md) now supplies the trusted supervisor identity; file services enforce scoped grants, expiry and revocation. Broader #13 authority cases remain open.
 

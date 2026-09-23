@@ -4,6 +4,7 @@ use crate::memory::PAGE_SIZE;
 use crate::process::heap;
 
 pub const MAX_SEGMENTS: usize = 8;
+pub const MAX_BYTES: usize = 1024 * 1024;
 pub const MAX_PAGES: u64 = 256;
 pub const STACK_TOP: u64 = 0x8000_0000;
 pub const STACK_PAGES: u64 = 16;
@@ -59,7 +60,7 @@ fn number(bytes: &[u8], at: usize, size: usize) -> Result<u64, Error> {
 impl<'a> Image<'a> {
     pub fn parse(bytes: &'a [u8]) -> Result<Self, Error> {
         if bytes.len() < 64
-            || bytes.len() > 1024 * 1024
+            || bytes.len() > MAX_BYTES
             || bytes.get(..9) != Some(b"\x7fELF\x02\x01\x01\x00\x00")
             || bytes[9..16].iter().any(|b| *b != 0)
             || number(bytes, 16, 2)? != 2

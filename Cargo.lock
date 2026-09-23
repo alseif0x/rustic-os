@@ -116,6 +116,7 @@ version = "0.1.0"
 dependencies = [
  "limine",
  "rustic-abi",
+ "sha2",
 ]
 
 [[package]]
@@ -186,6 +187,7 @@ version = "0.1.0"
 dependencies = [
  "rustic-abi",
  "rustic-fs",
+ "sha2",
 ]
 
 [[package]]

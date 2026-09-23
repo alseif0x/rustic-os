@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Build a separate no_std executable and encode its bounded admission manifest."""
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -16,11 +17,13 @@ CAPABILITIES = {"ipc": 1, "diagnostic": 2, "block": 4, "console": 8, "control": 
 ACCEPTANCE = ("shell", "supervisor", "utility")
 
 
-def encode(document):
+def encode(document, artifact_sha256):
     if set(document) != FIELDS:
-        raise ValueError("manifest fields must match schema 1")
-    if any(type(document[key]) is not int for key in ("schema", "process_abi", "ipc_version")) or document["schema"] != 1 or document["process_abi"] != 65536 or document["ipc_version"] != 1:
+        raise ValueError("manifest fields must match schema 2")
+    if any(type(document[key]) is not int for key in ("schema", "process_abi", "ipc_version")) or document["schema"] != 2 or document["process_abi"] != 65536 or document["ipc_version"] != 1:
         raise ValueError("unsupported manifest or ABI version")
+    if not isinstance(artifact_sha256, bytes) or len(artifact_sha256) != 32:
+        raise ValueError("artifact_sha256 must be exactly 32 bytes")
     def name(key):
         value = document[key]
         if not isinstance(value, str) or not re.fullmatch(r"[a-z][a-z0-9._-]{0,30}", value):
@@ -36,7 +39,7 @@ def encode(document):
     if not isinstance(requests, list) or any(not isinstance(v, str) or v not in CAPABILITIES for v in requests) or len(set(requests)) != len(requests):
         raise ValueError("invalid capability requests")
     bits = sum(CAPABILITIES[v] for v in requests)
-    return struct.pack("<8sHHIHHHHQ32s32s32s", b"RUSTAPP\0", 1, 128, 65536, 1, *version, bits, identity, executable, bytes(32))
+    return struct.pack("<8sHHIHHHHQ32s32s32s", b"RUSTAPP\0", 2, 128, 65536, 1, *version, bits, identity, executable, artifact_sha256)
 
 
 def build_one(root, env, offline, name, manifest_name, tasks_acceptance=False):
@@ -45,7 +48,7 @@ def build_one(root, env, offline, name, manifest_name, tasks_acceptance=False):
     if descriptor.stat().st_size > 4096:
         raise ValueError("manifest text exceeds 4096 bytes")
     document = tomllib.loads(descriptor.read_text())
-    manifest = encode(document)
+    encode(document, bytes(32))
     features = "native,tasks-acceptance" if tasks_acceptance and name in ACCEPTANCE else "native"
     command = ["cargo", "build", "-p", "rustic-" + name, "--features", features,
                "--target", "x86_64-unknown-none", "--release", "--locked"]
@@ -56,11 +59,13 @@ def build_one(root, env, offline, name, manifest_name, tasks_acceptance=False):
     if not target.is_absolute():
         target = root / target
     elf = target / ("x86_64-unknown-none/release/" + name)
-    if not 64 <= elf.stat().st_size <= 1024 * 1024:
+    elf_bytes = elf.read_bytes()
+    if not 64 <= len(elf_bytes) <= 1024 * 1024:
         raise ValueError("application ELF exceeds loader budget")
+    manifest = encode(document, hashlib.sha256(elf_bytes).digest())
     output = target / "native"
     output.mkdir(exist_ok=True)
-    for name, content in ((document["executable"], elf.read_bytes()), (manifest_name, manifest)):
+    for name, content in ((document["executable"], elf_bytes), (manifest_name, manifest)):
         destination = output / name
         if not destination.is_file() or destination.read_bytes() != content:
             destination.write_bytes(content)
