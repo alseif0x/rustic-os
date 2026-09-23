@@ -1642,3 +1642,55 @@ fn final_flush_error_after_execute_or_cancel_recovers_the_terminal_head() {
         }
     }
 }
+
+#[test]
+fn deleting_an_admitted_files_target_preserves_it_until_cancellation() {
+    let mut disk = Sparse::default();
+    let mut volume = Volume7::EMPTY;
+    volume.provision_into(&mut disk, LINEAGE).unwrap();
+    let file = volume
+        .create(&mut disk, 4, b"admitted", Kind::File)
+        .unwrap();
+    let identity = identity(88);
+    let mut poll = ReadyPoll {
+        disk,
+        ..ReadyPoll::default()
+    };
+
+    let mut admission = volume
+        .prepare_admission(&mut poll, identity, file.version, CANDIDATE)
+        .unwrap();
+    let admitted = settle(&mut admission);
+    drop(admission);
+    assert_eq!(admitted.state, RecordState::Admitted);
+    assert_eq!(volume.free_sectors(), Ok(DATA_SECTORS - 1));
+
+    volume.remove(&mut poll.disk, file.id).unwrap();
+    assert_eq!(volume.stat(file.id), Err(Error::NotFound));
+    assert_eq!(volume.retained_records().unwrap()[0], Some(admitted));
+    assert_eq!(volume.free_sectors(), Ok(DATA_SECTORS - 1));
+
+    let mut cancellation = volume
+        .prepare_cancellation(
+            &mut poll,
+            identity,
+            file.version,
+            PreventionReason::Requested,
+        )
+        .unwrap();
+    let cancelled = settle(&mut cancellation);
+    drop(cancellation);
+    assert_eq!(cancelled.state, RecordState::Cancelled);
+    assert_eq!(cancelled.prevention, Some(PreventionReason::Requested));
+
+    let mut durable = poll.disk.recover();
+    let mut remounted = Volume7::EMPTY;
+    remounted.mount_into(&mut durable).unwrap();
+    assert_eq!(remounted.stat(file.id), Err(Error::NotFound));
+    assert_eq!(remounted.retained_records().unwrap()[0], Some(cancelled));
+    assert_eq!(remounted.free_sectors(), Ok(DATA_SECTORS - 1));
+
+    remounted.maintain_retention(&mut durable).unwrap();
+    assert_eq!(remounted.retained_records().unwrap()[0], None);
+    assert_eq!(remounted.free_sectors(), Ok(DATA_SECTORS));
+}

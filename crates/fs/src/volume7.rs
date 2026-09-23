@@ -2,11 +2,12 @@
 //! In-place owner for provisioning, mounting and v7 mutation.
 //!
 //! Mount verifies both header copies, raw aggregate checksums, the decoded
-//! generation, and every live or retained payload CRC. Mutation paths currently
-//! support existing-file direct commits, durable staged admission, explicit
-//! execution/cancellation and terminal-record retention maintenance. The
-//! out-of-place v5 converter is explicit and storage-only; service integration
-//! and capability advertisement remain separate work.
+//! generation, and every live or retained payload CRC. Mutation paths support
+//! namespace queries/create/removal, existing-file direct commits, durable
+//! staged admission, explicit execution/cancellation and terminal-record
+//! retention maintenance. The out-of-place v5 converter is explicit and
+//! storage-only; service integration and capability advertisement remain
+//! separate work.
 
 use crate::extent::MAP_WORDS;
 use crate::format7::{Header7, MAP_WORDS as FORMAT_MAP_WORDS, NODES, Node7, RETAINED, Record7};
@@ -15,6 +16,7 @@ use crate::{Error, Kind};
 mod admission;
 mod maintenance;
 mod mount;
+mod namespace;
 mod payload;
 mod poll;
 mod provision;
