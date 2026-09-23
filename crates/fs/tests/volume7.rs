@@ -6,6 +6,8 @@ mod admission;
 mod failures;
 #[path = "volume7/namespace.rs"]
 mod namespace;
+#[path = "volume7/read.rs"]
+mod read;
 mod support;
 #[path = "volume7/tracked.rs"]
 mod tracked;

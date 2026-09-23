@@ -21,6 +21,7 @@ mod payload;
 mod poll;
 mod provision;
 mod publication;
+mod read;
 mod replacement;
 mod upgrade;
 
