@@ -2,6 +2,7 @@
 use super::super::application::{self, Error};
 use super::{Exit, Manager, Memory, State};
 use rustic_abi::application as abi;
+use sha2::{Digest, Sha256};
 static ELF: &[u8] = include_bytes!(concat!(
     env!("RUSTIC_APPLICATION_DIRECTORY"),
     "/sdk-probe.elf"
@@ -19,7 +20,6 @@ pub(super) fn verify(manager: &mut Manager, memory: &mut Memory) {
         (16, abi::Error::Ipc),
         (32, abi::Error::Identity),
         (64, abi::Error::Executable),
-        (96, abi::Error::Reserved),
         (31, abi::Error::Capabilities),
     ] {
         let mut bad = [0; abi::SIZE];
@@ -48,8 +48,40 @@ pub(super) fn verify(manager: &mut Manager, memory: &mut Memory) {
         application::launch(manager, memory, MANIFEST, "sdk-probe.elf", ELF, 0),
         Err(Error::Denied)
     ));
+    let pids_before: [Option<rustic_kernel::process::lifecycle::Pid>;
+        rustic_kernel::process::lifecycle::CAPACITY] =
+        core::array::from_fn(|slot| manager.table.pid_at(slot));
+    let mut mismatched = [0; abi::SIZE];
+    mismatched.copy_from_slice(MANIFEST);
+    mismatched[96] ^= 1;
     assert!(matches!(
-        application::launch(manager, memory, MANIFEST, "sdk-probe.elf", &[], abi::KNOWN),
+        application::launch(
+            manager,
+            memory,
+            &mismatched,
+            "sdk-probe.elf",
+            ELF,
+            abi::KNOWN
+        ),
+        Err(Error::ArtifactDigest)
+    ));
+    assert_eq!(memory.free_frames(), before);
+    let pids_after: [Option<rustic_kernel::process::lifecycle::Pid>;
+        rustic_kernel::process::lifecycle::CAPACITY] =
+        core::array::from_fn(|slot| manager.table.pid_at(slot));
+    assert_eq!(pids_after, pids_before);
+    let mut empty_elf_manifest = [0; abi::SIZE];
+    empty_elf_manifest.copy_from_slice(MANIFEST);
+    empty_elf_manifest[96..128].copy_from_slice(&Sha256::digest([]));
+    assert!(matches!(
+        application::launch(
+            manager,
+            memory,
+            &empty_elf_manifest,
+            "sdk-probe.elf",
+            &[],
+            abi::KNOWN
+        ),
         Err(Error::Process(super::super::Error::Elf(_)))
     ));
     assert_eq!(memory.free_frames(), before);

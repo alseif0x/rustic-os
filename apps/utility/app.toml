@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-schema = 1
+schema = 2
 identity = "rustic.utility"
 executable = "utility.elf"
 version = [0, 1, 0]

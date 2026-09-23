@@ -3,7 +3,7 @@ use rustic_abi::application::{Error, Manifest, SIZE};
 fn manifest() -> [u8; SIZE] {
     let mut bytes = [0; SIZE];
     bytes[..8].copy_from_slice(b"RUSTAPP\0");
-    bytes[8..12].copy_from_slice(&[1, 0, 128, 0]);
+    bytes[8..12].copy_from_slice(&[2, 0, 128, 0]);
     bytes[12..16].copy_from_slice(&65536u32.to_le_bytes());
     bytes[16] = 1;
     bytes[20] = 1;
@@ -11,6 +11,7 @@ fn manifest() -> [u8; SIZE] {
     bytes[32..54].copy_from_slice(b"org.rusticos.sdk-probe");
     let executable = b"sdk-probe.elf";
     bytes[64..64 + executable.len()].copy_from_slice(executable);
+    bytes[96..128].copy_from_slice(&[0xa5; 32]);
     bytes
 }
 #[test]
@@ -20,6 +21,7 @@ fn representation_and_admission_do_not_grant_authority() {
     assert_eq!(parsed.identity, "org.rusticos.sdk-probe");
     assert_eq!(parsed.executable, "sdk-probe.elf");
     assert_eq!(parsed.version, [0, 1, 0]);
+    assert_eq!(parsed.artifact_sha256, [0xa5; 32]);
     assert!(!parsed.admitted(0));
     assert!(!parsed.admitted(1));
     assert!(parsed.admitted(3));
@@ -40,11 +42,19 @@ fn rejects_truncation_extensions_versions_and_unknown_requests() {
         (12, Error::Abi),
         (16, Error::Ipc),
         (24, Error::Capabilities),
-        (96, Error::Reserved),
     ] {
         let mut bad = bytes;
         bad[offset] = 255;
         assert_eq!(Manifest::parse(&bad).unwrap_err(), error);
+    }
+}
+
+#[test]
+fn rejects_v1_and_unsupported_manifest_schemas() {
+    for version in [1, 3, u16::MAX] {
+        let mut bytes = manifest();
+        bytes[8..10].copy_from_slice(&version.to_le_bytes());
+        assert_eq!(Manifest::parse(&bytes).unwrap_err(), Error::Version);
     }
 }
 #[test]

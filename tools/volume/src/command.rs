@@ -10,6 +10,7 @@ use rustic_fs::{
     DATA_SECTORS, Kind, Node6, VOLUME_SECTORS, Volume, Volume7, WriteIdentity7, format7, mount6,
     provision6, upgrade6,
 };
+use sha2::{Digest, Sha256};
 
 use crate::disk::FileDisk;
 
@@ -217,6 +218,10 @@ pub(crate) fn seed7(
             "manifest names {}, but the ELF file is {elf_name}",
             parsed.executable
         ));
+    }
+    let elf_sha256: [u8; 32] = Sha256::digest(&elf).into();
+    if parsed.artifact_sha256 != elf_sha256 {
+        return Err("manifest ELF digest does not match the executable".to_owned());
     }
 
     let mut disk = FileDisk::create_new(image, V7_IMAGE_SECTORS)?;
@@ -584,15 +589,16 @@ mod tests {
         elf
     }
 
-    fn fixture_manifest() -> [u8; rustic_abi::application::SIZE] {
+    fn fixture_manifest(elf: &[u8]) -> [u8; rustic_abi::application::SIZE] {
         let mut bytes = [0; rustic_abi::application::SIZE];
         bytes[..8].copy_from_slice(b"RUSTAPP\0");
-        bytes[8..10].copy_from_slice(&1u16.to_le_bytes());
+        bytes[8..10].copy_from_slice(&2u16.to_le_bytes());
         bytes[10..12].copy_from_slice(&(rustic_abi::application::SIZE as u16).to_le_bytes());
         bytes[12..16].copy_from_slice(&(rustic_abi::process::VERSION as u32).to_le_bytes());
         bytes[16..18].copy_from_slice(&rustic_abi::ipc::VERSION.to_le_bytes());
         bytes[32..55].copy_from_slice(b"org.rusticos.v7-fixture");
         bytes[64..75].copy_from_slice(b"fixture.elf");
+        bytes[96..128].copy_from_slice(&Sha256::digest(elf));
         bytes
     }
 
@@ -600,7 +606,7 @@ mod tests {
         let elf_path = dir.join("fixture.elf");
         let manifest_path = dir.join("fixture.manifest");
         std::fs::write(&elf_path, elf).unwrap();
-        std::fs::write(&manifest_path, fixture_manifest()).unwrap();
+        std::fs::write(&manifest_path, fixture_manifest(elf)).unwrap();
         (elf_path, manifest_path)
     }
 
@@ -612,7 +618,7 @@ mod tests {
         assert!(elf.len() > 256 * 1024);
         assert!(elf.len() <= format7::MAX_FILE_BYTES as usize);
         let (elf_path, manifest_path) = write_inputs(dir.path(), &elf);
-        let manifest = fixture_manifest();
+        let manifest = fixture_manifest(&elf);
 
         let result = seed7(&image, LINEAGE, &elf_path, &manifest_path).unwrap();
         assert_eq!(std::fs::metadata(&image).unwrap().len(), V7_IMAGE_BYTES);
@@ -666,6 +672,21 @@ mod tests {
         assert!(report.contains(&format!("\"lineage\":\"{LINEAGE}\"")));
         assert!(report.contains("\"name\":\"fixture.elf\""));
         assert!(report.contains("\"name\":\"fixture.manifest\""));
+    }
+
+    #[test]
+    fn seed7_rejects_manifest_for_different_executable_before_creating_image() {
+        let dir = TempDir::new();
+        let image = dir.path().join("fixture.raw");
+        let elf = fixture_elf(300_000);
+        let (elf_path, manifest_path) = write_inputs(dir.path(), &elf);
+        let mut changed_elf = elf;
+        *changed_elf.last_mut().unwrap() ^= 1;
+        std::fs::write(&elf_path, changed_elf).unwrap();
+
+        let error = seed7(&image, LINEAGE, &elf_path, &manifest_path).unwrap_err();
+        assert!(error.contains("digest does not match"));
+        assert!(!image.exists());
     }
 
     #[test]

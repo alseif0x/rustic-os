@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-schema = 1
+schema = 2
 identity = "org.rusticos.block-probe"
 executable = "block-probe.elf"
 version = [0, 1, 0]
