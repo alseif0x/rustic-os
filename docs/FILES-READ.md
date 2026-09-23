@@ -95,6 +95,8 @@ IPC retains its 64-byte payload. The existing file packet supplies native protoc
 
 The 30-byte read-request payload contains lineage at 0–15, workspace directory ID at 16–19, absolute byte offset at 20–27 and logical service version at 28–29. Integers are little endian and the remaining ten bytes are zero. `REFERENCES` is a native bootstrap helper for an already authorized object; it is not live capability discovery.
 
+The explicit read-only V7 service path reports the complete file size through the profile-2 limit of 256 KiB in `READ_OPEN.arg`; each request remains limited to a 1,024-byte range, and chunks remain limited to 40 bytes. This uses the existing read packet and adds no profile marker or generic negotiation. The production v5 `Server` remains the default, and this path does not advertise or implement profile-2 writes, receipts or capabilities.
+
 Known read opcodes with another logical service version return `UnsupportedVersion`. A missing usable lineage/epoch returns `Unavailable`. Invalid ranges return native validation errors; scope failure, expiry or revocation remains a denial. Canonical error replies contain only opcode/status/context, with all result fields zero. Malformed framing, response mismatch, closure and interruption are local client failures, never successful logical results or invented remote responses.
 
 The ABI owns identities and codecs; the SDK owns collection/progress; `rustic-file-service` owns read authority and hashing; `rustic-fs` owns namespace/version/data facts. The kernel imports none of those service implementations and gains no filesystem policy or SHA dependency.

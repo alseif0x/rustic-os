@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-use super::{MAX_RANGE, Request};
+use super::Request;
 use crate::files::{
     Error, Packet, READ_OPEN,
     reference::{Epoch, References, Version},
@@ -15,7 +15,7 @@ pub struct Header {
 }
 impl Header {
     pub fn packet(self, context: u32) -> Result<Packet, Error> {
-        if self.id == 0 || self.size > MAX_RANGE as u64 {
+        if self.id == 0 || self.size > u64::from(crate::files::workspace::MAX_FILE_BYTES) {
             return Err(Error::Invalid);
         }
         let mut p = Packet::new(READ_OPEN);
@@ -33,7 +33,7 @@ impl Header {
             || p.status != 0
             || p.count != 40
             || p.id == 0
-            || p.arg as usize > MAX_RANGE
+            || p.arg > crate::files::workspace::MAX_FILE_BYTES
         {
             return Err(Error::Protocol);
         }
@@ -63,7 +63,7 @@ impl Info {
     pub fn from_header(request: Request, header: Header) -> Result<Self, Error> {
         request.validate()?;
         if header.id != request.resource.object()
-            || header.size > MAX_RANGE as u64
+            || header.size > u64::from(crate::files::workspace::MAX_FILE_BYTES)
             || request.offset > header.size
             || request
                 .expected_version

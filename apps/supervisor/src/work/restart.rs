@@ -4,13 +4,15 @@ use super::super::services::*;
 use rustic_sdk::{files::Client, rpc::Rpc, runtime::abi as k};
 pub(super) struct Restart {
     pub initialize: bool,
+    profile: FileProfile,
     retired: bool,
     mount: super::mount::Mount,
 }
 impl Restart {
-    pub fn new(initialize: bool) -> Self {
+    pub fn new(initialize: bool, profile: FileProfile) -> Self {
         Self {
             initialize,
+            profile,
             retired: false,
             mount: super::mount::Mount::new(),
         }
@@ -37,7 +39,7 @@ impl Restart {
             return Ok(None);
         }
         state.work.phase = self.mount.phase();
-        self.mount.poll(state, self.initialize)
+        self.mount.poll(state, self.initialize, self.profile)
     }
     pub fn cancel(&self, state: &mut State) {
         if self.retired {

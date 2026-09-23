@@ -14,8 +14,8 @@ mod takeover;
 #[cfg(feature = "native")]
 mod work;
 rustic_sdk::entry!(run);
-fn run(initialize: u64, _: u64, _: u64) -> u64 {
-    match bootstrap::start(initialize == 1) {
+fn run(startup: u64, _: u64, _: u64) -> u64 {
+    match bootstrap::start(startup) {
         Ok(mut state) => state.serve(),
         Err(_) => {
             let _ = rustic_sdk::runtime::console_write(

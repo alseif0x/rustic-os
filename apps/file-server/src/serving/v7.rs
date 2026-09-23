@@ -1,0 +1,190 @@
+// SPDX-License-Identifier: Apache-2.0
+//! Explicit read-only V7 dispatch. No V5 mutation or admission path is reachable.
+use rustic_file_service::{READ_CLIENTS7, ReadServer7};
+use rustic_sdk::{
+    abi::{files, runtime as wire},
+    ipc::{Endpoint, Message},
+    runtime,
+};
+
+const ADMIN_SLOT: usize = READ_CLIENTS7;
+const WORKSPACES_ROOT: u32 = 4;
+
+fn close_slot(
+    server: &mut ReadServer7<'_>,
+    replies: &mut [Option<Message>; READ_CLIENTS7 + 1],
+    slot: usize,
+) {
+    if let Some(grant) = server.grant_at(slot) {
+        let _ = Endpoint::from_bootstrap(grant.endpoint).close();
+    }
+    server.detach(slot);
+    replies[slot] = None;
+}
+
+pub(crate) fn run(
+    disk: &mut super::super::disk::Disk,
+    server: &mut ReadServer7<'_>,
+    admin: Endpoint,
+) -> u64 {
+    let ready = Message::new(0, &wire::encode([0, 2, 256, 262144, 8, 0, 0, 0])).unwrap();
+    if admin.send(&ready).is_err() {
+        return 1;
+    }
+
+    let mut administrator = 0;
+    let mut replies: [Option<Message>; READ_CLIENTS7 + 1] = [const { None }; READ_CLIENTS7 + 1];
+    loop {
+        for slot in 0..=ADMIN_SLOT {
+            if slot < READ_CLIENTS7 && replies[slot].is_some() {
+                let now = runtime::clock();
+                match server.grant_at(slot) {
+                    Some(grant) if grant.expires == 0 || now < grant.expires => {}
+                    Some(_) => close_slot(server, &mut replies, slot),
+                    None => replies[slot] = None,
+                }
+            }
+            if let Some(message) = &replies[slot] {
+                let token = if slot == ADMIN_SLOT {
+                    admin.token()
+                } else {
+                    server.grant_at(slot).map_or(0, |grant| grant.endpoint)
+                };
+                match Endpoint::from_bootstrap(token).send(message) {
+                    Ok(()) => replies[slot] = None,
+                    Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {}
+                    Err(_) if slot == ADMIN_SLOT => return 2,
+                    Err(_) => close_slot(server, &mut replies, slot),
+                }
+            }
+        }
+
+        if replies[ADMIN_SLOT].is_none() {
+            match admin.receive() {
+                Ok(message) => {
+                    if administrator == 0 {
+                        administrator = message.sender();
+                    }
+                    if message.sender() != administrator {
+                        return 3;
+                    }
+                    let output = match wire::decode(message.payload()) {
+                        Ok(words) => admin_request(server, &mut replies, words),
+                        Err(_) => [files::Error::Invalid as u64, 0, 0, 0, 0, 0, 0, 0],
+                    };
+                    replies[ADMIN_SLOT] =
+                        Some(Message::new(message.correlation(), &wire::encode(output)).unwrap());
+                }
+                Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {}
+                Err(_) => return 0,
+            }
+        }
+
+        let now = runtime::clock();
+        for slot in 0..READ_CLIENTS7 {
+            if let Some(grant) = server.grant_at(slot)
+                && grant.expires != 0
+                && now >= grant.expires
+            {
+                close_slot(server, &mut replies, slot);
+                continue;
+            }
+            if replies[slot].is_some() {
+                continue;
+            }
+            let Some(grant) = server.grant_at(slot) else {
+                continue;
+            };
+            match Endpoint::from_bootstrap(grant.endpoint).receive() {
+                Ok(message) => {
+                    let response = match files::Packet::decode(message.payload()) {
+                        Ok(request) => {
+                            server.handle(disk, slot, message.sender(), request, runtime::clock())
+                        }
+                        Err(_) => {
+                            let mut response = files::Packet::new(1);
+                            response.status = files::Error::Protocol as u8;
+                            response
+                        }
+                    };
+                    if server
+                        .grant_at(slot)
+                        .is_some_and(|current| current.endpoint == grant.endpoint)
+                    {
+                        replies[slot] =
+                            Some(Message::new(message.correlation(), &response.encode()).unwrap());
+                    }
+                }
+                Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {}
+                Err(_) => close_slot(server, &mut replies, slot),
+            }
+        }
+
+        if replies.iter().all(Option::is_none) {
+            let mut tokens = [0; READ_CLIENTS7 + 1];
+            tokens[0] = admin.token();
+            let mut count = 1;
+            for slot in 0..READ_CLIENTS7 {
+                if let Some(grant) = server.grant_at(slot) {
+                    tokens[count] = grant.endpoint;
+                    count += 1;
+                }
+            }
+            let _ = runtime::wait_set(&tokens[..count], 100);
+        }
+    }
+}
+
+fn admin_request(
+    server: &mut ReadServer7<'_>,
+    replies: &mut [Option<Message>; READ_CLIENTS7 + 1],
+    words: [u64; 8],
+) -> [u64; 8] {
+    let mut result = [0; 8];
+    let parsed = (|| {
+        let slot = usize::try_from(words[1]).map_err(|_| files::Error::Invalid)?;
+        match words[0] {
+            command if command == u64::from(files::GRANT) => {
+                if slot >= READ_CLIENTS7
+                    || words[2] == 0
+                    || words[3] == 0
+                    || words[5] != u64::from(files::READ_RIGHT)
+                    || words[7] != 0
+                {
+                    return Err(files::Error::Invalid);
+                }
+                let old = server.grant_at(slot);
+                let scope = if words[4] == 0 {
+                    WORKSPACES_ROOT
+                } else {
+                    u32::try_from(words[4]).map_err(|_| files::Error::Invalid)?
+                };
+                let grant = server.grant(slot, words[2], words[3], scope, words[6])?;
+                replies[slot] = None;
+                if let Some(old) = old
+                    && old.endpoint != grant.endpoint
+                {
+                    let _ = Endpoint::from_bootstrap(old.endpoint).close();
+                }
+                result[1] = u64::from(grant.context);
+            }
+            command if command == u64::from(files::REVOKE) => {
+                if slot >= READ_CLIENTS7 || words[2..].iter().any(|word| *word != 0) {
+                    return Err(files::Error::Invalid);
+                }
+                server.revoke(slot)?;
+                close_slot(server, replies, slot);
+            }
+            34 if words[1..].iter().all(|word| *word == 0) => {}
+            35 if slot < READ_CLIENTS7 && words[2..].iter().all(|word| *word == 0) => {
+                close_slot(server, replies, slot);
+            }
+            _ => return Err(files::Error::Protocol),
+        }
+        Ok(())
+    })();
+    if let Err(error) = parsed {
+        result[0] = error as u64;
+    }
+    result
+}

@@ -35,6 +35,11 @@ fn unknown_or_ambiguous_modes_cannot_report_success() {
     assert_eq!(BootMode::parse(b"mode=ok"), Some(BootMode::Ok));
     assert_eq!(BootMode::parse(b"mode=panic"), Some(BootMode::Panic));
     assert_eq!(BootMode::parse(b"mode=hang"), Some(BootMode::Hang));
+    assert_eq!(
+        BootMode::parse(b"mode=terminal-v7"),
+        Some(BootMode::TerminalV7)
+    );
+    assert_eq!(BootMode::parse(b"mode=terminal-v7-init"), None);
     assert_eq!(BootMode::parse(b""), None);
     assert_eq!(BootMode::parse(b"mode=ok mode=panic"), None);
     assert_eq!(BootMode::parse(b"mode=\xff"), None);

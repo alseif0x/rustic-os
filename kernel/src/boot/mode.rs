@@ -5,6 +5,7 @@ pub enum BootMode {
     Ok,
     Terminal,
     TerminalInit,
+    TerminalV7,
     Panic,
     Hang,
     Exception,
@@ -33,6 +34,7 @@ impl BootMode {
             b"mode=terminal-init" | b"mode=terminal-test" | b"mode=recovery-test" => {
                 Some(Self::TerminalInit)
             }
+            b"mode=terminal-v7" => Some(Self::TerminalV7),
             b"mode=ok" => Some(Self::Ok),
             b"mode=panic" => Some(Self::Panic),
             b"mode=hang" => Some(Self::Hang),
