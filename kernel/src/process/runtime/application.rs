@@ -37,5 +37,36 @@ pub(super) fn launch(
     if !manifest.admitted(available) {
         return Err(Error::Denied);
     }
+    rustic_kernel::process::elf::Image::parse(elf)
+        .map_err(|error| Error::Process(ProcessError::Elf(error)))?;
     manager.create(memory, elf, [0; 3]).map_err(Error::Process)
+}
+
+#[cfg(feature = "sdk-test")]
+pub(super) struct Registration {
+    pub(super) parent: u64,
+    pub(super) program: u64,
+}
+
+#[cfg(feature = "sdk-test")]
+pub(super) fn launch_dormant(
+    manager: &mut Manager,
+    memory: &mut Memory,
+    manifest: &[u8],
+    name: &str,
+    elf: &[u8],
+    available: u64,
+    registration: Registration,
+) -> Result<Pid, Error> {
+    let pid = launch(manager, memory, manifest, name, elf, available)?;
+    if let Err(error) = manager.table.hold(pid) {
+        manager.kill(pid).expect("rollback unheld image");
+        manager.wait(memory, pid).expect("reap unheld image");
+        return Err(Error::Process(ProcessError::Process(error)));
+    }
+    let slot = manager.table.slot(pid).expect("held image slot");
+    let process = manager.processes[slot].as_mut().expect("held image record");
+    process.parent = registration.parent;
+    process.program = registration.program;
+    Ok(pid)
 }

@@ -4,6 +4,7 @@ mod catalog;
 pub(super) mod console;
 mod control;
 mod session;
+pub(super) mod staging;
 pub(super) mod wait;
 use super::{manager::Manager, record::Process, syscall::Action};
 use crate::arch::{interrupts, memory::Memory};
@@ -44,12 +45,14 @@ pub(crate) fn run(memory: &mut Memory, interrupts: &mut interrupts::Controller, 
             manager.state(pid),
             Ok(rustic_kernel::process::lifecycle::State::Exited(_))
         ) {
+            manager.clear_image_stage(memory);
             panic!("native supervisor exited: {:?}", manager.state(pid));
         }
         if manager.step(memory).expect("native scheduling").is_none() {
             interrupts.idle();
         }
     }
+    manager.clear_image_stage(memory);
     for slot in 0..rustic_kernel::process::lifecycle::CAPACITY {
         if let Some(pid) = manager.table.pid_at(slot) {
             if !matches!(

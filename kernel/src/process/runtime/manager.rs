@@ -17,6 +17,8 @@ use rustic_kernel::{
 pub(super) struct Manager {
     #[cfg(feature = "sdk-test")]
     pub(super) session: super::native::Session,
+    #[cfg(feature = "sdk-test")]
+    pub(super) image_stage: super::native::staging::State,
     pub(super) table: Table,
     pub(super) processes: [Option<Process>; CAPACITY],
     pub(super) broker: Broker,
@@ -27,6 +29,8 @@ impl Manager {
         Self {
             #[cfg(feature = "sdk-test")]
             session: Default::default(),
+            #[cfg(feature = "sdk-test")]
+            image_stage: Default::default(),
             table: Table::new(),
             processes: [const { None }; CAPACITY],
             broker: Broker::new(),
@@ -108,6 +112,10 @@ impl Manager {
                     error: event.error,
                     address: if vector == 14 { event.address } else { 0 },
                 };
+                #[cfg(feature = "sdk-test")]
+                if pid.0 == self.session.supervisor {
+                    self.clear_image_stage(memory);
+                }
                 self.finish(pid, exit)?;
                 return Ok(Some(pid));
             }
@@ -115,6 +123,10 @@ impl Manager {
         let process = self.processes[slot].as_mut().expect("scheduled process");
         match action {
             Action::Exit(code) => {
+                #[cfg(feature = "sdk-test")]
+                if pid.0 == self.session.supervisor {
+                    self.clear_image_stage(memory);
+                }
                 self.finish(pid, Exit::Code(code))?;
                 return Ok(Some(pid));
             }
@@ -126,6 +138,10 @@ impl Manager {
             Action::Resume => {}
         }
         if !process.frame.valid_user() {
+            #[cfg(feature = "sdk-test")]
+            if pid.0 == self.session.supervisor {
+                self.clear_image_stage(memory);
+            }
             self.finish(
                 pid,
                 Exit::Fault {

@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //! R0 memory owner. Physical bookkeeping, table mechanics and fixtures stay separate.
 mod bootstrap;
+#[cfg(feature = "sdk-test")]
+mod buffer;
 mod copy;
 mod dma;
+#[cfg(feature = "sdk-test")]
+pub(crate) use buffer::KernelBuffer;
 pub(crate) use dma::DmaRegion;
 mod cpu;
 mod physical;

@@ -16,6 +16,10 @@ fn control_shapes_reject_unknown_operations_and_reserved_words() {
         (REAP, 2),
         (SHUTDOWN, 1),
         (DEVICE, 1),
+        (STAGE_BEGIN, 4),
+        (STAGE_COPY, 5),
+        (STAGE_COMMIT, 2),
+        (STAGE_ABORT, 2),
     ] {
         let mut w = [0; 8];
         w[0] = op;
@@ -30,6 +34,19 @@ fn control_shapes_reject_unknown_operations_and_reserved_words() {
     assert_eq!(
         validate_control([10, 0, 0, 0, 0, 0, 0, 0]),
         Err(Error::Invalid)
+    );
+    assert_eq!(
+        validate_control([
+            STAGE_BEGIN,
+            512,
+            0x20_0000,
+            rustic_abi::application::KNOWN,
+            0,
+            0,
+            0,
+            0
+        ]),
+        Ok(())
     );
     assert_eq!(decode(&[0; 63]), Err(Error::Size));
     for e in [
