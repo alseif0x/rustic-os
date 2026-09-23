@@ -1,16 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The four volume operations this tool exposes, all against a real image file.
+//! Host volume-image commands for legacy v5/v6 images and explicit v7 fixtures.
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 
-use rustic_fs::{DATA_SECTORS, Kind, Node6, VOLUME_SECTORS, Volume, mount6, provision6, upgrade6};
+use rustic_abi::application::Manifest;
+use rustic_abi::files::reference::{Resource, Workspace};
+use rustic_fs::{
+    DATA_SECTORS, Kind, Node6, VOLUME_SECTORS, Volume, Volume7, WriteIdentity7, format7, mount6,
+    provision6, upgrade6,
+};
 
 use crate::disk::FileDisk;
 
 /// The smallest image this tool will touch: a volume's structures plus payload.
 const IMAGE_SECTORS: u64 = VOLUME_SECTORS;
+const V7_IMAGE_SECTORS: u64 = format7::VOLUME_SECTORS;
+const V7_IMAGE_BYTES: u64 = V7_IMAGE_SECTORS * format7::SECTOR_BYTES;
 /// The fixture `seed` writes: a directory and a file whose bytes a v5 reader
 /// can confirm, so a later migration is checked against an independent source.
 const SEEDED: &[u8] = b"a v5 record";
+const V7_WORKSPACE_NAME: &[u8] = b"application";
 
 pub(crate) fn provision(image: &Path, lineage: &str) -> Result<String, String> {
     let mut disk = FileDisk::create(image, IMAGE_SECTORS)?;
@@ -172,6 +182,296 @@ pub(crate) fn report(image: &Path) -> Result<String, String> {
     ))
 }
 
+/// Create a fresh v7 image containing an application ELF and its manifest.
+/// All host inputs are checked before the output path is exclusively created.
+pub(crate) fn seed7(
+    image: &Path,
+    lineage: &str,
+    elf_path: &Path,
+    manifest_path: &Path,
+) -> Result<String, String> {
+    let lineage = parse_lineage(lineage)?;
+    let elf_name = source_name(elf_path, ".elf", "ELF")?;
+    let manifest_name = source_name(manifest_path, ".manifest", "manifest")?;
+    if elf_name == manifest_name {
+        return Err("ELF and manifest names must be different".to_owned());
+    }
+
+    let elf = read_bounded(elf_path, "ELF", format7::MAX_FILE_BYTES as u64)?;
+    validate_elf(&elf)?;
+    let manifest = read_bounded(
+        manifest_path,
+        "manifest",
+        rustic_abi::application::SIZE as u64,
+    )?;
+    if manifest.len() != rustic_abi::application::SIZE {
+        return Err(format!(
+            "manifest must be exactly {} bytes",
+            rustic_abi::application::SIZE
+        ));
+    }
+    let parsed =
+        Manifest::parse(&manifest).map_err(|error| format!("invalid manifest: {error:?}"))?;
+    if parsed.executable != elf_name {
+        return Err(format!(
+            "manifest names {}, but the ELF file is {elf_name}",
+            parsed.executable
+        ));
+    }
+
+    let mut disk = FileDisk::create_new(image, V7_IMAGE_SECTORS)?;
+    let mut volume = Volume7::EMPTY;
+    volume
+        .provision_into(&mut disk, lineage)
+        .map_err(|error| format!("v7 provision refused: {error:?}"))?;
+
+    let workspace = volume
+        .create(&mut disk, 4, V7_WORKSPACE_NAME, Kind::Directory)
+        .map_err(|error| format!("v7 workspace creation refused: {error:?}"))?;
+    let elf_node = volume
+        .create(&mut disk, workspace.id, elf_name.as_bytes(), Kind::File)
+        .map_err(|error| format!("v7 ELF creation refused: {error:?}"))?;
+    let manifest_node = volume
+        .create(
+            &mut disk,
+            workspace.id,
+            manifest_name.as_bytes(),
+            Kind::File,
+        )
+        .map_err(|error| format!("v7 manifest creation refused: {error:?}"))?;
+
+    let epoch = volume
+        .header()
+        .map_err(|error| format!("v7 header unavailable: {error:?}"))?
+        .epoch;
+    let elf_record = volume
+        .replace_tracked(
+            &mut disk,
+            write_identity(workspace.id, elf_node.id, elf_node.version, epoch),
+            elf_node.version,
+            &elf,
+        )
+        .map_err(|error| format!("v7 ELF write refused: {error:?}"))?;
+    let manifest_record = volume
+        .replace_tracked(
+            &mut disk,
+            write_identity(workspace.id, manifest_node.id, manifest_node.version, epoch),
+            manifest_node.version,
+            &manifest,
+        )
+        .map_err(|error| format!("v7 manifest write refused: {error:?}"))?;
+
+    let workspace_text = workspace_text(lineage, workspace.id)?;
+    let elf_resource = resource_text(lineage, workspace.id, elf_node.id)?;
+    let manifest_resource = resource_text(lineage, workspace.id, manifest_node.id)?;
+    Ok(format!(
+        "{{\"lineage\":\"{}\",\"workspace\":{{\"id\":{},\"text\":\"{}\"}},\
+         \"elf\":{{\"id\":{},\"version\":{},\"size\":{},\"resource\":\"{}\"}},\
+         \"manifest\":{{\"id\":{},\"version\":{},\"size\":{},\"resource\":\"{}\"}}}}",
+        hex(&lineage),
+        workspace.id,
+        workspace_text,
+        elf_node.id,
+        elf_record.committed,
+        elf.len(),
+        elf_resource,
+        manifest_node.id,
+        manifest_record.committed,
+        manifest.len(),
+        manifest_resource,
+    ))
+}
+
+/// Verify a full v7 mount and report its selected metadata without write access.
+pub(crate) fn report7(image: &Path) -> Result<String, String> {
+    let mut disk = FileDisk::open_read_only(image)?;
+    if disk.sectors() != V7_IMAGE_SECTORS || disk.bytes()? != V7_IMAGE_BYTES {
+        return Err(format!(
+            "{} is not an exact v7 image of {V7_IMAGE_BYTES} bytes",
+            image.display()
+        ));
+    }
+    let mut volume = Volume7::EMPTY;
+    volume
+        .mount_into(&mut disk)
+        .map_err(|error| format!("v7 mount refused: {error:?}"))?;
+    let header = *volume
+        .header()
+        .map_err(|error| format!("v7 header unavailable: {error:?}"))?;
+    let nodes = volume
+        .nodes()
+        .map_err(|error| format!("v7 nodes unavailable: {error:?}"))?;
+    let live_nodes: Vec<String> = nodes
+        .iter()
+        .filter(|node| node.kind != Kind::Empty)
+        .map(|node| {
+            format!(
+                "{{\"id\":{},\"parent\":{},\"version\":{},\"size\":{},\
+                 \"kind\":\"{}\",\"name\":\"{}\"}}",
+                node.id,
+                node.parent,
+                node.version,
+                node.length,
+                kind_name(node.kind),
+                escape(node.name()),
+            )
+        })
+        .collect();
+    let free_sectors = volume
+        .free_sectors()
+        .map_err(|error| format!("v7 map unavailable: {error:?}"))?;
+    Ok(format!(
+        "{{\"lineage\":\"{}\",\"sequence\":{},\"epoch\":{},\"generation\":{},\
+         \"next\":{},\"objects\":{},\"free_sectors\":{},\"workspace\":{{\"id\":4,\"text\":\"{}\"}},\
+         \"nodes\":[{}]}}",
+        hex(&header.lineage),
+        header.sequence,
+        header.epoch,
+        header.generation,
+        header.next,
+        live_nodes.len(),
+        free_sectors,
+        workspace_text(header.lineage, 4)?,
+        live_nodes.join(","),
+    ))
+}
+
+fn write_identity(workspace: u32, object: u32, instance: u64, retry_epoch: u64) -> WriteIdentity7 {
+    WriteIdentity7 {
+        subject: 1,
+        workspace,
+        object,
+        instance,
+        retry_epoch,
+        retry_key: u64::from(object),
+    }
+}
+
+fn source_name(path: &Path, suffix: &str, label: &str) -> Result<String, String> {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("{label} path needs an ASCII filename"))?;
+    if !name.ends_with(suffix) || !valid_name(name.as_bytes()) {
+        return Err(format!(
+            "{label} filename must be a valid workspace name ending in {suffix}"
+        ));
+    }
+    Ok(name.to_owned())
+}
+
+fn valid_name(name: &[u8]) -> bool {
+    !name.is_empty()
+        && name.len() <= 31
+        && name != b"."
+        && name != b".."
+        && name
+            .iter()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(byte))
+}
+
+fn read_bounded(path: &Path, label: &str, max: u64) -> Result<Vec<u8>, String> {
+    let file =
+        File::open(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| format!("cannot size {}: {error}", path.display()))?;
+    if !metadata.is_file() {
+        return Err(format!("{label} {} is not a regular file", path.display()));
+    }
+    if metadata.len() > max {
+        return Err(format!(
+            "{label} {} is {} bytes; maximum is {max}",
+            path.display(),
+            metadata.len()
+        ));
+    }
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(max.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+    if bytes.len() as u64 > max || bytes.len() as u64 != metadata.len() {
+        return Err(format!(
+            "{label} {} changed while being read",
+            path.display()
+        ));
+    }
+    Ok(bytes)
+}
+
+fn validate_elf(bytes: &[u8]) -> Result<(), String> {
+    if bytes.len() < 64
+        || &bytes[..4] != b"\x7fELF"
+        || bytes[4] != 2
+        || bytes[5] != 1
+        || bytes[6] != 1
+        || le_u16(bytes, 16) != 2
+        || le_u16(bytes, 18) != 62
+        || le_u32(bytes, 20) != 1
+        || le_u16(bytes, 52) != 64
+        || le_u16(bytes, 54) != 56
+    {
+        return Err("ELF must be a little-endian x86-64 executable".to_owned());
+    }
+    let phoff = usize::try_from(le_u64(bytes, 32)).map_err(|_| "ELF program table is too large")?;
+    let phnum = usize::from(le_u16(bytes, 56));
+    let table_bytes = phnum
+        .checked_mul(56)
+        .ok_or_else(|| "ELF program table is too large".to_owned())?;
+    let table_end = phoff
+        .checked_add(table_bytes)
+        .ok_or_else(|| "ELF program table is too large".to_owned())?;
+    if phnum == 0 || table_end > bytes.len() {
+        return Err("ELF program table is incomplete".to_owned());
+    }
+    let mut has_load_segment = false;
+    for header in bytes[phoff..table_end].as_chunks::<56>().0 {
+        if u32::from_le_bytes(header[..4].try_into().unwrap()) == 1 {
+            has_load_segment = true;
+            let offset = usize::try_from(u64::from_le_bytes(header[8..16].try_into().unwrap()))
+                .map_err(|_| "ELF load segment is too large")?;
+            let file_size = usize::try_from(u64::from_le_bytes(header[32..40].try_into().unwrap()))
+                .map_err(|_| "ELF load segment is too large")?;
+            let end = offset
+                .checked_add(file_size)
+                .ok_or_else(|| "ELF load segment is too large".to_owned())?;
+            if end > bytes.len() {
+                return Err("ELF load segment exceeds the file".to_owned());
+            }
+        }
+    }
+    if !has_load_segment {
+        return Err("ELF has no loadable segment".to_owned());
+    }
+    Ok(())
+}
+
+fn le_u16(bytes: &[u8], offset: usize) -> u16 {
+    u16::from_le_bytes(bytes[offset..offset + 2].try_into().unwrap())
+}
+
+fn le_u32(bytes: &[u8], offset: usize) -> u32 {
+    u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
+}
+
+fn le_u64(bytes: &[u8], offset: usize) -> u64 {
+    u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap())
+}
+
+fn workspace_text(lineage: [u8; 16], root: u32) -> Result<String, String> {
+    Workspace::new(lineage, root)
+        .map(|workspace| workspace.to_string())
+        .map_err(|error| format!("invalid workspace identity: {error:?}"))
+}
+
+fn resource_text(lineage: [u8; 16], root: u32, object: u32) -> Result<String, String> {
+    let workspace = Workspace::new(lineage, root)
+        .map_err(|error| format!("invalid workspace identity: {error:?}"))?;
+    Resource::new(workspace, object)
+        .map(|resource| resource.to_string())
+        .map_err(|error| format!("invalid resource identity: {error:?}"))
+}
+
 fn open(image: &Path) -> Result<FileDisk, String> {
     let disk = FileDisk::open(image)?;
     if disk.sectors() < IMAGE_SECTORS {
@@ -220,4 +520,202 @@ fn escape(name: &[u8]) -> String {
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustic_abi::files::reference::{Resource, Workspace};
+    use std::path::PathBuf;
+    use std::str::FromStr;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "rustic-volume-v7-{}-{}",
+                std::process::id(),
+                NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    const LINEAGE: &str = "000102030405060708090a0b0c0d0e0f";
+
+    fn fixture_elf(size: usize) -> Vec<u8> {
+        assert!(size >= 120);
+        let mut elf = vec![0; size];
+        elf[..4].copy_from_slice(b"\x7fELF");
+        elf[4] = 2;
+        elf[5] = 1;
+        elf[6] = 1;
+        elf[16..18].copy_from_slice(&2u16.to_le_bytes());
+        elf[18..20].copy_from_slice(&62u16.to_le_bytes());
+        elf[20..24].copy_from_slice(&1u32.to_le_bytes());
+        elf[24..32].copy_from_slice(&0x400000u64.to_le_bytes());
+        elf[32..40].copy_from_slice(&64u64.to_le_bytes());
+        elf[52..54].copy_from_slice(&64u16.to_le_bytes());
+        elf[54..56].copy_from_slice(&56u16.to_le_bytes());
+        elf[56..58].copy_from_slice(&1u16.to_le_bytes());
+        elf[64..68].copy_from_slice(&1u32.to_le_bytes());
+        elf[68..72].copy_from_slice(&5u32.to_le_bytes());
+        elf[72..80].copy_from_slice(&0u64.to_le_bytes());
+        elf[80..88].copy_from_slice(&0x400000u64.to_le_bytes());
+        elf[88..96].copy_from_slice(&0x400000u64.to_le_bytes());
+        elf[96..104].copy_from_slice(&(size as u64).to_le_bytes());
+        elf[104..112].copy_from_slice(&(size as u64).to_le_bytes());
+        elf[112..120].copy_from_slice(&0x1000u64.to_le_bytes());
+        elf
+    }
+
+    fn fixture_manifest() -> [u8; rustic_abi::application::SIZE] {
+        let mut bytes = [0; rustic_abi::application::SIZE];
+        bytes[..8].copy_from_slice(b"RUSTAPP\0");
+        bytes[8..10].copy_from_slice(&1u16.to_le_bytes());
+        bytes[10..12].copy_from_slice(&(rustic_abi::application::SIZE as u16).to_le_bytes());
+        bytes[12..16].copy_from_slice(&(rustic_abi::process::VERSION as u32).to_le_bytes());
+        bytes[16..18].copy_from_slice(&rustic_abi::ipc::VERSION.to_le_bytes());
+        bytes[32..55].copy_from_slice(b"org.rusticos.v7-fixture");
+        bytes[64..75].copy_from_slice(b"fixture.elf");
+        bytes
+    }
+
+    fn write_inputs(dir: &Path, elf: &[u8]) -> (PathBuf, PathBuf) {
+        let elf_path = dir.join("fixture.elf");
+        let manifest_path = dir.join("fixture.manifest");
+        std::fs::write(&elf_path, elf).unwrap();
+        std::fs::write(&manifest_path, fixture_manifest()).unwrap();
+        (elf_path, manifest_path)
+    }
+
+    #[test]
+    fn seed7_exclusively_creates_exact_v7_image_and_remounts_exact_artifact_bytes() {
+        let dir = TempDir::new();
+        let image = dir.path().join("fixture.raw");
+        let elf = fixture_elf(300_000);
+        assert!(elf.len() > 256 * 1024);
+        assert!(elf.len() <= format7::MAX_FILE_BYTES as usize);
+        let (elf_path, manifest_path) = write_inputs(dir.path(), &elf);
+        let manifest = fixture_manifest();
+
+        let result = seed7(&image, LINEAGE, &elf_path, &manifest_path).unwrap();
+        assert_eq!(std::fs::metadata(&image).unwrap().len(), V7_IMAGE_BYTES);
+
+        let lineage = parse_lineage(LINEAGE).unwrap();
+        let workspace_text = format!("ws_{LINEAGE}_00000005");
+        let elf_resource_text = format!("rs_{LINEAGE}_00000005_00000006");
+        let manifest_resource_text = format!("rs_{LINEAGE}_00000005_00000007");
+        let expected = format!(
+            "{{\"lineage\":\"{LINEAGE}\",\"workspace\":{{\"id\":5,\"text\":\"{workspace_text}\"}},\
+             \"elf\":{{\"id\":6,\"version\":5,\"size\":300000,\"resource\":\"{elf_resource_text}\"}},\
+             \"manifest\":{{\"id\":7,\"version\":6,\"size\":128,\"resource\":\"{manifest_resource_text}\"}}}}"
+        );
+        assert_eq!(result, expected);
+
+        let workspace = Workspace::from_str(&workspace_text).unwrap();
+        let elf_resource = Resource::from_str(&elf_resource_text).unwrap();
+        let manifest_resource = Resource::from_str(&manifest_resource_text).unwrap();
+        assert_eq!(workspace.root(), 5);
+        assert_eq!(workspace.lineage(), lineage);
+        assert_eq!(elf_resource.workspace(), workspace);
+        assert_eq!(manifest_resource.workspace(), workspace);
+        assert_eq!(elf_resource.object(), 6);
+        assert_eq!(manifest_resource.object(), 7);
+
+        let mut disk = FileDisk::open_read_only(&image).unwrap();
+        let mut volume = Volume7::EMPTY;
+        volume.mount_into(&mut disk).unwrap();
+        assert_eq!(volume.header().unwrap().lineage, lineage);
+        let mut elf_read = vec![0; elf.len()];
+        let elf_count = volume
+            .read_range(&mut disk, elf_resource.object(), Some(5), 0, &mut elf_read)
+            .unwrap();
+        assert_eq!(elf_count, elf.len());
+        assert_eq!(elf_read, elf);
+        let mut manifest_read = [0; rustic_abi::application::SIZE];
+        let manifest_count = volume
+            .read_range(
+                &mut disk,
+                manifest_resource.object(),
+                Some(6),
+                0,
+                &mut manifest_read,
+            )
+            .unwrap();
+        assert_eq!(manifest_count, manifest.len());
+        assert_eq!(manifest_read, manifest);
+
+        let report = report7(&image).unwrap();
+        assert!(report.contains("\"sequence\":6"));
+        assert!(report.contains(&format!("\"lineage\":\"{LINEAGE}\"")));
+        assert!(report.contains("\"name\":\"fixture.elf\""));
+        assert!(report.contains("\"name\":\"fixture.manifest\""));
+    }
+
+    #[test]
+    fn seed7_refuses_existing_files_directories_and_symlinks_without_overwriting() {
+        let dir = TempDir::new();
+        let (elf_path, manifest_path) = write_inputs(dir.path(), &fixture_elf(4096));
+
+        let existing_file = dir.path().join("existing.raw");
+        std::fs::write(&existing_file, b"preserve this image").unwrap();
+        assert!(seed7(&existing_file, LINEAGE, &elf_path, &manifest_path).is_err());
+        assert_eq!(
+            std::fs::read(&existing_file).unwrap(),
+            b"preserve this image"
+        );
+
+        let existing_dir = dir.path().join("existing-dir.raw");
+        std::fs::create_dir(&existing_dir).unwrap();
+        assert!(seed7(&existing_dir, LINEAGE, &elf_path, &manifest_path).is_err());
+        assert!(existing_dir.is_dir());
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let target = dir.path().join("target.raw");
+            let link = dir.path().join("link.raw");
+            std::fs::write(&target, b"symlink target stays intact").unwrap();
+            symlink(&target, &link).unwrap();
+            assert!(seed7(&link, LINEAGE, &elf_path, &manifest_path).is_err());
+            assert_eq!(
+                std::fs::read(&target).unwrap(),
+                b"symlink target stays intact"
+            );
+            assert!(
+                std::fs::symlink_metadata(&link)
+                    .unwrap()
+                    .file_type()
+                    .is_symlink()
+            );
+        }
+    }
+
+    #[test]
+    fn seed7_rejects_an_oversized_elf_before_creating_the_image() {
+        let dir = TempDir::new();
+        let elf = fixture_elf(format7::MAX_FILE_BYTES as usize + 1);
+        let (elf_path, manifest_path) = write_inputs(dir.path(), &elf);
+        let image = dir.path().join("must-not-exist.raw");
+
+        let error = seed7(&image, LINEAGE, &elf_path, &manifest_path).unwrap_err();
+        assert!(error.contains("maximum"));
+        assert!(!image.exists());
+    }
 }

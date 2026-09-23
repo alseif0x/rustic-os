@@ -36,9 +36,7 @@
 
 use crate::Error;
 use crate::checksum::crc;
-use crate::extent::{
-    DATA_BYTES_V6, DATA_SECTORS, EXTENTS_PER_FILE, Extent, MAX_FILE_V6, OBJECTS_V6,
-};
+use crate::extent::{DATA_BYTES_V6, DATA_SECTORS, EXTENTS_PER_FILE, Extent, OBJECTS_V6};
 use crate::receipt6::RETAINED_V6;
 
 mod header;
@@ -97,8 +95,9 @@ pub const PAYLOAD_SECTOR: u64 = FIRST_GENERATION_SECTOR + GENERATIONS as u64 * G
 pub const PAYLOAD_BYTES: u64 = DATA_BYTES_V6;
 pub const VOLUME_SECTORS: u64 = PAYLOAD_SECTOR + DATA_SECTORS;
 
-/// Largest file the payload addresses. Reused from the selected #51 budget.
-pub const MAX_FILE_BYTES: u32 = MAX_FILE_V6 as u32;
+/// Largest file in the measured native-application profile. This exceeds the
+/// frozen v6 limit and is identified by `FEATURE_FILE_512K` on disk.
+pub const MAX_FILE_BYTES: u32 = 512 * 1024;
 /// Runs one file, node or retained record may reference.
 pub const MAX_EXTENTS: usize = EXTENTS_PER_FILE;
 
@@ -107,7 +106,9 @@ pub const MAX_EXTENTS: usize = EXTENTS_PER_FILE;
 pub const FEATURE_EXTENT_PAYLOAD: u32 = 1;
 pub const FEATURE_EXTENT_SNAPSHOT: u32 = 1 << 1;
 pub const FEATURE_SCOPED_RECORDS: u32 = 1 << 2;
-pub const FEATURES: u32 = FEATURE_EXTENT_PAYLOAD | FEATURE_EXTENT_SNAPSHOT | FEATURE_SCOPED_RECORDS;
+pub const FEATURE_FILE_512K: u32 = 1 << 3;
+pub const FEATURES: u32 =
+    FEATURE_EXTENT_PAYLOAD | FEATURE_EXTENT_SNAPSHOT | FEATURE_SCOPED_RECORDS | FEATURE_FILE_512K;
 
 /// First sector of a generation's header copy. Callers pass 0 or 1; a larger
 /// value wraps into the two copies.

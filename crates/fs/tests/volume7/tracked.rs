@@ -305,7 +305,12 @@ fn size_identity_epoch_not_found_and_sequence_refusals_do_not_write() {
     );
     assert_eq!(
         volume
-            .replace_tracked(&mut disk, identity(27), 1, &vec![0; 256 * 1024 + 1])
+            .replace_tracked(
+                &mut disk,
+                identity(27),
+                1,
+                &vec![0; format7::MAX_FILE_BYTES as usize + 1],
+            )
             .err(),
         Some(Error::Size)
     );
@@ -453,11 +458,11 @@ fn allocator_uses_later_contiguous_space_and_maximum_payload() {
     seed_one_file(&mut maximum_disk, b"old");
     let mut maximum = Volume7::EMPTY;
     maximum.mount_into(&mut maximum_disk).unwrap();
-    let bytes = vec![0xa5; 256 * 1024];
+    let bytes = vec![0xa5; format7::MAX_FILE_BYTES as usize];
     let record = maximum
         .replace_tracked(&mut maximum_disk, identity(19), 1, &bytes)
         .unwrap();
-    assert_eq!(record.length, 256 * 1024);
+    assert_eq!(record.length, format7::MAX_FILE_BYTES);
     assert_eq!(record.extents_used, 1);
     assert_eq!(read_snapshot(&mut maximum_disk, &record), bytes);
 }

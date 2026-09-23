@@ -4,7 +4,12 @@
 
 Decision for [#51](https://github.com/alseif0x/rustic-os/issues/51), adopted
 2026-09-22 under the owner's authorization to continue implementation and
-versioned storage/protocol decisions. The current host-tested owner supports
+versioned storage/protocol decisions. On 2026-09-23 the native artifact
+measurements were refreshed: `file-server.elf` is 324,344 bytes and
+`block-probe.elf` is 283,816 bytes. V7/profile 2 therefore now supports 512 KiB
+per file; V5/V6 remain frozen. Feature bit 3 identifies this development profile
+and the reader refuses earlier 256 KiB V7 images, which must be reprovisioned.
+The current host-tested owner supports
 tracked replacement, durable staged admission, explicit admitted execution,
 cause-bearing cancellation and explicit retry-epoch retention maintenance.
 Payloads and exact retries use bounded sector I/O; candidate bytes and inactive
@@ -13,13 +18,15 @@ after final flush settlement. Maintenance refuses open admissions and must only
 run after the service has resolved current-epoch outcomes. The host-only
 `upgrade_v5_to_v7` converter copies a v5 source to distinct disposable media,
 preserving supported scoped recovery records and refusing ambiguous or invalid
-history. Production remains v5-backed; no service backend or capability
-advertisement is wired, and the v6 direct probe remains separate.
+history. The explicit `mode=terminal-v7` fixture now selects a read-only V7
+service and profile-2 file-size readiness; production/default `mode=terminal`
+remains v5-backed, and no profile-2 write path or capability advertisement is
+wired. The v6 direct probe remains separate.
 
 ## Why a successor
 
 The [measured workspace budget](WORKSPACES.md) selects 256 live objects, 64 MiB
-of payload, 256 KiB per file and eight retained outcomes. The v6 extent prototype
+of payload, 512 KiB per V7 file and eight retained outcomes. The v6 extent prototype
 supports that payload geometry but does not persist the monotonic identity
 watermark or the subject/workspace/instance binding and exact candidate bytes
 required by the v5 service's durable admission and retry contracts. Substituting
@@ -36,8 +43,9 @@ ABI change or new unsafe boundary is introduced.
 ## Disk layout
 
 All numbers are little-endian. Sectors are 512 bytes relative to the volume.
-The magic is `RUSTFS3\0`, version 7, layout 1, exact feature mask 7 (extent
-payload, immutable snapshots, scoped records). Unknown features are refused.
+The magic is `RUSTFS3\0`, version 7, layout 1, exact feature mask 15 (extent
+payload, immutable snapshots, scoped records, 512 KiB files). Unknown features
+and pre-release mask-7 256 KiB images are refused.
 
 | Region | Generation 0 | Generation 1 | Size |
 | --- | --- | --- | --- |
@@ -51,7 +59,7 @@ Total volume size is 131,282 sectors. Each node or retained record references at
 most eight runs, each two `u32` values (start and sector count), relative to the
 payload. Runs must be nonempty, in bounds, nonoverlapping within the record, and
 total exactly `ceil(length / 512)`; unused runs are zero. Length is `u32`, capped
-at 262,144 bytes. An empty file has no runs.
+at 524,288 bytes. An empty file has no runs.
 
 The header stores lineage at byte 12, retry epoch at 28, global sequence at 36,
 monotonic next identity at 44, and node/map/receipt aggregate CRCs at 48/52/56.
@@ -155,11 +163,12 @@ legacy `operation` module. The kernel's 64-byte packet stays unchanged.
   or small files. Receipt fragment framing remains unchanged; complete receipt
   decoding establishes the selected profile.
 
-This marker does not negotiate availability. No SDK call, running service,
-descriptor or generic service-v1 schema advertises support yet. A later service
-integration must explicitly select the new profile and preserve authority,
-bounded transfer, conflict, cancellation and recovery semantics. Existing clients
-and schema hashes retain their original meaning and 1 KiB limit.
+This marker does not negotiate availability. The explicit V7 fixture selects a
+read-only service; its readiness records the 512 KiB file limit and eight
+retained-record geometry, but the service accepts only stable references and
+bounded reads. No profile-2 write, receipt, descriptor or generic service-v1
+capability is exposed. Existing clients and schema hashes retain their original
+meaning and 1 KiB limit.
 
 ## Direct tracked replacement
 
@@ -229,25 +238,43 @@ space is one 512-byte sector regardless of file size. A stale version returns
 error may leave the already copied prefix in the caller's output; callers must
 discard that buffer unless the method succeeds.
 
+The `rustic-volume seed7` host command creates a fresh disposable V7 image
+exclusively, provisions the `workspaces/application` directory, and writes the
+measured ELF and manifest as tracked files. `report7` remounts the image
+read-only and verifies the provisioned lineage, identities, kinds, sizes and
+bytes. The boot harness consumes those canonical workspace/resource IDs; the
+guest does not invent a lineage or run a provisioner.
+
 The full live payload CRC is checked when the volume is mounted, not rescanned
 for every range. Reads therefore assume that no writer changes the medium outside
 the mounted `Volume7` owner. An external media change while mounted is not
 detected by this API; remount validates the whole live payload CRC again. The
-method is a filesystem prerequisite only: no service profile, SDK route or guest
-consumer is wired to it yet.
+explicit read-only service routes the existing SDK range API to V7; the
+`terminal-v7` QEMU harness verifies the selected 324,344-byte ELF and 128-byte
+manifest byte-for-byte in two boots, with another bounded read after service
+restart. It does not execute the file from the workspace or exercise V7 writes.
 
 ## Evidence boundary
 
 Host codec tests cover byte offsets, independently computed CRCs, checksum-valid
 malformed records, temporal states, high monotonic identities, size boundaries
-through 256 KiB, and mutually incompatible wire profiles. The focused sparse
+through 512 KiB, and mutually incompatible wire profiles. The focused sparse
 host-disk suite has 80 v7 cases covering provision/mount, version-pinned bounded
 range reads, tracked commit/replay,
 durable admission, pollable retry, execute/cancel, pre-write refusals, retained
 snapshots, torn headers, 105 admission publication cuts, 103 execute/cancel cuts,
 and recovery after final-flush errors. The separate `upgrade7` suite exercises
 conversion/remount, 18 success/refusal cases, and each publication write/flush
-failure on sparse host disks. These
-tests exercise mocks only; they do not demonstrate real device/DMA behavior, a v7
-guest, service integration, bounded control latency or the consuming workload.
-Those remain #51 acceptance obligations.
+failure on sparse host disks. These host tests do not demonstrate real
+device/DMA behavior. Guest evidence is recorded in
+`artifacts/boot/terminal-v7/result.json` (build `2338ead14911b84f`): the
+host-provisioned 67,216,384-byte image passed read-only service reads for
+`file-server.elf` and its manifest in two boots, survived one service restart,
+and had the same before/after SHA-256. QEMU's temporary block backend is opened
+read/write because the filesystem mount's required initial FLUSH is rejected by
+the local QEMU read-only backend; the service grants only the read protocol, and
+the full volume digest is checked unchanged. The build ID records the source
+tree, toolchain, image and application hashes for this run. CI's boot job
+repeats this disposable V7 harness. This read/remount slice does not
+establish application execution, full-storage/retention behavior, guest
+publication-fault recovery, bounded control latency or complete #51 acceptance.

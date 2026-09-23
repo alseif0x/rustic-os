@@ -51,7 +51,7 @@ def disk(path, initialize=False, upgrade_recovery=False):
         os.close(lock_fd)
 
 @contextlib.contextmanager
-def machine(image, data, serial, log, fault=None):
+def machine(image, data, serial, log, fault=None, readonly=False):
     image = Path(image).resolve()
     metadata = json.loads((image.parent / "image.json").read_text())
     if environment.digest(image) != metadata["image_sha256"]:
@@ -66,13 +66,16 @@ def machine(image, data, serial, log, fault=None):
             rules = Path(temporary) / "blkdebug.conf"
             rules.write_text(configuration(fault))
             drive = f"blkdebug:{rules}:{data}"
+        data_options = f"if=none,id=rusticdata,format=raw,cache=writeback,file={drive}"
+        if readonly:
+            data_options += ",readonly=on"
         command = [
             "qemu-system-x86_64", "-machine", config["machine"], "-accel", config["accelerator"],
             "-cpu", config["cpu"], "-smp", "1", "-m", "256M",
             "-drive", "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.fd",
             "-drive", f"if=pflash,format=raw,file={variables}",
             "-drive", f"if=virtio,format=raw,readonly=on,file={image}",
-            "-drive", f"if=none,id=rusticdata,format=raw,cache=writeback,file={drive}",
+            "-drive", data_options,
             "-device", "virtio-blk-pci,drive=rusticdata,addr=0x6,disable-modern=on,disable-legacy=off,queue-size=8,num-queues=1,vectors=0,rerror=report,werror=report",
             "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04",
             "-display", "none", "-serial", serial, "-monitor", "none", "-nic", "none", "-no-reboot",

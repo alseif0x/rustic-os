@@ -13,6 +13,7 @@ name = "rustic-volume"
 path = "src/main.rs"
 
 [dependencies]
+rustic-abi = { path = "../../crates/abi" }
 rustic-fs = { path = "../../crates/fs" }
 
 [lints]

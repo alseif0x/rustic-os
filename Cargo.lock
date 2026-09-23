@@ -184,6 +184,7 @@ dependencies = [
 name = "rustic-volume"
 version = "0.1.0"
 dependencies = [
+ "rustic-abi",
  "rustic-fs",
 ]
 

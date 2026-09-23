@@ -3,11 +3,12 @@
 //! these tests prove the shapes, the offsets and the invariants one record can
 //! prove, not that any volume mounts or serves a request.
 use rustic_fs::format7::{
-    FEATURES, GENERATION_SECTORS, Header7, LAYOUT, MAGIC, MAP_BYTES, MAP_SECTORS, MAX_EXTENTS,
-    MAX_FILE_BYTES, NODE_BYTES, NODES, NODES_SECTORS, Node7, PAYLOAD_BYTES, PAYLOAD_SECTOR,
-    RECEIPT_BLOCK_BYTES, RECEIPT_RESERVED_BYTES, RECEIPTS_SECTORS, RECORD_BYTES, RECORDS_BYTES,
-    RETAINED, Record7, RecordState, SECTOR_BYTES, VERSION, VOLUME_SECTORS, aggregate,
-    header_sector, map_sector, nodes_sector, receipt_slots, receipts_sector,
+    FEATURE_FILE_512K, FEATURES, GENERATION_SECTORS, Header7, LAYOUT, MAGIC, MAP_BYTES,
+    MAP_SECTORS, MAX_EXTENTS, MAX_FILE_BYTES, NODE_BYTES, NODES, NODES_SECTORS, Node7,
+    PAYLOAD_BYTES, PAYLOAD_SECTOR, RECEIPT_BLOCK_BYTES, RECEIPT_RESERVED_BYTES, RECEIPTS_SECTORS,
+    RECORD_BYTES, RECORDS_BYTES, RETAINED, Record7, RecordState, SECTOR_BYTES, VERSION,
+    VOLUME_SECTORS, aggregate, header_sector, map_sector, nodes_sector, receipt_slots,
+    receipts_sector,
 };
 use rustic_fs::{DATA_BYTES_V6, DATA_SECTORS, Error, Extent, Header6, Kind, PreventionReason};
 
@@ -150,7 +151,7 @@ fn the_v7_geometry_is_the_selected_budget_and_fits_the_disk() {
         (2048, 512, 4)
     );
     assert_eq!(GENERATION_SECTORS, 64 + 32 + 4);
-    assert_eq!(MAX_FILE_BYTES, 256 * 1024);
+    assert_eq!(MAX_FILE_BYTES, 512 * 1024);
     assert_eq!(MAX_EXTENTS, 8);
     assert_eq!(PAYLOAD_BYTES, 64 * 1024 * 1024);
     // Two header sectors keyed by generation, then two 100-sector generations.
@@ -265,7 +266,7 @@ fn header_reserved_bytes_and_geometry_are_strict_even_with_a_valid_checksum() {
         (68, (MAP_BYTES as u32 / 2).to_le_bytes()),
         (72, (DATA_SECTORS as u32 + 1).to_le_bytes()),
         (76, (RETAINED as u32 + 1).to_le_bytes()),
-        (80, (FEATURES | 1 << 3).to_le_bytes()),
+        (80, (FEATURES | 1 << 4).to_le_bytes()),
         (84, (RECORD_BYTES as u32 - 1).to_le_bytes()),
     ];
     for (offset, value) in mutations {
@@ -274,6 +275,10 @@ fn header_reserved_bytes_and_geometry_are_strict_even_with_a_valid_checksum() {
         seal_header(&mut b);
         assert_eq!(Header7::decode(&b), Err(Error::Corrupt), "offset {offset}");
     }
+    let mut old_profile = Header7::initial(LINEAGE).encode().unwrap();
+    old_profile[80..84].copy_from_slice(&(FEATURES & !FEATURE_FILE_512K).to_le_bytes());
+    seal_header(&mut old_profile);
+    assert_eq!(Header7::decode(&old_profile), Err(Error::Corrupt));
     let mut b = Header7::initial(LINEAGE).encode().unwrap();
     b[88] = MAX_EXTENTS as u8 + 1;
     seal_header(&mut b);
@@ -529,7 +534,7 @@ fn node_runs_must_be_exact_in_bounds_and_disjoint() {
 }
 
 #[test]
-fn node_payload_geometry_is_exact_at_the_64k_and_256k_boundaries() {
+fn node_payload_geometry_is_exact_at_the_64k_and_512k_boundaries() {
     let file = |length, extents, used| Node7 {
         length,
         extents_used: used,
@@ -544,14 +549,14 @@ fn node_payload_geometry_is_exact_at_the_64k_and_256k_boundaries() {
         file(64 * 1024 + 1, runs(&[(0, 128)]), 1).validate(),
         Err(Error::Corrupt)
     );
-    // 256 KiB is the largest file, and one byte more is refused outright.
+    // 512 KiB is the largest V7 file, and one byte more is refused outright.
     assert!(
-        file(MAX_FILE_BYTES, runs(&[(0, 512)]), 1)
+        file(MAX_FILE_BYTES, runs(&[(0, 1024)]), 1)
             .validate()
             .is_ok()
     );
     assert_eq!(
-        file(MAX_FILE_BYTES + 1, runs(&[(0, 513)]), 1).validate(),
+        file(MAX_FILE_BYTES + 1, runs(&[(0, 1025)]), 1).validate(),
         Err(Error::Corrupt)
     );
     assert_eq!(
@@ -1290,18 +1295,18 @@ fn record_payload_geometry_matches_the_node_rule() {
         Record7 {
             length: MAX_FILE_BYTES + 1,
             extents_used: 1,
-            extents: runs(&[(0, 513)]),
+            extents: runs(&[(0, 1025)]),
             ..record
         },
     ] {
         assert_eq!(broken.encode(), Err(Error::Corrupt));
         assert_eq!(broken.validate(9, 100), Err(Error::Corrupt));
     }
-    // The retained snapshot at the largest file boundary is valid.
+    // The retained snapshot at the 512 KiB file boundary is valid.
     let largest = Record7 {
         length: MAX_FILE_BYTES,
         extents_used: 1,
-        extents: runs(&[(0, 512)]),
+        extents: runs(&[(0, 1024)]),
         ..record
     };
     assert!(largest.validate(u64::MAX, 100).is_ok());

@@ -27,7 +27,7 @@ pub(crate) fn run(
     server: &mut ReadServer7<'_>,
     admin: Endpoint,
 ) -> u64 {
-    let ready = Message::new(0, &wire::encode([0, 2, 256, 262144, 8, 0, 0, 0])).unwrap();
+    let ready = Message::new(0, &wire::encode([0, 2, 256, 524288, 8, 0, 0, 0])).unwrap();
     if admin.send(&ready).is_err() {
         return 1;
     }

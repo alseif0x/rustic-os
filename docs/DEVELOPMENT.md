@@ -87,7 +87,7 @@ The selected release and its pins are recorded in image and measurement metadata
 
 ## CI and negative testing
 
-.github/workflows/check.yml runs the same cargo xtask check on ubuntu-24.04 for push and pull_request. Actions are pinned by SHA, the token has contents:read permissions, checkout does not persist credentials, and no project secrets are supplied. Toolchain versions, logs and the no_std library are retained as artifacts for 14 days. A separate job installs pinned QEMU/OVMF, tests the runner and boots all twenty-two scenarios, preserving images and evidence.
+.github/workflows/check.yml runs the same cargo xtask check on ubuntu-24.04 for push and pull_request. Actions are pinned by SHA, the token has contents:read permissions, checkout does not persist credentials, and no project secrets are supplied. Toolchain versions, logs and the no_std library are retained as artifacts for 14 days. A separate job installs pinned QEMU/OVMF, tests the runner, boots all twenty-two scenarios, and runs the disposable V7 artifact-read harness, preserving images and evidence. Ubuntu 24.04 remains the pinned CI reference; the local developer baseline on this machine is Ubuntu 26.04 and is checked against its own recorded package versions.
 
 Next, tools/check-failure.sh introduces a deliberately failing test and requires cargo xtask check to reject it. The check identifies the expected marker so a compilation or tooling error cannot count as evidence. Run it only in a disposable checkout: it formats and temporarily adds the fixture, removing it on exit.
 
@@ -151,6 +151,18 @@ cargo run -p rustic-volume -- report <image>
 `seed` writes a small v5 experiment volume, never the owner's terminal volume, and
 `migrate` is the deliberate one-way upgrade. Host agreement is not guest execution: no
 guest mounts a v6 volume yet.
+
+The explicitly selected V7 read-only guest fixture uses a fresh disposable
+volume and the measured largest shipped native artifact. Run
+`python3 tools/v7_read_test.py` to build the host provisioner and UEFI image,
+read the full `file-server.elf` and manifest over the real guest UART in two
+boots, restart the file service between reads, and verify the provisioned volume
+is unchanged. It writes no volume image to the tracked workspace or to
+`artifacts/terminal/data.raw`; evidence is stored in
+`artifacts/boot/terminal-v7/`. The service grants only the read protocol. The
+temporary QEMU data backend is not opened read-only because V7 mount requires an
+initial flush, which this host's read-only QEMU backend rejects; before/after
+volume hashes independently check for mutation.
 
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer

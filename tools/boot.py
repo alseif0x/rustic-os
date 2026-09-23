@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Build and test the R0 UEFI image from the repository root."""
 import argparse
+from pathlib import Path
+import subprocess
+import sys
 from boot_support.image import DEFAULT_MEMORY_MIB, MAX_MEMORY_MIB, MEMORY_PROFILES, build, memory_supported
 from boot_support.runner import run, suite
 from boot_support.scenarios import MODES
@@ -33,3 +36,9 @@ if __name__ == "__main__":
         raise SystemExit({"success": 0, "panic": 1, "fatal": 1, "exception": 1, "timeout": 124}.get(result["outcome"], 2))
     else:
         suite(args.timeout)
+        root = Path(__file__).resolve().parent.parent
+        subprocess.run(
+            [sys.executable, str(root / "tools/v7_read_test.py")],
+            cwd=root,
+            check=True,
+        )

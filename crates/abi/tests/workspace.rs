@@ -46,6 +46,7 @@ fn replacement() -> Replacement {
 
 #[test]
 fn large_requests_round_trip_and_profiles_never_fall_back() {
+    assert_eq!(MAX_FILE_BYTES, 512 * 1024);
     let request = replacement();
     for size in [0, 100, 1024, 1025, 65535, 65536, MAX_FILE_BYTES as usize] {
         let packet = request.packet(size, 9).unwrap();
