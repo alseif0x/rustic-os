@@ -40,6 +40,7 @@ pub use volume::Volume;
 pub use volume6::{Volume6, mount as mount6, provision as provision6};
 pub use volume7::{
     PollDisk7, PollPublication7, Publication7Cancel, Publication7Phase, Volume7, WriteIdentity7,
+    upgrade_v5_to_v7,
 };
 pub const OBJECTS: usize = 32;
 pub const MAX_FILE: usize = 1024;

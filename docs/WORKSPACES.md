@@ -53,11 +53,11 @@ Whole-file buffers are the other bound: the file service holds `Transfer.data: [
 - **64 MiB of file data per volume** — the issue's planning target, kept as the total cap because 256 x 256 KiB would otherwise be 64 MiB exactly; the cap is what makes exhaustion decidable.
 - **8 retained operation records** — four times today's two, so a client can recover a small window of unresolved outcomes instead of losing the third mutation to `Full`. Retention is bounded; v7 now has an explicit retry-epoch transition that refuses open admissions, and unresolved evidence is never silently dropped.
 
-**What this implies for the format:** a v6 layout with extents (or a bank chain) per file, `Node.length` widened beyond 16 bits, an explicit total-data cap with typed exhaustion, and deliberate upgrade behavior from v5. Those are the implementation stages of #51, not this document.
+**Format follow-up:** at the time this budget was selected, the next design was described as a v6 layout with extents per file, a wider length field, typed total-data exhaustion and deliberate upgrade behavior from v5. The later [format-7 decision](WORKSPACE-FORMAT7.md) supersedes that target to persist scoped identity, immutable retry snapshots, staged admission and explicit retention without weakening the selected budget. The host-only `upgrade_v5_to_v7` converter copies into a distinct disposable target, preserving representable scoped evidence and refusing ambiguous history. Production service wiring and disposable-guest migration acceptance remain pending.
 
 ## Not claimed
 
-This document selects a workload and budget, not production capacity or service support. The numbers above are measurements of one build on one machine; the 64 MiB figure is the issue's planning target and not a product promise. The v7 owner now implements explicit host-tested retention maintenance, but whole-file RAM cost, interruption behavior, service integration, guest workload acceptance and migration remain open.
+This document selects a workload and budget, not production capacity or service support. The numbers above are measurements of one build on one machine; the 64 MiB figure is the issue's planning target and not a product promise. The host-tested v7 owner now implements bounded replacement, durable admission/execution/cancellation, explicit retention maintenance and an out-of-place v5 converter. Whole-file RAM cost, production service integration and disposable-guest workload/failure acceptance remain open.
 
 ## Stage two: format decision
 

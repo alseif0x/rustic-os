@@ -4,10 +4,10 @@
 //! This module fixes the on-disk shapes, checks each record and a decoded
 //! generation's namespace and allocation ownership. It stays pure: the separate
 //! `Volume7` owner provisions and verifies mounts, publishes direct tracked
-//! replacements for existing files, and explicitly advances retry epochs while
-//! reclaiming terminal snapshots. Staged admission, cancellation, migration and
-//! service support remain later stages. The v5 and v6 layouts stay frozen, and
-//! these codecs do not claim service support.
+//! replacements for existing files, stages/cancels admissions and explicitly
+//! advances retry epochs while reclaiming terminal snapshots. A separate owner
+//! module converts v5 into a distinct disposable v7 target. This codec module
+//! stays pure; v5 and v6 remain frozen, and no service integration is claimed.
 //!
 //! Sectors are 512 bytes, numbered from the volume start:
 //!
