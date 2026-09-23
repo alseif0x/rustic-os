@@ -359,13 +359,14 @@ fn maximum_size_payload_mounts_across_all_noncontiguous_extents() {
         .collect();
     let mut extents = [Extent::new(0, 0); MAX_EXTENTS];
     let mut map = [0; MAP_WORDS];
+    let sectors_per_extent = format7::MAX_FILE_BYTES as u64 / 512 / MAX_EXTENTS as u64;
 
     for (run, extent) in extents.iter_mut().enumerate() {
-        let start = 32 + run as u64 * 65;
-        *extent = Extent::new(start, 64);
-        allocate_run(&mut map, start, 64);
-        let first = run * 64 * 512;
-        let last = first + 64 * 512;
+        let start = 32 + run as u64 * (sectors_per_extent + 1);
+        *extent = Extent::new(start, sectors_per_extent);
+        allocate_run(&mut map, start, sectors_per_extent);
+        let first = run * sectors_per_extent as usize * 512;
+        let last = first + sectors_per_extent as usize * 512;
         let (blocks, remainder) = payload[first..last].as_chunks::<512>();
         assert!(remainder.is_empty());
         for (offset, block) in blocks.iter().enumerate() {

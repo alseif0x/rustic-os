@@ -25,7 +25,9 @@ MAX_MEMORY_MIB = 16384
 # Fixtures whose harness owns its own QEMU invocation and pins the reference
 # size. A profile other than the reference cannot be honored for these, so the
 # builder refuses it instead of recording a memory_mib the boot never used.
-PINNED_MEMORY_MODES = ("terminal-test", "recovery-test")
+V7_READ_MODE = "terminal-v7"
+IMAGE_MODES = MODES + (V7_READ_MODE,)
+PINNED_MEMORY_MODES = ("terminal-test", "recovery-test", V7_READ_MODE)
 
 
 def memory_supported(mode, memory):
@@ -55,7 +57,7 @@ def source_id(*, tasks_acceptance=False, memory=DEFAULT_MEMORY_MIB):
 
 
 def build(mode, memory=DEFAULT_MEMORY_MIB):
-    if mode not in MODES:
+    if mode not in IMAGE_MODES:
         raise ValueError("unsupported fixture")
     if not memory_supported(mode, memory):
         raise ValueError(
@@ -99,7 +101,7 @@ def image_directory(mode, memory=DEFAULT_MEMORY_MIB):
 
 def package(kernel, mode, build_id, provenance):
     """Package a prebuilt ELF using trusted reference files, without compiling."""
-    if mode not in MODES:
+    if mode not in IMAGE_MODES:
         raise ValueError("unsupported fixture")
     memory = provenance.get("memory_mib", DEFAULT_MEMORY_MIB)
     directory = image_directory(mode, memory)

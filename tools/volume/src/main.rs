@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Host tool for v6 volume images: provision, seed a v5 experiment volume,
-//! migrate it in place and report what an image contains. It never touches the
-//! owner's terminal volume and never guesses a lineage.
+//! Host tool for v5/v6 volume images and explicit disposable v7 fixtures.
+//! It never touches the owner's terminal volume and never guesses a lineage.
 use std::path::Path;
 use std::process::ExitCode;
 
@@ -15,8 +14,11 @@ usage: rustic-volume <command>
   write <image> <parent> <name> <source>   place a host file in a v6 image
   migrate <image> <lineage>     migrate a v5 image to v6 in place
   report <image>                print a v6 image as JSON
+  seed7 <image> <lineage> <elf> <manifest>  create a fresh v7 application fixture
+  report7 <image>               verify a v7 image and print its metadata as JSON
 A lineage is 32 hex characters. Images are exactly one volume long; a shorter
-file is refused so a truncated image cannot be read as a volume.";
+file is refused so a truncated image cannot be read as a volume. `seed7` uses an
+exclusive create and refuses an existing image path.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -45,6 +47,13 @@ fn run(args: &[String]) -> Result<String, String> {
         }
         [command, image] if command == "seed" => command::seed(Path::new(image)),
         [command, image] if command == "report" => command::report(Path::new(image)),
+        [command, image, lineage, elf, manifest] if command == "seed7" => command::seed7(
+            Path::new(image),
+            lineage,
+            Path::new(elf),
+            Path::new(manifest),
+        ),
+        [command, image] if command == "report7" => command::report7(Path::new(image)),
         _ => Err(USAGE.to_owned()),
     }
 }

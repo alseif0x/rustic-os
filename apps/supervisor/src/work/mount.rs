@@ -65,7 +65,7 @@ impl Mount {
                 let w = k::decode(m.payload()).map_err(|_| 4u64)?;
                 let ready = match profile {
                     FileProfile::V5 => [0, 1, 32, 1024, 0, 0, 0, 0],
-                    FileProfile::V7 => [0, 2, 256, 262144, 8, 0, 0, 0],
+                    FileProfile::V7 => [0, 2, 256, 524288, 8, 0, 0, 0],
                 };
                 if m.sender() != state.files || m.correlation() != 0 || w != ready {
                     return Err(4);

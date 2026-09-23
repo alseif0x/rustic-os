@@ -10,16 +10,16 @@ The native application artifacts that a workspace must eventually carry, as buil
 
 | Artifact | Bytes |
 | --- | ---: |
-| `file-server.elf` | 215,296 |
-| `shell.elf` | 208,824 |
-| `block-probe.elf` | 186,024 |
-| `utility.elf` | 126,560 |
+| `file-server.elf` | 324,344 |
+| `block-probe.elf` | 283,816 |
+| `shell.elf` | 204,800 |
+| `utility.elf` | 126,656 |
 | `supervisor.elf` | 68,128 |
 | `tasks.elf` | 52,808 |
 | `sdk-probe.elf` | 25,944 |
 | every `*.manifest` | 128 |
 
-The largest shipped executable is **215,296 bytes**, and the manifest that identifies it is 128 bytes. Anything that installs or launches an application from a workspace (#52) therefore needs files of that order, not of the current order.
+The largest shipped executable is **324,344 bytes**, and the manifest that identifies it is 128 bytes. Anything that installs or launches an application from a workspace (#52) therefore needs files of that order, not of the current order. Measurements were refreshed from the current `target/native` build on 2026-09-23.
 
 ## Measured limits of the current volume
 
@@ -44,20 +44,20 @@ Whole-file buffers are the other bound: the file service holds `Transfer.data: [
 
 ## Selected workload and budget
 
-**Workload:** install and launch one native application artifact from a workspace, the consumer that #52 names. Its measured size is 215,296 bytes plus a 128-byte manifest.
+**Workload:** install and launch one native application artifact from a workspace, the consumer that #52 names. The current largest artifact is `file-server.elf` at 324,344 bytes plus its 128-byte manifest.
 
 **Budget, pinned to that consumer:**
 
-- **256 KiB per file** — covers the largest shipped executable with about 19% headroom; 1 MiB stays a planning ceiling to be revisited only with a larger measured artifact.
+- **512 KiB per V7 file** — covers the current largest shipped executable with about 61% headroom. V5/V6 limits remain frozen. A 512 KiB feature bit distinguishes this V7 profile from pre-release 256 KiB V7 images; old-format development fixtures must be reprovisioned.
 - **256 objects** — eight times today's 32, enough for application generations plus configuration and task records.
-- **64 MiB of file data per volume** — the issue's planning target, kept as the total cap because 256 x 256 KiB would otherwise be 64 MiB exactly; the cap is what makes exhaustion decidable.
+- **64 MiB of file data per volume** — the issue's planning target, independent of the 256-object and 512 KiB per-file ceilings. Not all maximum-size files can coexist; total capacity is exhausted first.
 - **8 retained operation records** — four times today's two, so a client can recover a small window of unresolved outcomes instead of losing the third mutation to `Full`. Retention is bounded; v7 now has an explicit retry-epoch transition that refuses open admissions, and unresolved evidence is never silently dropped.
 
-**Format follow-up:** at the time this budget was selected, the next design was described as a v6 layout with extents per file, a wider length field, typed total-data exhaustion and deliberate upgrade behavior from v5. The later [format-7 decision](WORKSPACE-FORMAT7.md) supersedes that target to persist scoped identity, immutable retry snapshots, staged admission and explicit retention without weakening the selected budget. The host-only `upgrade_v5_to_v7` converter copies into a distinct disposable target, preserving representable scoped evidence and refusing ambiguous history. An explicit read-only V7 service is wired behind `mode=terminal-v7`; v5 remains the default and profile-2 writes are not enabled. Host provisioning, the disposable QEMU path and consumer acceptance remain pending.
+**Format follow-up:** at the time this budget was selected, the next design was described as a v6 layout with extents per file, a wider length field, typed total-data exhaustion and deliberate upgrade behavior from v5. The later [format-7 decision](WORKSPACE-FORMAT7.md) supersedes that target to persist scoped identity, immutable retry snapshots, staged admission and explicit retention without weakening the selected budget. The host-only `upgrade_v5_to_v7` converter copies into a distinct disposable target, preserving representable scoped evidence and refusing ambiguous history. An explicitly selected read-only V7 service is wired behind `mode=terminal-v7`; v5 remains the default and profile-2 writes are not enabled. `python3 tools/v7_read_test.py` now provisions a fresh temporary V7 volume and reads the complete `file-server.elf` plus manifest in two QEMU boots, including a service restart, while checking byte equality and an unchanged volume digest. This proves guest read/remount behavior only; installing and launching the artifact and the full #51 capacity/failure workload remain pending.
 
 ## Not claimed
 
-This document selects a workload and budget, not production capacity or service support. The numbers above are measurements of one build on one machine; the 64 MiB figure is the issue's planning target and not a product promise. The host-tested v7 owner now implements bounded replacement, durable admission/execution/cancellation, explicit retention maintenance and an out-of-place v5 converter. Whole-file RAM cost, production service integration and disposable-guest workload/failure acceptance remain open.
+This document selects a workload and budget, not production capacity or general service support. The numbers above are measurements of one build on one machine; the 64 MiB figure is the issue's planning target and not a product promise. The host-tested v7 owner implements bounded replacement, durable admission/execution/cancellation, explicit retention maintenance and an out-of-place v5 converter. A narrow read-only guest profile has now mounted the host-provisioned V7 image and verified the full selected ELF and manifest across reboot and service restart. Application launch from the workspace, write/retention capacity, interrupted publication, corrupt-input recovery, measured guest RAM and control latency remain open; #51 is not complete.
 
 ## Stage two: format decision
 

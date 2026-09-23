@@ -105,16 +105,19 @@ fn seed_full_payload() -> Sparse {
     let zeros = vec![0; format7::MAX_FILE_BYTES as usize];
     let checksum = format7::aggregate(&zeros);
     let mut cursor = 0;
+    let sectors_per_file = format7::MAX_FILE_BYTES as u64 / 512;
+    let retained_files = 4;
+    let live_files = (DATA_SECTORS / sectors_per_file) as usize - retained_files;
 
-    for index in 0..NODES - 4 {
+    for index in 0..live_files {
         let id = index as u32 + 5;
-        let run = Extent::new(cursor, format7::MAX_FILE_BYTES as u64 / 512);
+        let run = Extent::new(cursor, sectors_per_file);
         nodes[index + 4] = full_file_node(id, &[run], checksum);
         allocate_run(&mut map, run.start, run.sectors);
         cursor += run.sectors;
     }
-    for (index, record) in records.iter_mut().take(4).enumerate() {
-        let run = Extent::new(cursor, format7::MAX_FILE_BYTES as u64 / 512);
+    for (index, record) in records.iter_mut().take(retained_files).enumerate() {
+        let run = Extent::new(cursor, sectors_per_file);
         *record = Some(admitted_snapshot(index, run, checksum));
         allocate_run(&mut map, run.start, run.sectors);
         cursor += run.sectors;
@@ -133,23 +136,31 @@ fn seed_fragmented_payload() -> Sparse {
     header.next = NODES as u32 + 1;
     let zeros = vec![0; format7::MAX_FILE_BYTES as usize];
     let checksum = format7::aggregate(&zeros);
-    let mut runs = Vec::with_capacity(NODES - 1);
-    let mut tail = 519;
+    let sectors_per_file = format7::MAX_FILE_BYTES as u64 / 512;
+    let sectors_per_hole = sectors_per_file / MAX_EXTENTS as u64;
+    let separators = MAX_EXTENTS - 1;
+    let total_files = (DATA_SECTORS / sectors_per_file) as usize - 1;
+    let live_files = total_files - 3;
+    let mut runs = Vec::with_capacity(total_files);
+    let mut tail = sectors_per_file + separators as u64;
 
-    for separator in 0..7 {
-        let marker = Extent::new(separator * 65 + 64, 1);
-        let rest = Extent::new(tail, format7::MAX_FILE_BYTES as u64 / 512 - 1);
+    for separator in 0..separators {
+        let marker = Extent::new(
+            separator as u64 * (sectors_per_hole + 1) + sectors_per_hole,
+            1,
+        );
+        let rest = Extent::new(tail, sectors_per_file - 1);
         runs.push([marker, rest]);
         tail += rest.sectors;
     }
-    for _ in 7..NODES - 1 {
-        let rest = Extent::new(tail, format7::MAX_FILE_BYTES as u64 / 512);
+    for _ in separators..total_files {
+        let rest = Extent::new(tail, sectors_per_file);
         runs.push([rest, Extent::new(0, 0)]);
         tail += rest.sectors;
     }
     assert_eq!(tail, DATA_SECTORS);
 
-    for index in 0..NODES - 4 {
+    for index in 0..live_files {
         let id = index as u32 + 5;
         let used = if runs[index][1].sectors == 0 { 1 } else { 2 };
         nodes[index + 4] = full_file_node(id, &runs[index][..used], checksum);
@@ -158,7 +169,7 @@ fn seed_fragmented_payload() -> Sparse {
         }
     }
     for index in 0..3 {
-        let run = runs[NODES - 4 + index][0];
+        let run = runs[live_files + index][0];
         records[index] = Some(admitted_snapshot(index, run, checksum));
         allocate_run(&mut map, run.start, run.sectors);
     }
@@ -651,7 +662,7 @@ fn fragmented_multisector_admission_and_retry_cover_partial_final_sector() {
     let bytes = vec![0xa5; format7::MAX_FILE_BYTES as usize - 17];
     let mut sparse = seed_fragmented_payload();
     let mut volume = mount(&mut sparse);
-    assert_eq!(volume.free_sectors(), Ok(512));
+    assert_eq!(volume.free_sectors(), Ok(1024));
     let old = *volume.node(5).unwrap().unwrap();
     let mut poll = ReadyPoll {
         disk: sparse,
@@ -665,10 +676,10 @@ fn fragmented_multisector_admission_and_retry_cover_partial_final_sector() {
     drop(admission);
     assert_eq!(record.length as usize, bytes.len());
     assert_eq!(record.runs().len(), MAX_EXTENTS);
-    assert!(record.runs().iter().all(|run| run.sectors == 64));
+    assert!(record.runs().iter().all(|run| run.sectors == 128));
     assert_eq!(
         record.runs().iter().map(|run| run.sectors).sum::<u64>(),
-        512
+        1024
     );
     assert_eq!(*volume.node(5).unwrap().unwrap(), old);
 
@@ -680,9 +691,9 @@ fn fragmented_multisector_admission_and_retry_cover_partial_final_sector() {
         .unwrap();
     assert_eq!(retry.phase(), Publication7Phase::Retrying);
     assert_eq!(retry.result(), None);
-    for index in 0..512 {
+    for index in 0..1024 {
         let result = retry.poll_advance();
-        if index < 511 {
+        if index < 1023 {
             assert_eq!(result, Poll::Ready(Ok(Publication7Phase::Retrying)));
             assert_eq!(retry.result(), None);
         } else {
@@ -691,7 +702,7 @@ fn fragmented_multisector_admission_and_retry_cover_partial_final_sector() {
         }
     }
     drop(retry);
-    assert_eq!(poll.commands - commands, 512);
+    assert_eq!(poll.commands - commands, 1024);
     assert_eq!(poll.writes, writes);
     assert_eq!(poll.flushes, flushes);
 }

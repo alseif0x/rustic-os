@@ -9,5 +9,5 @@ pub use receipt::Operation;
 pub use request::{Lookup, Replacement};
 
 pub const PROFILE: u32 = 2;
-pub const MAX_FILE_BYTES: u32 = 256 * 1024;
+pub const MAX_FILE_BYTES: u32 = 512 * 1024;
 pub const RECEIPT_BYTES: usize = super::operation::RECEIPT_BYTES;

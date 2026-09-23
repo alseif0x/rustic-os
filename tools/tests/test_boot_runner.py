@@ -6,9 +6,11 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from boot_support.image import (
+    IMAGE_MODES,
     MAX_MEMORY_MIB,
     MEMORY_PROFILES,
     OUTPUT,
+    V7_READ_MODE,
     image_directory,
     memory_supported,
 )
@@ -50,7 +52,7 @@ class OutcomeTests(unittest.TestCase):
     def test_a_pinned_harness_refuses_a_profile_it_cannot_boot(self):
         # These harnesses own QEMU and hardcode the reference size, so the image
         # builder refuses any other profile for them instead of recording it.
-        for mode in ("terminal-test", "recovery-test"):
+        for mode in ("terminal-test", "recovery-test", "terminal-v7"):
             self.assertTrue(memory_supported(mode, 256))
             for value in (512, 2048, 4096):
                 self.assertFalse(memory_supported(mode, value))
@@ -63,6 +65,14 @@ class OutcomeTests(unittest.TestCase):
         self.assertTrue(memory_supported("ok", MAX_MEMORY_MIB))
         self.assertFalse(memory_supported("ok", MAX_MEMORY_MIB + 256))
         self.assertFalse(memory_supported("ok", 1024 + 128))  # not a 256 MiB step
+
+    def test_v7_read_is_an_image_profile_owned_by_its_qemu_harness(self):
+        from boot_support.scenarios import MODES
+
+        self.assertIn(V7_READ_MODE, IMAGE_MODES)
+        self.assertNotIn(V7_READ_MODE, MODES)
+        self.assertTrue(memory_supported(V7_READ_MODE, 256))
+        self.assertFalse(memory_supported(V7_READ_MODE, 512))
 
 
 class ModeFloorTests(unittest.TestCase):
