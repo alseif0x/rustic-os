@@ -2,7 +2,7 @@
 //! Retain one copied native request across service-control polls; never resubmit it.
 use super::Disk;
 use core::task::Poll;
-use rustic_fs::{Error, PollDisk};
+use rustic_fs::{Error, PollDisk, PollDisk7};
 use rustic_sdk::block::{Error as BlockError, Operation, Status};
 
 pub(super) struct Pending {
@@ -70,5 +70,50 @@ impl PollDisk for Disk {
     }
     fn poll_flush(&mut self) -> Poll<Result<(), Error>> {
         self.poll(Operation::Flush, 0, &[0; 512])
+    }
+}
+
+impl PollDisk7 for Disk {
+    fn poll_read(&mut self, sector: u64, bytes: &mut [u8; 512]) -> Poll<Result<(), Error>> {
+        if self.fenced {
+            return Poll::Ready(Err(Error::Uncertain));
+        }
+        self.fenced = true;
+        if let Some(pending) = &self.pending {
+            if pending.operation != Operation::Read || pending.sector != sector {
+                return Poll::Ready(Err(Error::Uncertain));
+            }
+            match self.device.result() {
+                Err(BlockError::WouldBlock) => {
+                    self.fenced = false;
+                    Poll::Pending
+                }
+                Ok(done)
+                    if done.id == pending.id
+                        && done.operation == Operation::Read
+                        && done.status == Status::Success =>
+                {
+                    *bytes = done.data;
+                    self.pending = None;
+                    self.fenced = false;
+                    Poll::Ready(Ok(()))
+                }
+                _ => Poll::Ready(Err(Error::Uncertain)),
+            }
+        } else {
+            match self.device.read(sector) {
+                Ok(id) => {
+                    self.pending = Some(Pending {
+                        id,
+                        operation: Operation::Read,
+                        sector,
+                        data: [0; 512],
+                    });
+                    self.fenced = false;
+                    Poll::Pending
+                }
+                Err(_) => Poll::Ready(Err(Error::Uncertain)),
+            }
+        }
     }
 }
