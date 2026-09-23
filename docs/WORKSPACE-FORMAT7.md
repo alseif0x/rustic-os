@@ -218,12 +218,31 @@ partial after I/O failure, so it must be disposable and backed up; this is not
 rollback atomicity or production service integration. Never experiment on the
 owner's `artifacts/terminal/data.raw`.
 
+## Bounded range reads
+
+`Volume7::read_range` resolves a live object ID, optionally pins its current
+version, validates the node and full extent geometry before payload I/O, and
+copies only the sectors intersecting the requested logical range. Its scratch
+space is one 512-byte sector regardless of file size. A stale version returns
+`Version`, a directory returns `IsDirectory`, an offset beyond EOF returns
+`Size`, and an empty or EOF range returns zero without payload reads. An I/O
+error may leave the already copied prefix in the caller's output; callers must
+discard that buffer unless the method succeeds.
+
+The full live payload CRC is checked when the volume is mounted, not rescanned
+for every range. Reads therefore assume that no writer changes the medium outside
+the mounted `Volume7` owner. An external media change while mounted is not
+detected by this API; remount validates the whole live payload CRC again. The
+method is a filesystem prerequisite only: no service profile, SDK route or guest
+consumer is wired to it yet.
+
 ## Evidence boundary
 
 Host codec tests cover byte offsets, independently computed CRCs, checksum-valid
 malformed records, temporal states, high monotonic identities, size boundaries
 through 256 KiB, and mutually incompatible wire profiles. The focused sparse
-host-disk suite has 61 v7 cases covering provision/mount, tracked commit/replay,
+host-disk suite has 80 v7 cases covering provision/mount, version-pinned bounded
+range reads, tracked commit/replay,
 durable admission, pollable retry, execute/cancel, pre-write refusals, retained
 snapshots, torn headers, 105 admission publication cuts, 103 execute/cancel cuts,
 and recovery after final-flush errors. The separate `upgrade7` suite exercises
