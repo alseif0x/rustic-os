@@ -12,12 +12,16 @@ use crate::extent::MAP_WORDS;
 use crate::format7::{Header7, MAP_WORDS as FORMAT_MAP_WORDS, NODES, Node7, RETAINED, Record7};
 use crate::{Error, Kind};
 
+mod admission;
 mod maintenance;
 mod mount;
 mod payload;
+mod poll;
 mod provision;
 mod publication;
 mod replacement;
+
+pub use poll::{PollDisk7, PollPublication7, Publication7Cancel, Publication7Phase};
 
 /// Scoped retry identity for one direct v7 file replacement.
 ///

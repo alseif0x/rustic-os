@@ -15,7 +15,7 @@ pub(super) struct PayloadPlan {
 }
 
 impl PayloadPlan {
-    fn empty() -> Self {
+    pub(super) fn empty() -> Self {
         Self {
             runs: [Extent::new(0, 0); MAX_EXTENTS],
             used: 0,

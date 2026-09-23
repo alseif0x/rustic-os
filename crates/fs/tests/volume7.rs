@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Sparse disposable-disk tests for the first v7 mount/provision owner.
+#[path = "volume7/admission.rs"]
+mod admission;
 #[path = "volume7/failures.rs"]
 mod failures;
 mod support;

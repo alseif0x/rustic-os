@@ -137,7 +137,7 @@ impl Volume7 {
         }
     }
 
-    fn validate_identity(&self, identity: WriteIdentity7) -> Result<(), Error> {
+    pub(super) fn validate_identity(&self, identity: WriteIdentity7) -> Result<(), Error> {
         if identity.subject == 0
             || identity.workspace == 0
             || identity.object < NEXT_MIN
@@ -153,7 +153,7 @@ impl Volume7 {
         Ok(())
     }
 
-    fn find_retry(&self, identity: WriteIdentity7) -> Option<&Record7> {
+    pub(super) fn find_retry(&self, identity: WriteIdentity7) -> Option<&Record7> {
         self.records.iter().flatten().find(|record| {
             record.subject == identity.subject
                 && record.workspace == identity.workspace
@@ -168,7 +168,7 @@ impl Volume7 {
     }
 }
 
-fn retained_owns_run(records: &[Option<Record7>], run: Extent) -> bool {
+pub(super) fn retained_owns_run(records: &[Option<Record7>], run: Extent) -> bool {
     records.iter().flatten().any(|record| {
         record
             .runs()
