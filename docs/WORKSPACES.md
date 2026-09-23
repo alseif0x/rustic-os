@@ -51,13 +51,13 @@ Whole-file buffers are the other bound: the file service holds `Transfer.data: [
 - **256 KiB per file** — covers the largest shipped executable with about 19% headroom; 1 MiB stays a planning ceiling to be revisited only with a larger measured artifact.
 - **256 objects** — eight times today's 32, enough for application generations plus configuration and task records.
 - **64 MiB of file data per volume** — the issue's planning target, kept as the total cap because 256 x 256 KiB would otherwise be 64 MiB exactly; the cap is what makes exhaustion decidable.
-- **8 retained operation records** — four times today's two, so a client can recover a small window of unresolved outcomes instead of losing the third mutation to `Full`. Retention is bounded and its eviction policy belongs to the next stage; unresolved evidence is never silently dropped.
+- **8 retained operation records** — four times today's two, so a client can recover a small window of unresolved outcomes instead of losing the third mutation to `Full`. Retention is bounded; v7 now has an explicit retry-epoch transition that refuses open admissions, and unresolved evidence is never silently dropped.
 
 **What this implies for the format:** a v6 layout with extents (or a bank chain) per file, `Node.length` widened beyond 16 bits, an explicit total-data cap with typed exhaustion, and deliberate upgrade behavior from v5. Those are the implementation stages of #51, not this document.
 
 ## Not claimed
 
-No capacity is implemented, no format is selected, and no filesystem is preselected by this document. The numbers above are measurements of one build on one machine; the 64 MiB figure is the issue's planning target and not a product promise. Whole-file RAM cost, interruption behavior, retention maintenance and migration are named here and remain to be measured and implemented in the following stages.
+This document selects a workload and budget, not production capacity or service support. The numbers above are measurements of one build on one machine; the 64 MiB figure is the issue's planning target and not a product promise. The v7 owner now implements explicit host-tested retention maintenance, but whole-file RAM cost, interruption behavior, service integration, guest workload acceptance and migration remain open.
 
 ## Stage two: format decision
 
@@ -111,13 +111,13 @@ The failure model distinguishes ordered durability from sector atomicity: the si
 The production successor is now specified separately in
 [format 7 and native payload profile 2](WORKSPACE-FORMAT7.md). Its codecs persist
 the identity watermark and scoped candidate extent snapshots that v6 lacks.
-The separate `Volume7` owner now destructively provisions fresh/disposable media
-and verifies mounts, and its first write path replaces an existing file with a
-tracked direct commit. It allocates fresh extents, retains an exact-byte snapshot,
-and publishes through the inactive metadata generation and matching header; this
-is not a migration path or production service backend. The v5/v6 formats remain
-frozen.
+The separate `Volume7` owner now destructively provisions fresh/disposable media,
+verifies mounts, replaces an existing file with a tracked direct commit, and
+explicitly retires terminal records by advancing the retry epoch and reclaiming
+unowned snapshots. Publication uses the inactive metadata generation and matching
+header; this is not a migration path or production service backend. The v5/v6
+formats remain frozen.
 
-1. The host-tested v7 owner provisions and validates mounts, then publishes a narrow `DirectCommitted` replacement with version conflicts, exact-byte retry and dual-generation copy-on-write. The v6 direct probe remains a separate tested precursor, not the production backend.
-2. Implement bounded staged writes, durable admission, pollable cancellation and explicit reclamation without evicting unresolved evidence. Add deliberate compatibility/upgrade behavior on disposable copies.
+1. The host-tested v7 owner provisions and validates mounts, publishes a narrow `DirectCommitted` replacement with version conflicts, exact-byte retry and dual-generation copy-on-write, and explicitly advances retry epochs to reclaim terminal snapshots. The v6 direct probe remains a separate tested precursor, not the production backend.
+2. Implement bounded staged writes, durable admission and pollable cancellation without evicting unresolved evidence. Add deliberate compatibility/upgrade behavior on disposable copies.
 3. Integrate the service and explicitly selected native profile, then run the selected consumer above today's limits. Independently verify data, versions and operation identity under full storage/retention, interrupted publication, reboot/remount, corrupt input and bounded RAM/control latency.

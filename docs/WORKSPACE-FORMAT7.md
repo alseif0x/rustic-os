@@ -4,13 +4,14 @@
 
 Decision for [#51](https://github.com/alseif0x/rustic-os/issues/51), adopted
 2026-09-22 under the owner's authorization to continue implementation and
-versioned storage/protocol decisions. The current increment adds a narrowly
-scoped tracked replacement for existing files: expected-version conflict checks,
-bounded streaming into fresh extents, one immutable `DirectCommitted` snapshot,
-exact-byte retry comparison, and dual-generation copy-on-write publication. There
-is no staged admission/cancellation, retention maintenance, v5 migration, service
-backend or capability advertisement. Production remains v5-backed; the v6 direct
-probe remains separate.
+versioned storage/protocol decisions. The current host-tested owner supports a
+narrow tracked replacement for existing files and explicit retry-epoch retention
+maintenance. It checks expected versions, streams into fresh extents, retains
+immutable snapshots for exact-byte retry, and publishes through dual-generation
+copy-on-write. Maintenance refuses open admissions and only runs when the service
+has resolved current-epoch outcomes. There is no staged admission/cancellation,
+v5 migration, service backend or capability advertisement. Production remains
+v5-backed; the v6 direct probe remains separate.
 
 ## Why a successor
 
@@ -184,8 +185,14 @@ generation; if it did not become durable, the prior head remains selected.
 Payload and retry I/O use one 512-byte sector buffer. The extent planner considers
 the largest free runs first, so early small holes do not hide a later contiguous
 fit; files still require at most eight runs and can honestly receive `Full` when
-available space cannot satisfy that geometry. Explicit retention maintenance,
-staged admission, pollable cancellation and safe reclamation remain unimplemented.
+available space cannot satisfy that geometry. `maintain_retention` is an explicit
+owner operation: it refuses while any admission is unresolved, clears terminal
+records, reconstructs the allocation map from live files, and publishes the next
+retry epoch through the same copy-on-write barriers. Snapshot extents are freed
+only when no live file owns them. Only a caller that has confirmed clients have
+resolved every current-epoch result may invoke it; once durable, old-epoch retries
+return `ExpiredEpoch`. It never runs implicitly to bypass a full receipt table.
+Staged admission and pollable cancellation remain unimplemented.
 
 There is no automatic upgrade. A future migration must operate on disposable
 copies, preserve or explicitly refuse retained evidence and identity history, and
@@ -199,8 +206,9 @@ malformed records, temporal states, high monotonic identities, size boundaries
 through 256 KiB, and mutually incompatible wire profiles. Sparse host-disk tests
 cover provision/remount, tracked commit and replay, conflicts and pre-write
 refusals, retained snapshots across replacement/remount, later contiguous and
-maximum-size payloads, torn headers, and every write/flush cut for three-sector
-first and reused-generation publication. A post-durable flush error is also
-recovered by remount. These tests do not demonstrate new guest behavior, service
-integration, bounded control latency or the consuming workload. Those remain #51
-acceptance obligations.
+maximum-size payloads, torn headers, every write/flush cut for three-sector first
+and reused-generation publication, and all 103 retry-epoch maintenance cuts. A
+post-durable flush error for either direct publication or maintenance is recovered
+by remount. These tests do not demonstrate new guest behavior, service integration,
+bounded control latency or the consuming workload. Those remain #51 acceptance
+obligations.
