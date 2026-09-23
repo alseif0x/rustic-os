@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-//! In-place owner for provisioning, mounting and tracked v7 file replacement.
+//! In-place owner for provisioning, mounting and v7 mutation.
 //!
 //! Mount verifies both header copies, raw aggregate checksums, the decoded
 //! generation, and every live or retained payload CRC. Mutation paths currently
-//! support existing-file direct commits with retained exact payload snapshots
-//! and explicit terminal-record retention maintenance. Staged admission and
-//! cancellation, migration, service integration and capability advertisement
-//! remain separate work.
+//! support existing-file direct commits, durable staged admission, explicit
+//! execution/cancellation and terminal-record retention maintenance. The
+//! out-of-place v5 converter is explicit and storage-only; service integration
+//! and capability advertisement remain separate work.
 
 use crate::extent::MAP_WORDS;
 use crate::format7::{Header7, MAP_WORDS as FORMAT_MAP_WORDS, NODES, Node7, RETAINED, Record7};
@@ -20,8 +20,10 @@ mod poll;
 mod provision;
 mod publication;
 mod replacement;
+mod upgrade;
 
 pub use poll::{PollDisk7, PollPublication7, Publication7Cancel, Publication7Phase};
+pub use upgrade::upgrade_v5_to_v7;
 
 /// Scoped retry identity for one direct v7 file replacement.
 ///

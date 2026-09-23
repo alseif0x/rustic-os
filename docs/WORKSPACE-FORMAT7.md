@@ -4,14 +4,17 @@
 
 Decision for [#51](https://github.com/alseif0x/rustic-os/issues/51), adopted
 2026-09-22 under the owner's authorization to continue implementation and
-versioned storage/protocol decisions. The current host-tested owner supports a
-narrow tracked replacement for existing files and explicit retry-epoch retention
-maintenance. It checks expected versions, streams into fresh extents, retains
-immutable snapshots for exact-byte retry, and publishes through dual-generation
-copy-on-write. Maintenance refuses open admissions and only runs when the service
-has resolved current-epoch outcomes. There is no staged admission/cancellation,
-v5 migration, service backend or capability advertisement. Production remains
-v5-backed; the v6 direct probe remains separate.
+versioned storage/protocol decisions. The current host-tested owner supports
+tracked replacement, durable staged admission, explicit admitted execution,
+cause-bearing cancellation and explicit retry-epoch retention maintenance.
+Payloads and exact retries use bounded sector I/O; candidate bytes and inactive
+metadata are flushed before the alternate header, and owner state changes only
+after final flush settlement. Maintenance refuses open admissions and must only
+run after the service has resolved current-epoch outcomes. The host-only
+`upgrade_v5_to_v7` converter copies a v5 source to distinct disposable media,
+preserving supported scoped recovery records and refusing ambiguous or invalid
+history. Production remains v5-backed; no service backend or capability
+advertisement is wired, and the v6 direct probe remains separate.
 
 ## Why a successor
 
@@ -192,23 +195,40 @@ retry epoch through the same copy-on-write barriers. Snapshot extents are freed
 only when no live file owns them. Only a caller that has confirmed clients have
 resolved every current-epoch result may invoke it; once durable, old-epoch retries
 return `ExpiredEpoch`. It never runs implicitly to bypass a full receipt table.
-Staged admission and pollable cancellation remain unimplemented.
 
-There is no automatic upgrade. A future migration must operate on disposable
-copies, preserve or explicitly refuse retained evidence and identity history, and
-be tested separately from executable rollback. Never experiment on the owner's
-`artifacts/terminal/data.raw`.
+`prepare_admission` stages a candidate extent snapshot as a durable `Admitted`
+record without changing the live file. It preflights version, identity, receipt
+capacity, sequence and free extents, then writes payload sectors and flushes them
+before publishing inactive nodes/map/records and the alternate header. Exact retry
+verification polls one sector at a time and compares bytes as well as CRC; its
+single-sector scratch stays bounded. `prepare_execute` rechecks the live version
+and explicitly commits the admitted bytes, while `prepare_cancellation` records a
+prevention cause and keeps the candidate owned without changing live contents.
+Cancellation drains an outstanding pre-header command; after header submission it
+is too late and the caller must settle the result. Dropping or failing with
+unresolved I/O fences the owner until remount. These APIs are storage primitives,
+not service authorization or scheduling policy.
+
+There is no automatic or in-place upgrade. `upgrade_v5_to_v7` reads the v5 source
+without mutation and writes a distinct target whose v7 header sectors must be
+zero. It preserves lineage, sequence, identity watermark, live files and scoped
+retained evidence that passes v7 validation; it refuses scope-less evidence or
+history that cannot be represented before writing the target. The target may be
+partial after I/O failure, so it must be disposable and backed up; this is not
+rollback atomicity or production service integration. Never experiment on the
+owner's `artifacts/terminal/data.raw`.
 
 ## Evidence boundary
 
 Host codec tests cover byte offsets, independently computed CRCs, checksum-valid
 malformed records, temporal states, high monotonic identities, size boundaries
-through 256 KiB, and mutually incompatible wire profiles. Sparse host-disk tests
-cover provision/remount, tracked commit and replay, conflicts and pre-write
-refusals, retained snapshots across replacement/remount, later contiguous and
-maximum-size payloads, torn headers, every write/flush cut for three-sector first
-and reused-generation publication, and all 103 retry-epoch maintenance cuts. A
-post-durable flush error for either direct publication or maintenance is recovered
-by remount. These tests do not demonstrate new guest behavior, service integration,
-bounded control latency or the consuming workload. Those remain #51 acceptance
-obligations.
+through 256 KiB, and mutually incompatible wire profiles. The focused sparse
+host-disk suite has 61 v7 cases covering provision/mount, tracked commit/replay,
+durable admission, pollable retry, execute/cancel, pre-write refusals, retained
+snapshots, torn headers, 105 admission publication cuts, 103 execute/cancel cuts,
+and recovery after final-flush errors. The separate `upgrade7` suite exercises
+conversion/remount, 18 success/refusal cases, and each publication write/flush
+failure on sparse host disks. These
+tests exercise mocks only; they do not demonstrate real device/DMA behavior, a v7
+guest, service integration, bounded control latency or the consuming workload.
+Those remain #51 acceptance obligations.
