@@ -54,7 +54,17 @@ impl Rebind {
     /// Before the revocation is confirmed nothing was created. After it the
     /// shell has no file binding, so the supervisor stays degraded until a
     /// restart issues a fresh incarnation and binding.
+    ///
+    /// A revocation sent but not yet acknowledged may still be answered: the
+    /// service acknowledges it only after an in-flight admission publication
+    /// settles. That late reply is drained so it cannot block the next owner
+    /// exchange. The revocation itself may then have taken effect, in which
+    /// case the shell's requests fail on its closed endpoint until `restart
+    /// files` issues a fresh binding.
     pub fn cancel(&self, state: &mut State) {
+        if self.sent && !self.revoked && state.admin.pending() {
+            state.mark_admin_drain();
+        }
         if self.revoked {
             self.mount.cleanup(state);
             state.degraded = true;

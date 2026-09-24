@@ -38,7 +38,8 @@ if __name__ == "__main__":
         suite(args.timeout)
         root = Path(__file__).resolve().parent.parent
         for harness in ("v7_read_test.py", "v7_launch_test.py", "v7_corrupt_test.py", "v7_write_test.py",
-                        "v7_retention_test.py", "v7_faults_test.py", "v7_admission_test.py"):
+                        "v7_retention_test.py", "v7_faults_test.py", "v7_admission_test.py",
+                        "v7_authority_test.py"):
             subprocess.run(
                 [sys.executable, str(root / "tools" / harness)],
                 cwd=root,

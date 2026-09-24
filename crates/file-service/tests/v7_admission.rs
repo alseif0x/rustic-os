@@ -2,9 +2,12 @@
 //! Profile-2 staged admission through the V7 service: streamed acceptance,
 //! status and observation, explicit execution with its completion receipt,
 //! version refusal, requested cancellation, exact retries without writes,
-//! remount and the owner's maintenance refusal while an admission is open.
+//! remount, the owner's maintenance refusal while an admission is open and
+//! owner control while an admission publication is in flight.
 #[path = "v7_admission/authority.rs"]
 mod authority;
+#[path = "v7_admission/control.rs"]
+mod control;
 
 use rustic_abi::files::{
     DATA, Error, OPERATION_PART, Packet, REPLACE_CHUNK, REPLACE_COMMIT,

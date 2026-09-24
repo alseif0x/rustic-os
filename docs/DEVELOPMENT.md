@@ -274,6 +274,20 @@ Evidence is stored in `artifacts/boot/terminal-v7-admission/`, and
 parsers and the oracle comparison have unit tests in
 `tools/tests/test_v7_admission.py`. See [V7 staged admissions](FILES-V7-ADMISSIONS.md).
 
+`python3 tools/v7_authority_test.py` builds the same image, seeds another fresh
+temporary volume and boots it twice. Boot 1 revokes the shell's binding while
+the first publication write of an EXECUTE is held by the kernel's completion
+hold (`execute-admission-v7 ID revoke 0 200`): the admission must end
+`cancelled` with cause `authority_lost`, the file unchanged and exactly one new
+generation. The same diagnostic during an ACCEPT must leave no record or
+generation, after which the same key admits and executes normally. Boot 2
+re-reads the cancelled status and cause. `oracle7` checks the image after
+every phase and after each shutdown. Evidence is stored in
+`artifacts/boot/terminal-v7-authority/`, and `python3 tools/boot.py test` runs
+it after `tools/v7_admission_test.py`. The output parser has unit tests in
+`tools/tests/test_v7_authority.py`. See
+[owner control during a publication](FILES-V7-ADMISSIONS.md#owner-control-during-a-publication).
+
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer
 rather than with the candidate under test.

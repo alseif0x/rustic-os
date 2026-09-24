@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Manual client of the SDK's explicitly scheduled durable admissions.
 mod observation;
+mod revocation;
 mod workspace;
 use super::*;
 use rustic_sdk::files::{
@@ -24,6 +25,8 @@ fn print(status: Status) {
 }
 pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
     match argument(a, 0)? {
+        "admit-pattern-v7" if a.len() == 11 => revocation::accept(s, a)?,
+        "execute-admission-v7" => revocation::execute(s, a)?,
         "admit-pattern-v7" | "admission-v7" => workspace::execute(s, a)?,
         "observe-admission-v2" => {
             exact(a, 2)?;

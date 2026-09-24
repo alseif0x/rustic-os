@@ -9,9 +9,9 @@
 //! exactly those bytes, and an exact retry only finishes when every supplied
 //! byte equals the retained snapshot, so the digest is the stored content's in
 //! both cases.
-use crate::{disk::Synchronous, reply};
+use crate::reply;
 use rustic_abi::files::{Error, operation::Replacement};
-use rustic_fs::{Disk, Stage7, Stage7Kind, Volume7, format7::Record7};
+use rustic_fs::{Disk, PollDisk7, PollPublication7, Stage7, Stage7Kind, Volume7, format7::Record7};
 use sha2::{Digest, Sha256};
 
 const SECTOR: usize = 512;
@@ -114,17 +114,19 @@ impl Transfer {
         }
     }
 
-    /// Finish the complete admission stage and publish it synchronously. The
-    /// result is the admitted record, or for an exact retry the retained
-    /// record in its current state. Any failure leaves no stage open.
-    pub(super) fn finish_admission(
+    /// Finish the complete admission stage and hand its publication to
+    /// `settle`, which drives it. The publication makes the admitted record
+    /// durable, or for an exact retry reports the retained record in its
+    /// current state without I/O. A refusal before the publication leaves no
+    /// stage open.
+    pub(super) fn finish_admission<D: PollDisk7, T>(
         mut self,
         volume: &mut Volume7,
-        disk: &mut impl Disk,
-    ) -> Result<Record7, Error> {
-        let mut disk = Synchronous(disk);
-        let refused = match volume.finish_admission(&mut disk, &mut self.stage) {
-            Ok(publication) => return super::settle::settle(publication),
+        disk: &mut D,
+        settle: impl FnOnce(PollPublication7<'_, D>) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let refused = match volume.finish_admission(disk, &mut self.stage) {
+            Ok(publication) => return settle(publication),
             Err(error) => error,
         };
         // Only an `Invalid` refusal leaves a stage open; release it.
