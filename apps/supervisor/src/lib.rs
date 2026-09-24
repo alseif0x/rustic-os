@@ -6,5 +6,6 @@ pub mod grant;
 pub mod image_pair;
 pub mod jobs;
 pub mod revocation;
+pub mod shell_binding;
 pub mod storage_launch;
 pub mod tasks_owner;

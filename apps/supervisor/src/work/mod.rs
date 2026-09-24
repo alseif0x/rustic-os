@@ -4,6 +4,7 @@ mod dispatch;
 pub(super) mod launch;
 mod mount;
 mod policy;
+mod rebind;
 mod restart;
 pub(super) mod stage;
 mod start;
@@ -22,6 +23,7 @@ enum Task {
     Launch(launch::Draft),
     TasksList(tasks::TaskList),
     Restart(restart::Restart),
+    Rebind(rebind::Rebind),
     StageV7(stage::Stage),
     Admin { words: [u64; 8], sent: bool },
 }

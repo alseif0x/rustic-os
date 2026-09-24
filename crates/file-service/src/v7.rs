@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Explicitly selected V7 native service over one exclusively borrowed mounted
-//! volume: bounded range reads and profile-2 tracked replacement.
+//! volume: bounded range reads, profile-2 tracked replacement and lookups of
+//! retained records.
 //!
 //! The composing [`Server7`] routes each request after the envelope and grant
 //! checks, and keeps the storage consequences of authority changes together:
 //! revoking, detaching, expiring or replacing a slot aborts that slot's open
 //! stage and forgets its receipt. The v5 `Server` is unaffected.
 mod grants;
+mod lookup;
 mod read;
 mod scope;
 mod transfer;

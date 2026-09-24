@@ -190,3 +190,122 @@ fn oversized_files_are_refused_without_a_request() {
     );
     assert_eq!(transport::counts(), (0, 0, 0));
 }
+
+/// A lookup stand-in that answers ID and retry lookups with `answer` and its
+/// later parts by ID.
+fn lookup_service(answer: Operation) {
+    transport::reset();
+    transport::respond(move |p| {
+        let query = Lookup::decode(&p).unwrap().query;
+        match (p.op, query) {
+            (OPERATION_ID, IdentityLookup::Id(_)) => answer.part(p.op, p.context, 0).unwrap(),
+            (OPERATION_RETRY, IdentityLookup::Retry { .. }) => {
+                answer.part(p.op, p.context, 0).unwrap()
+            }
+            (OPERATION_PART, IdentityLookup::Id(id)) => {
+                assert_eq!(id, answer.id, "later parts name the answered operation");
+                answer.part(p.op, p.context, p.arg as usize).unwrap()
+            }
+            (op, _) => panic!("unexpected op {op}"),
+        }
+    });
+}
+
+#[test]
+fn lookups_by_id_and_retry_collect_the_whole_receipt() {
+    let stored = receipt(request(), &pattern(700));
+    for query in [
+        IdentityLookup::Id(stored.id),
+        IdentityLookup::Retry {
+            workspace: stored.workspace,
+            retry: stored.retry,
+        },
+    ] {
+        lookup_service(stored);
+        let mut client = files::Client::new(1, 7, 11);
+        assert_eq!(client.workspace_operation(query), Ok(stored));
+        let requests = transport::requests();
+        assert_eq!(requests.len(), 3);
+        // Every request carries the profile-2 marker.
+        for (_, _, p) in &requests {
+            let end = p.count as usize;
+            assert_eq!(p.data[end - 4..end], workspace::PROFILE.to_le_bytes());
+        }
+        assert_eq!(
+            requests.iter().map(|(_, _, p)| p.op).collect::<Vec<_>>()[1..],
+            [OPERATION_PART, OPERATION_PART]
+        );
+    }
+}
+
+#[test]
+fn a_lookup_answered_with_another_operation_is_a_protocol_error() {
+    let stored = receipt(request(), &pattern(700));
+    let mut other_key = stored;
+    other_key.retry.key = Key::new(43).unwrap();
+    lookup_service(other_key);
+    let mut client = files::Client::new(1, 7, 11);
+    assert_eq!(
+        client.workspace_operation(IdentityLookup::Retry {
+            workspace: stored.workspace,
+            retry: stored.retry,
+        }),
+        Err(FileError::Protocol)
+    );
+    let mut other_id = stored;
+    other_id.id = OperationId::new([7; 16], 10).unwrap();
+    other_id.version = Version::new(10).unwrap();
+    lookup_service(other_id);
+    let mut client = files::Client::new(1, 7, 11);
+    assert_eq!(
+        client.workspace_operation(IdentityLookup::Id(stored.id)),
+        Err(FileError::Protocol)
+    );
+}
+
+#[test]
+fn a_stepwise_transfer_advances_only_on_acknowledged_chunks() {
+    transport::reset();
+    let refuse = Rc::new(RefCell::new(false));
+    let refusing = refuse.clone();
+    transport::respond(move |p| {
+        let mut reply = Packet::new(p.op);
+        reply.context = p.context;
+        if p.op == REPLACE_CHUNK && *refusing.borrow() {
+            reply.status = FileError::NoTransfer as u8;
+        }
+        reply
+    });
+    let mut client = files::Client::new(1, 7, 11);
+    let mut transfer = client.workspace_open(request(), 100).unwrap();
+    for _ in 0..2 {
+        client
+            .workspace_chunk(&mut transfer, |_, buffer| {
+                buffer.fill(3);
+                Ok(())
+            })
+            .unwrap();
+    }
+    assert_eq!((transfer.offset(), transfer.size()), (80, 100));
+    *refuse.borrow_mut() = true;
+    assert_eq!(
+        client.workspace_chunk(&mut transfer, |_, buffer| {
+            buffer.fill(3);
+            Ok(())
+        }),
+        Err(FileError::NoTransfer)
+    );
+    assert_eq!(transfer.offset(), 80, "a refused chunk does not advance");
+    // An incomplete transfer is aborted instead of committed.
+    assert_eq!(client.workspace_commit(transfer), Err(FileError::Offset));
+    assert_eq!(
+        ops(),
+        [
+            REPLACE_OPEN,
+            REPLACE_CHUNK,
+            REPLACE_CHUNK,
+            REPLACE_CHUNK,
+            REPLACE_ABORT
+        ]
+    );
+}

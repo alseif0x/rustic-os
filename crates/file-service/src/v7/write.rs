@@ -1,34 +1,37 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Profile-2 tracked replacement: open, streamed chunks, commit with a
-//! completed-operation receipt, abort, and receipt parts for this slot.
+//! completed-operation receipt, abort, lookups of retained records and receipt
+//! parts for the receipt this slot last produced or looked up.
 //!
 //! Policy lives here: which rights each step needs, which retry subject and
 //! service instance are persisted, and when transfer state is dropped. The
 //! volume enforces versions, retry scopes, the retained-record budget and
 //! publication barriers.
+use super::lookup::{self, receipt};
 use super::transfer::{Fault, Transfer};
 use super::{CLIENTS7, Grant7, scope};
 use crate::reply;
 use rustic_abi::files::{
-    operation::{self, Instance, Key, OperationId, Retry},
-    reference::{Epoch, Resource, Version, Workspace},
+    operation,
     workspace::{Lookup, Operation, Replacement},
     *,
 };
 use rustic_fs::{Disk, Stage7Kind, Volume7, WriteIdentity7, format7::Record7};
 
 /// Whether `p` selects the profile-2 write path. Open and lookups carry an
-/// explicit profile marker; chunk, commit and abort bind to an open transfer.
+/// explicit profile marker, so profile-1 lookups stay `Unsupported`; chunk,
+/// commit and abort bind to an open transfer.
 pub(super) fn selected(p: &Packet) -> bool {
     match p.op {
         REPLACE_OPEN => p.count == 40,
-        OPERATION_PART => p.count == 20,
+        OPERATION_ID | OPERATION_PART => p.count == 20,
+        OPERATION_RETRY => p.count == 28,
         REPLACE_CHUNK | REPLACE_COMMIT | REPLACE_ABORT => true,
         _ => false,
     }
 }
 
-/// Per-slot transfers and the last receipt each slot produced.
+/// Per-slot transfers and the last receipt each slot produced or looked up.
 pub(super) struct Writes {
     transfers: [Option<Transfer>; CLIENTS7],
     receipts: [Option<Operation>; CLIENTS7],
@@ -76,6 +79,12 @@ impl Writes {
         ack.context = p.context;
         match p.op {
             OPERATION_PART => self.part(slot, grant, p),
+            OPERATION_ID | OPERATION_RETRY => {
+                let receipt = lookup::retained(volume, disk, grant, &p)?;
+                let first = receipt.part(p.op, p.context, 0)?;
+                self.receipts[slot] = Some(receipt);
+                Ok(first)
+            }
             REPLACE_OPEN => {
                 self.open(volume, slot, grant, p)?;
                 Ok(ack)
@@ -192,7 +201,8 @@ impl Writes {
     }
 
     /// Receipt parts are served only for the operation this slot last
-    /// completed; cold lookups of retained records are not implemented.
+    /// completed or looked up; a lookup by ID or retry identity recomputes a
+    /// retained record's receipt first.
     fn part(&self, slot: usize, grant: Grant7, p: Packet) -> Result<Packet, Error> {
         grant.holds(INSPECT_RIGHT)?;
         let operation::Lookup::Id(id) = Lookup::decode(&p)?.query else {
@@ -241,29 +251,13 @@ fn committed(
     Ok(receipt)
 }
 
-/// The completed-operation receipt for a direct-committed record.
-fn receipt(lineage: [u8; 16], record: &Record7, sha256: [u8; 32]) -> Result<Operation, Error> {
-    let workspace = Workspace::new(lineage, record.workspace)?;
-    Ok(Operation {
-        id: OperationId::new(lineage, record.committed)?,
-        service_instance: Instance::new(lineage, record.instance)?,
-        workspace,
-        resource: Resource::new(workspace, record.object)?,
-        previous_version: Version::new(record.previous)?,
-        version: Version::new(record.committed)?,
-        size: record.length,
-        retry: Retry {
-            epoch: Epoch::new(record.retry_epoch)?,
-            key: Key::new(record.retry_key)?,
-        },
-        sha256,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustic_abi::files::reference::References;
+    use rustic_abi::files::{
+        operation::{Key, Retry},
+        reference::{Epoch, References, Version},
+    };
     use rustic_fs::format7::RecordState;
 
     const LINEAGE: [u8; 16] = [0x5c; 16];

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Bounded reads from the live payload version verified by a mounted v7 owner.
+//! Bounded reads from payload verified by a mounted v7 owner: the live version
+//! of a file, or the immutable snapshot of a retained record.
 
-use crate::format7::{self, SECTOR_BYTES};
+use crate::extent::Extent;
+use crate::format7::{self, Record7, SECTOR_BYTES};
 use crate::{Disk, Error, Kind};
 
 use super::Volume7;
@@ -30,53 +32,97 @@ impl Volume7 {
             return Err(Error::IsDirectory);
         }
         node.validate().map_err(|_| Error::Corrupt)?;
-
-        let length = u64::from(node.length);
-        if offset > length {
-            return Err(Error::Size);
-        }
-        let count = out.len().min((length - offset) as usize);
-        let end = offset + count as u64;
-        let mut file_position = 0u64;
-        let mut written = 0usize;
-        let mut block = [0u8; 512];
-
-        for run in node.runs() {
-            let run_bytes = run
-                .sectors
-                .checked_mul(SECTOR_BYTES)
-                .ok_or(Error::Corrupt)?;
-            let run_end = file_position.checked_add(run_bytes).ok_or(Error::Corrupt)?;
-            if run_end > offset && file_position < end {
-                let from = offset.max(file_position);
-                let to = end.min(run_end);
-                let mut sector = (from - file_position) / SECTOR_BYTES;
-                let mut within = (from - file_position) % SECTOR_BYTES;
-                let mut remaining = (to - from) as usize;
-
-                while remaining > 0 {
-                    let disk_sector = format7::PAYLOAD_SECTOR
-                        .checked_add(run.start)
-                        .and_then(|base| base.checked_add(sector))
-                        .ok_or(Error::Corrupt)?;
-                    disk.read(disk_sector, &mut block)?;
-                    let take = remaining.min(SECTOR_BYTES as usize - within as usize);
-                    out[written..written + take]
-                        .copy_from_slice(&block[within as usize..within as usize + take]);
-                    written += take;
-                    remaining -= take;
-                    sector += 1;
-                    within = 0;
-                }
-            }
-            file_position = run_end;
-        }
-
-        if written != count {
-            return Err(Error::Corrupt);
-        }
-        Ok(written)
+        read_runs(disk, node.runs(), node.length, offset, out)
     }
+
+    /// Copy at most `out.len()` bytes from the immutable payload snapshot of a
+    /// record this owner currently retains.
+    ///
+    /// `record` must equal one retained record exactly; any other value,
+    /// including a record this owner retained before a remount or maintenance
+    /// cleared it, is `NotFound` without payload I/O. The snapshot may no longer
+    /// be the live file's content. Like [`Self::read_range`], this trusts the
+    /// mount-time CRC verification of every retained snapshot, shares its sector
+    /// walk and scratch space, refuses a past-EOF offset with `Size` and may leave
+    /// a prefix in `out` after an I/O error.
+    pub fn read_retained_range(
+        &self,
+        disk: &mut impl Disk,
+        record: &Record7,
+        offset: u64,
+        out: &mut [u8],
+    ) -> Result<usize, Error> {
+        let header = self.header()?;
+        if !self
+            .records
+            .iter()
+            .flatten()
+            .any(|retained| retained == record)
+        {
+            return Err(Error::NotFound);
+        }
+        record
+            .validate(header.sequence, header.next)
+            .map_err(|_| Error::Corrupt)?;
+        read_runs(disk, record.runs(), record.length, offset, out)
+    }
+}
+
+/// Copy the logical range `[offset, offset + out.len())`, clipped at `length`,
+/// from payload `runs` whose geometry the caller has validated. Only sectors
+/// that intersect the range are read, through one 512-byte scratch sector.
+fn read_runs(
+    disk: &mut impl Disk,
+    runs: &[Extent],
+    length: u32,
+    offset: u64,
+    out: &mut [u8],
+) -> Result<usize, Error> {
+    let length = u64::from(length);
+    if offset > length {
+        return Err(Error::Size);
+    }
+    let count = out.len().min((length - offset) as usize);
+    let end = offset + count as u64;
+    let mut file_position = 0u64;
+    let mut written = 0usize;
+    let mut block = [0u8; 512];
+
+    for run in runs {
+        let run_bytes = run
+            .sectors
+            .checked_mul(SECTOR_BYTES)
+            .ok_or(Error::Corrupt)?;
+        let run_end = file_position.checked_add(run_bytes).ok_or(Error::Corrupt)?;
+        if run_end > offset && file_position < end {
+            let from = offset.max(file_position);
+            let to = end.min(run_end);
+            let mut sector = (from - file_position) / SECTOR_BYTES;
+            let mut within = (from - file_position) % SECTOR_BYTES;
+            let mut remaining = (to - from) as usize;
+
+            while remaining > 0 {
+                let disk_sector = format7::PAYLOAD_SECTOR
+                    .checked_add(run.start)
+                    .and_then(|base| base.checked_add(sector))
+                    .ok_or(Error::Corrupt)?;
+                disk.read(disk_sector, &mut block)?;
+                let take = remaining.min(SECTOR_BYTES as usize - within as usize);
+                out[written..written + take]
+                    .copy_from_slice(&block[within as usize..within as usize + take]);
+                written += take;
+                remaining -= take;
+                sector += 1;
+                within = 0;
+            }
+        }
+        file_position = run_end;
+    }
+
+    if written != count {
+        return Err(Error::Corrupt);
+    }
+    Ok(written)
 }
 
 #[cfg(test)]

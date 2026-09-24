@@ -210,13 +210,19 @@ generation and read its exact bytes. Evidence is stored in
 volume with `rustic-volume seed7 ... --scratch` and boots it twice. Boot 1
 streams six deterministic patterns (513 B to 512 KiB) into `scratch.bin` with
 `replace-pattern-v7` until the eight-record budget is full, and checks a stale
-version and the following `Full`. Boot 2 replays one write exactly and checks
-two mismatched retries. After each boot `oracle7` must find retained records
-that match every printed receipt, and the volume digest must not change across
-boot 2. Evidence, including guest ticks per write size, is stored in
+version and the following `Full`. Before the last write it cuts a 512 KiB write
+after 31 sectors acknowledged (inferred from the acknowledged bytes) and has
+the owner revoke the shell's binding, which
+must answer `Closed` on the old endpoint and `NoTransfer` on the new binding.
+Boot 2 replays one write exactly, checks two mismatched retries and looks up a
+small and a large write by operation ID and by retry key, which must print the
+commit-time receipt lines. After each boot `oracle7` must find retained records
+that match every printed receipt and none for the revoked key, and the volume
+digest must not change across boot 2. Evidence, including guest ticks per write
+size and per lookup, is stored in
 `artifacts/boot/terminal-v7-write/`; `python3 tools/boot.py test` runs it after
-`tools/v7_corrupt_test.py`. The receipt parsing and record matching have unit
-tests in `tools/tests/test_v7_write.py`. See [V7 tracked writes](FILES-V7-WRITES.md).
+`tools/v7_corrupt_test.py`. The receipt, lookup and cut parsing and the record
+matching have unit tests in `tools/tests/test_v7_write.py`. See [V7 tracked writes](FILES-V7-WRITES.md).
 
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer

@@ -161,7 +161,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         "inspect-negotiated" | "cancel-negotiated" => lifecycle::execute(s, a)?,
         "inspect-operation" | "request-operation-cancel" => lifecycle::execute(s, a)?,
         "enable-operations" | "replace-ref" | "replace-fill-ref" | "replace-pattern-v7"
-        | "operation" => operations::execute(s, a)?,
+        | "operation" | "operation-v7" => operations::execute(s, a)?,
         "ref" | "read-ref" => read::execute(s, a)?,
         "stage-ref" | "start-staged" => staging::execute(s, a)?,
         "job-status" | "hold-io" | "io-status" => management::execute(s, a)?,

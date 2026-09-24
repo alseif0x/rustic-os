@@ -280,3 +280,160 @@ fn replaced_file_reads_only_at_the_new_version() {
     assert_eq!(disk.reads.len(), 1);
     assert_eq!((disk.writes, disk.flushes), (0, 0));
 }
+
+fn identity(object: u32, key: u64) -> WriteIdentity7 {
+    WriteIdentity7 {
+        subject: 9,
+        workspace: 4,
+        object,
+        instance: 1,
+        retry_epoch: 1,
+        retry_key: key,
+    }
+}
+
+/// Stream a retained snapshot through one sector-sized buffer, as a cold
+/// receipt lookup does.
+fn stream_retained(volume: &Volume7, disk: &mut impl Disk, record: &Record7) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    let mut block = [0u8; 512];
+    loop {
+        let read = volume
+            .read_retained_range(disk, record, bytes.len() as u64, &mut block)
+            .unwrap();
+        if read == 0 {
+            return bytes;
+        }
+        bytes.extend_from_slice(&block[..read]);
+    }
+}
+
+#[test]
+fn a_superseded_retained_snapshot_streams_its_own_bytes_after_remount() {
+    let mut sparse = Sparse::default();
+    let mut volume = Volume7::EMPTY;
+    volume.provision_into(&mut sparse, LINEAGE).unwrap();
+    let file = volume.create(&mut sparse, 4, b"live", Kind::File).unwrap();
+    let first: Vec<u8> = (0..1300u32).map(|index| (index % 253) as u8).collect();
+    let second = vec![0x5e; 700];
+    let older = volume
+        .replace_tracked(&mut sparse, identity(file.id, 11), file.version, &first)
+        .unwrap();
+    let newer = volume
+        .replace_tracked(&mut sparse, identity(file.id, 12), older.committed, &second)
+        .unwrap();
+
+    let mut mounted = Volume7::EMPTY;
+    mounted.mount_into(&mut sparse).unwrap();
+    let mut disk = CountingDisk::new(&mut sparse);
+    assert_eq!(stream_retained(&mounted, &mut disk, &older), first);
+    // Three sectors for 1,300 bytes, and the terminating EOF read costs none.
+    assert_eq!(disk.reads.len(), 3);
+    assert_eq!((disk.writes, disk.flushes), (0, 0));
+    assert_eq!(stream_retained(&mounted, &mut disk, &newer), second);
+
+    // An unaligned range touches only the sectors it intersects.
+    disk.reset_counts();
+    let mut out = [0u8; 40];
+    assert_eq!(
+        mounted.read_retained_range(&mut disk, &older, 1100, &mut out),
+        Ok(40)
+    );
+    assert_eq!(out, first[1100..1140]);
+    assert_eq!(disk.reads.len(), 1);
+    // The live file is the newer version; its range read is unaffected.
+    assert_eq!(
+        mounted.read_range(&mut disk, file.id, Some(older.committed), 0, &mut out),
+        Err(Error::Version)
+    );
+}
+
+#[test]
+fn a_removed_file_keeps_a_readable_retained_snapshot() {
+    let mut sparse = Sparse::default();
+    let mut volume = Volume7::EMPTY;
+    volume.provision_into(&mut sparse, LINEAGE).unwrap();
+    let file = volume.create(&mut sparse, 4, b"gone", Kind::File).unwrap();
+    let data = vec![0x42; 513];
+    let record = volume
+        .replace_tracked(&mut sparse, identity(file.id, 21), file.version, &data)
+        .unwrap();
+    volume.remove(&mut sparse, file.id).unwrap();
+
+    let mut mounted = Volume7::EMPTY;
+    mounted.mount_into(&mut sparse).unwrap();
+    assert_eq!(mounted.stat(file.id), Err(Error::NotFound));
+    assert_eq!(stream_retained(&mounted, &mut sparse, &record), data);
+}
+
+#[test]
+fn only_an_exactly_retained_record_is_read_and_bounds_are_checked_before_io() {
+    let mut sparse = Sparse::default();
+    let mut volume = Volume7::EMPTY;
+    volume.provision_into(&mut sparse, LINEAGE).unwrap();
+    let file = volume.create(&mut sparse, 4, b"live", Kind::File).unwrap();
+    let data = vec![0x17; 1024];
+    let record = volume
+        .replace_tracked(&mut sparse, identity(file.id, 31), file.version, &data)
+        .unwrap();
+    let mut disk = CountingDisk::new(&mut sparse);
+    let mut out = [0xa5; 16];
+
+    // Any field that differs from the retained record, including a snapshot
+    // run pointing elsewhere, names no record this owner vouches for.
+    let mut other_key = record;
+    other_key.retry_key = 32;
+    let mut other_run = record;
+    other_run.extents[0] = Extent::new(record.extents[0].start + 100, record.extents[0].sectors);
+    let mut longer = record;
+    longer.length += 1;
+    for forged in [other_key, other_run, longer] {
+        assert_eq!(
+            volume.read_retained_range(&mut disk, &forged, 0, &mut out),
+            Err(Error::NotFound)
+        );
+    }
+    assert_eq!(
+        volume.read_retained_range(&mut disk, &record, 1025, &mut out),
+        Err(Error::Size)
+    );
+    assert_eq!(
+        volume.read_retained_range(&mut disk, &record, 1024, &mut out),
+        Ok(0)
+    );
+    assert_eq!(out, [0xa5; 16]);
+    assert!(disk.reads.is_empty());
+    assert_eq!((disk.writes, disk.flushes), (0, 0));
+
+    let fenced = Volume7::EMPTY;
+    assert_eq!(
+        fenced.read_retained_range(&mut disk, &record, 0, &mut out),
+        Err(Error::Uncertain)
+    );
+    assert!(disk.reads.is_empty());
+}
+
+#[test]
+fn an_empty_retained_snapshot_reads_zero_bytes_without_io() {
+    let mut sparse = Sparse::default();
+    let mut volume = Volume7::EMPTY;
+    volume.provision_into(&mut sparse, LINEAGE).unwrap();
+    let file = volume.create(&mut sparse, 4, b"live", Kind::File).unwrap();
+    let seeded = volume
+        .replace_tracked(&mut sparse, identity(file.id, 41), file.version, &[1, 2, 3])
+        .unwrap();
+    let empty = volume
+        .replace_tracked(&mut sparse, identity(file.id, 42), seeded.committed, &[])
+        .unwrap();
+    let mut disk = CountingDisk::new(&mut sparse);
+    let mut out = [0xa5; 8];
+    assert_eq!(
+        volume.read_retained_range(&mut disk, &empty, 0, &mut out),
+        Ok(0)
+    );
+    assert_eq!(
+        volume.read_retained_range(&mut disk, &empty, 1, &mut out),
+        Err(Error::Size)
+    );
+    assert!(disk.reads.is_empty());
+}

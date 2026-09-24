@@ -134,18 +134,49 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 print(s.files.replace_file(request, argument(a, 6)?.as_bytes())?);
             }
         }
+        "operation-v7" => {
+            let query = if a.len() == 2 {
+                Lookup::Id(argument(a, 1)?.parse::<OperationId>()?)
+            } else {
+                exact(a, 4)?;
+                Lookup::Retry {
+                    workspace: argument(a, 1)?.parse::<Workspace>()?,
+                    retry: Retry {
+                        epoch: argument(a, 2)?.parse::<Epoch>()?,
+                        key: argument(a, 3)?.parse()?,
+                    },
+                }
+            };
+            let started = rustic_sdk::runtime::clock();
+            let operation = s.files.workspace_operation(query)?;
+            let ticks = rustic_sdk::runtime::clock().saturating_sub(started);
+            print(operation);
+            output::format(format_args!(
+                "lookup-v7 size={} ticks={ticks}\r\n",
+                operation.size
+            ));
+        }
         "replace-pattern-v7" => {
-            exact(a, 8)?;
+            if a.len() != 8 && a.len() != 10 {
+                return Err(Error::Usage);
+            }
             let request = replacement(a)?;
             let seed = u8::try_from(number(a, 6)?).map_err(|_| Error::Usage)?;
             let size = u32::try_from(number(a, 7)?).map_err(|_| Error::Usage)?;
-            let started = rustic_sdk::runtime::clock();
-            let operation = s.files.workspace_replace(request, size, |offset, buffer| {
+            let fill = move |offset: u32, buffer: &mut [u8]| {
                 for (index, byte) in (offset..).zip(buffer.iter_mut()) {
                     *byte = pattern_byte(seed, index);
                 }
                 Ok(())
-            })?;
+            };
+            if a.len() == 10 {
+                if argument(a, 8)? != "cut" {
+                    return Err(Error::Usage);
+                }
+                return cut(s, request, size, number(a, 9)?, fill);
+            }
+            let started = rustic_sdk::runtime::clock();
+            let operation = s.files.workspace_replace(request, size, fill)?;
             let ticks = rustic_sdk::runtime::clock().saturating_sub(started);
             print(operation);
             output::format(format_args!("write-v7 size={size} ticks={ticks}\r\n"));
@@ -153,4 +184,67 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
         _ => return Err(Error::Unknown),
     }
     Ok(())
+}
+
+/// Diagnostic cut of a V7 tracked write: send `chunks` chunks, have the owner
+/// revoke this shell's file binding through the supervisor, and report what
+/// the interrupted transfer observes on the old endpoint and on the new
+/// binding. It never commits: the harness checks that nothing was published.
+fn cut(
+    s: &mut Session,
+    request: Replacement,
+    size: u32,
+    chunks: u64,
+    fill: impl Fn(u32, &mut [u8]) -> Result<(), rustic_sdk::files::Error> + Copy,
+) -> Result<(), Error> {
+    use rustic_sdk::abi::{files::DATA, supervisor as sv};
+    // The cut must leave at least one chunk unsent.
+    if chunks == 0 || chunks >= u64::from(size.div_ceil(DATA as u32)) {
+        return Err(Error::Usage);
+    }
+    let mut transfer = s.files.workspace_open(request, size)?;
+    for _ in 0..chunks {
+        if let Err(error) = s.files.workspace_chunk(&mut transfer, fill) {
+            let _ = s.files.workspace_abort(transfer);
+            return Err(error.into());
+        }
+    }
+    let sent = transfer.offset();
+    let job = match s.request([sv::REVOKE_SHELL_V7, 0, 0, 0, 0, 0, 0, 0]) {
+        Ok(job) if job[0] == 5 => job[1],
+        refused => {
+            let _ = s.files.workspace_abort(transfer);
+            return Err(refused.err().unwrap_or(Error::Service(4)));
+        }
+    };
+    let status = s.wait_status(job)?;
+    if status[3] != 0 {
+        // The job failed, but the revocation may still have happened before a
+        // later step failed, so this abort is best effort: on a revoked
+        // binding it is refused and the service has already dropped the stage.
+        let _ = s.files.workspace_abort(transfer);
+        return Err(Error::Service(status[3]));
+    }
+    // The next chunk still goes to the endpoint the service closed.
+    let old = s.files.workspace_chunk(&mut transfer, fill);
+    s.finish_job(status)?;
+    // The same transfer on the adopted binding names nothing the service holds.
+    let new = s.files.workspace_chunk(&mut transfer, fill);
+    output::format(format_args!(
+        "cut-v7 chunks={chunks} bytes={sent} job={job} old={} new={}\r\n",
+        Outcome(old),
+        Outcome(new)
+    ));
+    Ok(())
+}
+
+/// A chunk result as the harness reads it: `ok` or the file error name.
+struct Outcome(Result<(), rustic_sdk::files::Error>);
+impl core::fmt::Display for Outcome {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self.0 {
+            Ok(()) => f.write_str("ok"),
+            Err(error) => write!(f, "{error:?}"),
+        }
+    }
 }
