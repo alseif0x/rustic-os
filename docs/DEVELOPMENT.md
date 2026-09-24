@@ -165,6 +165,17 @@ temporary QEMU data backend is not opened read-only because V7 mount requires an
 initial flush, which this host's read-only QEMU backend rejects; before/after
 volume hashes independently check for mutation.
 
+`python3 tools/v7_launch_test.py` builds that image once, copies it aside and
+boots the same bytes twice. It builds two tagged utility variants
+(`RUSTIC_UTILITY_TAG=1` and `2`) in separate cargo invocations under
+`target/v7-launch/`, never into `target/native`, seeds each into its own fresh
+V7 volume, and in each boot stages the pair, checks the start refusals, starts
+the child control-only with `start-staged PID exit`, reads the variant tag from
+`permissions PID` and reaps exit code 7. It records the image, kernel and
+variant digests and the unchanged volume digests in
+`artifacts/boot/terminal-v7-launch/`. `python3 tools/boot.py test` runs it after
+`tools/v7_read_test.py`.
+
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer
 rather than with the candidate under test.

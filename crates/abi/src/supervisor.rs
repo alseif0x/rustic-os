@@ -89,6 +89,32 @@ pub mod stage {
     /// `KERNEL_ERROR_BASE + e`.
     pub const KERNEL_ERROR_BASE: u64 = 64;
 }
+/// Start the one child staged by [`STAGE_V7`] under the supervisor's
+/// control-only storage topology: a single private control channel carries the
+/// role message and the child's report. No file endpoint, file-service peer,
+/// block grant or console is issued. The supervisor decides which manifest
+/// identity and which roles qualify; the owner only names the child and a role.
+///
+/// Words: `[37, pid, role, 0, 0, 0, 0, 0]`, where `pid` is the staged child and
+/// `role` is one of the utility roles of this module. The reply is immediate:
+/// `[0, pid, role, 0, 0, 0, 0, 0]` or a [`launch`] refusal. A refused start
+/// leaves the child dormant with no endpoint; it can still be killed and reaped.
+pub const START_STAGED: u64 = 37;
+/// Refusal statuses of [`START_STAGED`], beside the generic owner statuses `1`
+/// invalid, `2` denied (no such staged child) and `4` service failure.
+pub mod launch {
+    /// The staged manifest identity is not one the supervisor starts from storage.
+    pub const IDENTITY: u64 = 11;
+    /// The role needs authority the control-only topology does not issue.
+    pub const ROLE: u64 = 12;
+    /// The manifest does not request the features the issued channel implies.
+    pub const FEATURES: u64 = 13;
+    /// The staged child was already started once.
+    pub const STARTED: u64 = 14;
+    /// A kernel refusal of the control channel or of the start, with runtime
+    /// error index `e`, is reported as `KERNEL_ERROR_BASE + e`.
+    pub const KERNEL_ERROR_BASE: u64 = 64;
+}
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Separate native tasks application; it never receives console authority.

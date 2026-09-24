@@ -6,6 +6,7 @@ mod mount;
 mod policy;
 mod restart;
 pub(super) mod stage;
+mod start;
 pub(super) mod tasks;
 use rustic_sdk::runtime;
 use rustic_supervisor::jobs::{History, Ticket};

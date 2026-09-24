@@ -3,7 +3,6 @@
 use super::super::{children::Child, services::*};
 use rustic_sdk::{
     abi::supervisor as s,
-    ipc::{Endpoint, Message},
     process,
     rpc::Rpc,
     runtime::{self, abi as k},
@@ -226,26 +225,22 @@ impl Draft {
         close(state.files, self.data[0]);
     }
     fn activate(&self, state: &mut State, generation: u32) -> Result<(), u64> {
-        let endpoint = Endpoint::from_bootstrap(self.control[0]);
-        endpoint
-            .send(
-                &Message::new(
-                    0,
-                    &k::encode([
-                        self.role,
-                        self.scope as u64,
-                        self.other as u64,
-                        generation as u64,
-                        0,
-                        0,
-                        0,
-                        0,
-                    ]),
-                )
-                .unwrap(),
-            )
-            .map_err(|_| 4u64)?;
-        start(self.pid, [self.data[1], self.control[1], state.files]).map_err(|_| 4u64)?;
+        begin(
+            self.control[0],
+            self.pid,
+            [
+                self.role,
+                self.scope as u64,
+                self.other as u64,
+                generation as u64,
+                0,
+                0,
+                0,
+                0,
+            ],
+            [self.data[1], self.control[1], state.files],
+        )
+        .map_err(|_| 4u64)?;
         state.children[self.slot] = Some(Child {
             pid: self.pid,
             control: Rpc::new(self.control[0], self.pid),

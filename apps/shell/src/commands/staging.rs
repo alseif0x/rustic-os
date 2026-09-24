@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Owner request to stage one V7 ELF/manifest pair as a dormant child.
+//! Owner requests to stage one V7 ELF/manifest pair as a dormant child and to
+//! start that child.
 //!
 //! The shell only names the pair; the supervisor reads it with its own read-only
-//! authority and reports the outcome as an ordinary owner job.
+//! authority and reports the outcome as an ordinary owner job. Starting names the
+//! staged child and a role; the supervisor alone decides whether the staged
+//! manifest and the role qualify and issues the control-only topology.
 use super::*;
 use rustic_sdk::abi::{
     files::{
@@ -10,10 +13,13 @@ use rustic_sdk::abi::{
         reference::{Resource, Version, Workspace},
     },
     runtime::Error as RuntimeError,
-    supervisor::{self as p, stage},
+    supervisor::{self as p, launch, stage},
 };
 
 pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
+    if argument(a, 0)? == "start-staged" {
+        return start(s, a);
+    }
     exact(a, 6)?;
     let workspace = argument(a, 1)?.parse::<Workspace>()?;
     let elf = argument(a, 2)?.parse::<Resource>()?;
@@ -42,6 +48,65 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
         r[1], r[1]
     ));
     Ok(())
+}
+
+/// Role names the shell can send. It forwards roles the supervisor refuses too,
+/// so the storage launch policy is decided in one place.
+fn role(name: &str) -> Result<u64, Error> {
+    Ok(match name {
+        "exit" => p::FINISH,
+        "fault" => p::FAULT,
+        "spin" => p::SPIN,
+        "read" => p::READ,
+        "session" => p::SESSION,
+        _ => return Err(Error::Usage),
+    })
+}
+
+fn start(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
+    exact(a, 3)?;
+    let pid = number(a, 1)?;
+    let name = argument(a, 2)?;
+    let r = s
+        .request([p::START_STAGED, pid, role(name)?, 0, 0, 0, 0, 0])
+        .map_err(|error| match error {
+            Error::Service(code)
+                if matches!(
+                    code,
+                    launch::IDENTITY | launch::ROLE | launch::FEATURES | launch::STARTED
+                ) || code >= launch::KERNEL_ERROR_BASE =>
+            {
+                Error::StartRefused(code)
+            }
+            error => error,
+        })?;
+    if r[0] != 0 || r[1] != pid {
+        return Err(Error::Service(4));
+    }
+    output::format(format_args!(
+        "started staged pid={pid} role={name} topology=control-only\r\n"
+    ));
+    Ok(())
+}
+
+/// Readable class of a start refusal status.
+pub(super) fn start_refusal(f: &mut core::fmt::Formatter<'_>, code: u64) -> core::fmt::Result {
+    match code {
+        launch::IDENTITY => f.write_str("manifest identity is not started from storage"),
+        launch::ROLE => {
+            f.write_str("role needs authority the control-only topology does not issue")
+        }
+        launch::FEATURES => f.write_str("manifest does not request the ipc feature"),
+        launch::STARTED => f.write_str("already started"),
+        code => kernel(f, code - launch::KERNEL_ERROR_BASE),
+    }
+}
+
+fn kernel(f: &mut core::fmt::Formatter<'_>, index: u64) -> core::fmt::Result {
+    match (index < 10).then(|| RuntimeError::decode(RuntimeError::Denied.code() - index)) {
+        Some(Err(error)) => write!(f, "kernel {error:?}"),
+        _ => f.write_str("kernel error"),
+    }
 }
 
 /// Render one completed stage job. A refusal is returned as an error after its
@@ -83,12 +148,7 @@ pub(super) fn refusal(f: &mut core::fmt::Formatter<'_>, code: u64) -> core::fmt:
             }
         }
         code if (stage::KERNEL_ERROR_BASE..stage::KERNEL_ERROR_BASE + 10).contains(&code) => {
-            match RuntimeError::decode(
-                RuntimeError::Denied.code() - (code - stage::KERNEL_ERROR_BASE),
-            ) {
-                Err(error) => write!(f, "kernel {error:?}"),
-                Ok(_) => f.write_str("kernel error"),
-            }
+            kernel(f, code - stage::KERNEL_ERROR_BASE)
         }
         _ => f.write_str("service unavailable"),
     }

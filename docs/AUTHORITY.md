@@ -22,6 +22,12 @@ Replacing or detaching a root fences its helper. The supervisor also observes ro
 
 Service restart ends all actors and grants, remounts storage and issues fresh owner bindings. No utility process, lease or helper is restored automatically. The existing persistent `helpers=explicit` policy remains mandatory; malformed policy disables new utility grants while manual repair remains available.
 
+## Storage-sourced launch topology
+
+In `mode=terminal-v7` the owner can start the one child the supervisor staged from V7 storage ([storage-sourced images](NATIVE-RUNTIME.md#starting-the-staged-child-control-only)). What that child receives is supervisor policy, not a kernel rule: the kernel only enforces that the supervisor starts a dormant child it owns, and the manifest's feature bits were admission, never a grant. The supervisor issues exactly one topology, control-only: a single private channel between the supervisor and the child, carrying the role message and the child's report. It issues no file endpoint, file-service peer, grant generation, block grant or console, so the child has no file scope, rights or recovery subject, and `permissions` shows zero scope, rights and expiry.
+
+The policy (`rustic_supervisor::storage_launch`, host-tested) accepts only the manifest identity `rustic.utility` and only the roles that need none of the withheld authority (FINISH, FAULT, SPIN), and requires the manifest to request `ipc`, which the issued channel implies. Other identities, including the `file-server` image the same request can stage, are refused before any role is considered. The identity is the name the manifest declares, bound to the ELF bytes by SHA-256; it is not an authenticated publisher. The started child stays in the single storage slot rather than a utility slot, and the owner stops it with the same `kill`/`reap` path. A refused start leaves the child dormant without an endpoint.
+
 ## Try the deterministic mission
 
 Use the actual PIDs printed by `session` and `helper`; 4 and 5 below are examples. These actors are diagnostic native clients from the fixed catalog, not an application loader or a general agent framework. Their prepared replacement is the fixed text `session client edit`.
