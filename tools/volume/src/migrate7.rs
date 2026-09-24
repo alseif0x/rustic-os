@@ -31,6 +31,10 @@ pub(crate) fn migrate7(source: &Path, target: &Path, lineage: &str) -> Result<St
 
     let mut target_disk = FileDisk::create_new(target, format7::VOLUME_SECTORS)?;
     let created = created_identity(&target_disk);
+    // Hold the created file open until cleanup: while it is open its inode
+    // cannot be reused, so an identity match can only name this file.
+    let _held = std::fs::File::open(target)
+        .map_err(|error| format!("cannot hold {}: {error}", target.display()))?;
     let result = (|| {
         let mut volume = Volume7::EMPTY;
         upgrade_v5_to_v7(&mut source_disk, &mut target_disk, &mut volume, lineage)
@@ -549,7 +553,10 @@ mod tests {
         assert!(!target.exists());
 
         // Replaced by another file after creation: left in place and reported.
-        let created = created_identity(&FileDisk::create_new(&target, 1).unwrap());
+        // The created file stays open, as in `migrate7`, so its inode cannot be
+        // reused by the replacement.
+        let held = FileDisk::create_new(&target, 1).unwrap();
+        let created = created_identity(&held);
         std::fs::remove_file(&target).unwrap();
         std::fs::write(&target, b"someone else's file").unwrap();
         assert!(
@@ -558,6 +565,7 @@ mod tests {
                 .contains("left in place")
         );
         assert_eq!(std::fs::read(&target).unwrap(), b"someone else's file");
+        drop(held);
 
         // Replaced by a symlink to the created file: the link is not removed.
         std::fs::remove_file(&target).unwrap();
