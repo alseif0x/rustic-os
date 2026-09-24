@@ -11,7 +11,8 @@
 //!
 //! The resulting child is dormant: nothing here starts it or gives it an
 //! endpoint, and the manifest's executable name is not bound to the storage node
-//! that supplied the bytes.
+//! that supplied the bytes. The job keeps the admitted manifest's facts with the
+//! child so that `super::start` can apply the storage launch policy later.
 use super::super::services::{FileProfile, State};
 use super::Task;
 use rustic_sdk::{
@@ -23,8 +24,9 @@ use rustic_sdk::{
     files::{RangeProgress, RangeRead, VerifiedRange},
     runtime,
 };
-use rustic_supervisor::image_pair::{
-    Pin, STORAGE_FEATURES, Transfer, file_refusal, kernel_refusal,
+use rustic_supervisor::{
+    image_pair::{Pin, STORAGE_FEATURES, Transfer, file_refusal, kernel_refusal},
+    storage_launch::Facts,
 };
 
 /// Job budget in 100 Hz PIT ticks, sized from measurement rather than the
@@ -50,8 +52,9 @@ const STEPS_PER_TURN: usize = 3;
 /// first ELF range.
 const COPYING: u64 = 2;
 
-/// The single staged child the owner may inspect, kill and reap. It holds no
-/// authority: the supervisor issued it no endpoint, grant or start.
+/// The single staged child the owner may inspect, start, kill and reap. Until
+/// it is started it holds no authority: the supervisor issued it no endpoint,
+/// grant or start.
 #[derive(Clone, Copy)]
 pub(in super::super) struct Staged {
     pub pid: u64,
@@ -60,6 +63,10 @@ pub(in super::super) struct Staged {
     pub ticks: u64,
     pub bytes: u64,
     pub ranges: u32,
+    /// The admitted manifest, as the storage launch policy reads it.
+    pub facts: Facts,
+    /// Present once the child was started under the control-only topology.
+    pub started: Option<super::start::Started>,
 }
 
 enum Phase {
@@ -246,12 +253,20 @@ impl Stage {
             super::super::services::stop(pid);
             return Err(4);
         }
+        // The kernel admitted exactly these manifest bytes, so they parse; a
+        // child whose facts cannot be kept is withdrawn rather than tracked.
+        let Some(facts) = Facts::parse(&self.manifest) else {
+            super::super::services::stop(pid);
+            return Err(4);
+        };
         state.staged = Some(Staged {
             pid,
             generation,
             ticks: runtime::clock().saturating_sub(self.started),
             bytes: transfer.size().unwrap_or(0),
             ranges: transfer.ranges(),
+            facts,
+            started: None,
         });
         Ok(Turn::Done([
             0,
@@ -324,6 +339,10 @@ impl State {
 
     pub(in super::super) fn staged_facts(&self, pid: u64) -> Option<[u64; 8]> {
         let staged = self.staged.filter(|staged| staged.pid == pid)?;
+        if let Some(started) = staged.started {
+            // Words 5..7 carry the child's report, as for a utility child.
+            return Some(started.facts(staged.generation));
+        }
         // No scope, rights or expiry: the child was granted nothing.
         Some([
             0,
@@ -342,6 +361,9 @@ impl State {
             return Err(2);
         }
         let r = runtime::control([k::REAP, pid, 0, 0, 0, 0, 0, 0]).map_err(|_| 3u64)?;
+        if let Some(started) = self.staged.and_then(|staged| staged.started) {
+            started.close();
+        }
         self.staged = None;
         Ok([0, r[0], r[1], 0, 0, 0, 0, 0])
     }

@@ -27,7 +27,7 @@ impl State {
             | s::JOB_STATUS
             | s::TASKS_LIST
             | s::TASKS_ABORT => 2,
-            s::TASKS_ROW => 3,
+            s::TASKS_ROW | s::START_STAGED => 3,
             s::TASKS_CANDIDATE => 3,
             s::TASKS_OWNER_FORGET | s::TASKS_OWNER_APPLY_CUT => 3,
             s::TASKS_OWNER_BEGIN | s::TASKS_OWNER_CHUNK => 7,
@@ -100,6 +100,7 @@ impl State {
             s::REAP if self.staged_pid(w[1]) => self.reap_staged(w[1]),
             s::REAP => self.reap(w[1]),
             s::STAGE_V7 => self.stage_v7(w),
+            s::START_STAGED => self.start_staged(w[1], w[2]),
             s::PERMISSIONS => {
                 if w[1] == 0 {
                     return Ok([0, 0, 15, 0, 0, 0, 0, 0]);

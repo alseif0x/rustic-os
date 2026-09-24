@@ -18,7 +18,8 @@ pub fn run(files: &mut Client, w: [u64; 8]) -> [u64; 8] {
         s::LOST_REPLY => {
             super::recovery::discard_reply(files, w[1] as u32, w[2] as u32, s::LOST_REPLY)
         }
-        s::FINISH => [7, 0, 0, 0, 0, 0, 0, 0],
+        // Word 1 is the build tag, `0` in a default build.
+        s::FINISH => [7, rustic_utility::build_tag::TAG, 0, 0, 0, 0, 0, 0],
         s::WATCH => {
             let mut bytes = [0; 1024];
             loop {

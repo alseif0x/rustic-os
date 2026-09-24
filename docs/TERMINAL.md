@@ -61,7 +61,8 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `tasks forget INTENT_KEY` | Explicitly discard recovery evidence; does not cancel or undo an effect |
 | `ref WORKSPACE_PATH FILE_PATH` | Resolve authorized native objects to stable workspace/resource references |
 | `read-ref WORKSPACE RESOURCE VERSION\|- OFFSET LENGTH` | Read a bounded range through the shared SDK; print pinned version, range hash, epoch and exact bytes as hex |
-| `stage-ref WORKSPACE ELF MANIFEST ELF_VERSION MANIFEST_VERSION` | `mode=terminal-v7` only: the supervisor reads the pinned ELF/manifest pair with its own read-only authority and stages a dormant child that is never started; returns a job for `job-status`. See [storage-sourced dormant images](NATIVE-RUNTIME.md#storage-sourced-dormant-images-modeterminal-v7) |
+| `stage-ref WORKSPACE ELF MANIFEST ELF_VERSION MANIFEST_VERSION` | `mode=terminal-v7` only: the supervisor reads the pinned ELF/manifest pair with its own read-only authority and stages a dormant child; returns a job for `job-status`. See [storage-sourced dormant images](NATIVE-RUNTIME.md#storage-sourced-dormant-images-modeterminal-v7) |
+| `start-staged PID exit\|fault\|spin` | Start that staged child if its manifest identity is `rustic.utility`, with one control channel and no file, block or console authority; `read` and `session` are forwarded and refused by the supervisor. `permissions PID` then shows its report and `reap PID` its exit code. See [starting the staged child](NATIVE-RUNTIME.md#starting-the-staged-child-control-only) |
 | `echo TEXT...`, `status` | Print arguments; show the previous command's status |
 | `run spin`, `run fault`, `run exit` | Preemptible utility, deliberate isolated invalid-instruction fault, or exit code 7 |
 | `run read FILE`, `run probe FILE OTHER` | Read selected file; probe additionally verifies denial of the other file and privileged kernel/console calls |

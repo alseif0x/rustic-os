@@ -46,6 +46,27 @@ pub fn start(pid: u64, args: [u64; 3]) -> Result<(), ()> {
     call([k::START, pid, args[0], args[1], args[2], 0, 0, 0])?;
     Ok(())
 }
+/// Why a dormant child was not handed its role.
+pub enum BeginError {
+    /// The role message was not queued; the kernel was not asked to start.
+    Message,
+    /// The role message is queued but the kernel refused the start.
+    Start(runtime::Error),
+}
+/// Hand a dormant child its role: the role message is queued on the supervisor's
+/// end of the child's control channel before the kernel starts the child with
+/// `args`, so the child's first receive finds it. On failure the caller still
+/// owns both channel ends and the dormant child.
+pub fn begin(control: u64, pid: u64, role: [u64; 8], args: [u64; 3]) -> Result<(), BeginError> {
+    let message =
+        rustic_sdk::ipc::Message::new(0, &k::encode(role)).map_err(|_| BeginError::Message)?;
+    Endpoint::from_bootstrap(control)
+        .send(&message)
+        .map_err(|_| BeginError::Message)?;
+    runtime::control([k::START, pid, args[0], args[1], args[2], 0, 0, 0])
+        .map_err(BeginError::Start)?;
+    Ok(())
+}
 pub fn close(owner: u64, token: u64) {
     if token != 0 {
         let _ = call([k::CLOSE_ENDPOINT, owner, token, 0, 0, 0, 0, 0]);
@@ -60,6 +81,7 @@ impl State {
         loop {
             self.expire_task_result();
             self.collect();
+            self.collect_staged();
             self.poll_admin_drain();
             self.poll_takeover();
             self.poll_work();
@@ -84,7 +106,7 @@ impl State {
                     }
                 }
                 Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {
-                    let mut tokens = [0; 5];
+                    let mut tokens = [0; 6];
                     tokens[0] = self.control.token();
                     let mut n = 1;
                     for c in self.children.iter().flatten() {
@@ -92,6 +114,10 @@ impl State {
                             tokens[n] = c.control.endpoint.token();
                             n += 1;
                         }
+                    }
+                    if let Some(token) = self.staged_control() {
+                        tokens[n] = token;
+                        n += 1;
                     }
                     if self.admin.pending() && !self.admin.failed() {
                         tokens[n] = self.admin.endpoint.token();

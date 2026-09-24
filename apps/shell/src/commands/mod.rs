@@ -31,6 +31,8 @@ pub enum Error {
     TaskPending(u64),
     /// A completed stage job refused its pair with this owner status.
     StageRefused(u64),
+    /// The supervisor refused to start the staged child with this owner status.
+    StartRefused(u64),
 }
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -50,6 +52,10 @@ impl core::fmt::Display for Error {
             Self::StageRefused(code) => {
                 f.write_str("stage refused: ")?;
                 staging::refusal(f, *code)
+            }
+            Self::StartRefused(code) => {
+                f.write_str("start refused: ")?;
+                staging::start_refusal(f, *code)
             }
             Self::Pending(id) => write!(
                 f,
@@ -158,7 +164,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
             operations::execute(s, a)?
         }
         "ref" | "read-ref" => read::execute(s, a)?,
-        "stage-ref" => staging::execute(s, a)?,
+        "stage-ref" | "start-staged" => staging::execute(s, a)?,
         "job-status" | "hold-io" | "io-status" => management::execute(s, a)?,
         "run" | "ps" | "kill" | "reap" | "permissions" | "revoke" | "services" | "mem"
         | "restart" => processes::execute(s, a)?,

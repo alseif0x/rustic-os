@@ -25,6 +25,8 @@ FILE_VERSION = 13
 STAGE_KIND = 36
 SUPERSEDED = 6
 COPYING_PHASE = 2
+# Shell rendering of the supervisor's `launch::IDENTITY` refusal.
+IDENTITY_REFUSAL = "manifest identity is not started from storage"
 PROCESS_ROW = re.compile(r"(?m)^(\d+) (\w+) (\d+) (\d+) (\d+) (\d+) (\S+)\r?$")
 
 
@@ -63,7 +65,8 @@ def _programs(rows):
     return {pid: row["program"] for pid, row in rows.items()}
 
 
-def _processes(uart):
+def processes(uart):
+    """`ps` rows by PID: state and program name only."""
     rows = {}
     for row in PROCESS_ROW.finditer(uart.command("ps")):
         rows[int(row[1])] = {"state": row[2], "program": row[7]}
@@ -95,7 +98,8 @@ def _poll_stage(uart, job, done, delay=0.25):
         time.sleep(delay)
 
 
-def _stage(uart, *pair):
+def stage_pair(uart, *pair):
+    """Request one `stage-ref` and poll its job until it is no longer pending."""
     return _poll_stage(uart, _request_stage(uart, *pair), lambda outcome: outcome["state"] != "pending")
 
 
@@ -109,7 +113,7 @@ def _cancel_case(uart, references, seeded):
     workspace = references["elf"]["workspace"]
     pair = (workspace, references["elf"]["resource"], references["manifest"]["resource"],
             version_text(seeded["elf"]["version"]), version_text(seeded["manifest"]["version"]))
-    baseline = _programs(_processes(uart))
+    baseline = _programs(processes(uart))
     job = _request_stage(uart, *pair)
     copying = _poll_stage(
         uart, job, lambda outcome: outcome["state"] == "pending" and outcome["phase"] == COPYING_PHASE,
@@ -121,7 +125,7 @@ def _cancel_case(uart, references, seeded):
     if outcome["state"] != "refused" or outcome["status"] != SUPERSEDED:
         raise AssertionError(f"cancelled stage did not report superseded: {outcome}")
     # The restart gives the file service a new PID; compare the programs only.
-    after = _programs(_processes(uart))
+    after = _programs(processes(uart))
     if sorted(after.values()) != sorted(baseline.values()) or "staged" in after.values():
         raise AssertionError("cancelled stage left a process behind")
     return {"job": job, "restarted_after_seconds": copying["host_seconds"],
@@ -134,7 +138,7 @@ def _stage_cases(uart, references, seeded, elf_size):
     elf, manifest = references["elf"]["resource"], references["manifest"]["resource"]
     elf_version = version_text(seeded["elf"]["version"])
     manifest_version = version_text(seeded["manifest"]["version"])
-    baseline = _programs(_processes(uart))
+    baseline = _programs(processes(uart))
     if "staged" in baseline.values():
         raise AssertionError("a staged child exists before staging")
     refusals = []
@@ -142,20 +146,20 @@ def _stage_cases(uart, references, seeded, elf_size):
         ("stale_elf_version", (version_text(seeded["elf"]["version"] + 1), manifest_version)),
         ("stale_manifest_version", (elf_version, version_text(seeded["manifest"]["version"] + 1))),
     ):
-        outcome = _stage(uart, workspace, elf, manifest, *pins)
+        outcome = stage_pair(uart, workspace, elf, manifest, *pins)
         if outcome["state"] != "refused" or outcome["status"] != FILE_ERROR_BASE + FILE_VERSION:
             raise AssertionError(f"{name} was not refused as a version conflict: {outcome}")
-        if _programs(_processes(uart)) != baseline:
+        if _programs(processes(uart)) != baseline:
             raise AssertionError(f"{name} refusal left a process behind")
         refusals.append({"case": name, "status": outcome["status"], "reason": outcome["reason"]})
 
-    staged = _stage(uart, workspace, elf, manifest, elf_version, manifest_version)
+    staged = stage_pair(uart, workspace, elf, manifest, elf_version, manifest_version)
     if staged["state"] != "staged":
         raise AssertionError(f"current pair was not staged: {staged}")
     if (staged["elf_version"], staged["manifest_version"]) != (elf_version, manifest_version):
         raise AssertionError("stage result does not echo the pinned versions")
     pid = staged["pid"]
-    row = _processes(uart).get(pid)
+    row = processes(uart).get(pid)
     if row != {"state": "dormant", "program": "staged"}:
         raise AssertionError(f"staged child is not a dormant dynamic image: {row}")
     facts = re.search(
@@ -169,9 +173,13 @@ def _stage_cases(uart, references, seeded, elf_size):
         f"stage-ref {workspace} {elf} {manifest} {elf_version} {manifest_version}",
         "error: service busy or full",
     )
+    # Staging admits the file-server image; the storage launch policy never starts it.
+    uart.command(f"start-staged {pid} exit", f"error: start refused: {IDENTITY_REFUSAL}")
+    if processes(uart).get(pid) != row:
+        raise AssertionError("a refused start changed the staged child")
     uart.command(f"kill {pid}", "ok exit_kind=0 code=0")
     uart.command(f"reap {pid}", "ok exit_kind=3 code=0")
-    if _programs(_processes(uart)) != baseline:
+    if _programs(processes(uart)) != baseline:
         raise AssertionError("reaping the staged child did not restore the process table")
     uart.command(f"reap {pid}", "error: service denied")
     return {
@@ -189,11 +197,13 @@ def _stage_cases(uart, references, seeded, elf_size):
             "host_seconds": staged["host_seconds"],
         },
         "second_stage_while_staged": "busy",
+        "start_refused": IDENTITY_REFUSAL,
         "killed_and_reaped": True,
     }
 
 
-def _volume_json(binary, *arguments):
+def volume_json(binary, *arguments):
+    """Run one host `rustic-volume` subcommand and decode its JSON answer."""
     result = subprocess.run(
         [str(binary), *map(str, arguments)], capture_output=True, text=True
     )
@@ -284,10 +294,10 @@ def verify(image, volume_tool, output=None):
             temporary = Path(temporary)
             data = temporary / "v7-volume.raw"
             lineage = uuid.uuid4().hex
-            seeded = _volume_json(volume_tool, "seed7", data, lineage, elf, manifest)
+            seeded = volume_json(volume_tool, "seed7", data, lineage, elf, manifest)
             if seeded["lineage"] != lineage:
                 raise AssertionError("host provisioner returned another lineage")
-            initial_report = _volume_json(volume_tool, "report7", data)
+            initial_report = volume_json(volume_tool, "report7", data)
             _verify_report(initial_report, seeded, elf, manifest)
             volume_bytes = data.stat().st_size
             before_sha256 = environment.digest(data)
@@ -347,7 +357,7 @@ def verify(image, volume_tool, output=None):
                         uart.close()
 
             after_sha256 = environment.digest(data)
-            final_report = _volume_json(volume_tool, "report7", data)
+            final_report = volume_json(volume_tool, "report7", data)
             _verify_report(final_report, seeded, elf, manifest)
             if before_sha256 != after_sha256 or initial_report != final_report:
                 raise AssertionError("read-only guest boots changed the V7 volume")
