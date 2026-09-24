@@ -155,7 +155,9 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         | "request-cancel"
         | "schedule-admission"
         | "observe-admission"
-        | "observe-admission-v2" => admissions::execute(s, a)?,
+        | "observe-admission-v2"
+        | "admit-pattern-v7"
+        | "admission-v7" => admissions::execute(s, a)?,
         "admission-session" | "act-admission" => admission_actors::execute(s, a)?,
         "capabilities" => discovery::execute(s, a)?,
         "lifecycle-profile" | "select-lifecycle" => negotiation::execute(s, a)?,

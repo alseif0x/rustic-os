@@ -15,8 +15,10 @@ maintenance [interrupted at a publication boundary](#interrupted-publication)
 in the guest reports `Uncertain`. After `restart files` and a reboot, the
 service agrees with the independent reader on which generation survived. The
 system memory used by the file service and the owner's control latency are
-[measured around large writes](#memory-and-control-latency). The v5 service
-stays the default and is unchanged.
+[measured around large writes](#memory-and-control-latency). The same service
+now also serves [profile-2 staged admissions](FILES-V7-ADMISSIONS.md) with
+explicit execution and cancellation. The v5 service stays the default and is
+unchanged.
 
 ## What is verified
 
@@ -176,12 +178,15 @@ timings measured during 512 KiB writes.
 
 ## Selection and authority
 
-The file server's ready report is `[0, 2, 256, 524288, 8, 1, 0, 0]`. Word 5
-bit 0 means profile-2 tracked writes are served, and the supervisor checks the
-whole report exactly. V7 grants accept two rights profiles: read-only (`1`)
-with subject 0, or read, write and inspect (`7`) with a nonzero subject. Any
+The file server's ready report is `[0, 2, 256, 524288, 8, 3, 0, 0]`. Word 5
+bit 0 means profile-2 tracked writes are served and bit 1 that
+[staged admissions](FILES-V7-ADMISSIONS.md) are served; the supervisor checks
+the whole report exactly. V7 grants accept three rights profiles: read-only
+(`1`) with subject 0, read, write and inspect (`7`) with a nonzero subject, or
+the admission profile (`15`, which adds cancel) with a nonzero subject. Any
 other combination is refused with `Invalid`. The supervisor keeps its own
-owner binding read-only and grants the shell profile `7` with subject 2. That
+owner binding read-only and grants the shell profile `15` with subject 2
+(profile `7` before the admission increment). That
 retry scope is separate from the host provisioner's subject 1 seed records, so
 the shell can neither replay nor see them. The owner can revoke and reissue
 that binding with the supervisor job `REVOKE_SHELL_V7` and run retention
@@ -213,8 +218,9 @@ The receipt is the 104-byte completed-operation receipt with a 32-bit size at
 bytes 64 to 67 and the profile marker at 68 to 71. The operation ID and
 committed version are the record's commit sequence. The service instance is
 the one persisted in the record. The SHA-256 covers the file bytes. Profile-1
-(36-byte) opens, unmarked profile-1 lookups and every other mutation or
-admission opcode are `Unsupported` on V7.
+(36-byte) opens, unmarked profile-1 lookups, every other mutation and the
+admission opcodes not listed in [V7 staged admissions](FILES-V7-ADMISSIONS.md#wire)
+are `Unsupported` on V7.
 
 ## Service behavior
 
@@ -222,8 +228,11 @@ admission opcode are `Unsupported` on V7.
 `Volume7`. The file server keeps that volume in process-static storage. Read
 handling (`v7/read.rs`), the grant table (`v7/grants.rs`), scope walks
 (`v7/scope.rs`), write policy (`v7/write.rs`), retained-record lookups
-(`v7/lookup.rs`) and the per-transfer accumulator (`v7/transfer.rs`) are
-separate modules, and `v7.rs` composes them.
+(`v7/lookup.rs`), the per-transfer accumulator (`v7/transfer.rs`), staged
+admission policy (`v7/admission.rs` with `v7/admission/records.rs`) and the
+synchronous publication driver (`v7/settle.rs`) are separate modules, and
+`v7.rs` composes them. Tracked and admission transfers share the per-slot
+table; the stage kind fixed at open decides which requests may use it.
 
 - Each slot has at most one transfer. The volume allows two open stages in
   total, so a third concurrent open is `Busy`.
@@ -287,7 +296,7 @@ only) sends the file service an administrative `REVOKE` for the shell's client
 slot 0. The service aborts that slot's open stage without I/O, forgets its
 receipt and closes the old endpoint before it replies. Only after a confirmed
 revocation does the supervisor rerun the mount's last two phases: it connects a
-new channel and grants it the same shell policy (rights `7`, subject 2, the
+new channel and grants it the same shell policy (rights `15`, subject 2, the
 workspaces root) under a fresh context. The job result carries the same binding
 words as a restart, and the shell adopts it the same way. A refused revocation
 leaves the old binding. A failure after the revocation (a refused or
@@ -544,9 +553,9 @@ and resource. Creating it uses no retained record.
 - Maintenance relies on the owner's declaration that outcomes are resolved.
   The service refuses only what it can see (open transfers, stages and
   admitted records); a client that has not yet looked up a completed outcome
-  loses it. `rustic-volume` does not expose maintenance, and the guest refusal
-  for an unresolved admission is untested because the V7 service creates no
-  admissions (it is host-tested in `rustic-fs`).
+  loses it. `rustic-volume` does not expose maintenance. The refusal for an
+  unresolved admission is now shown in the guest by
+  `tools/v7_admission_test.py` ([V7 staged admissions](FILES-V7-ADMISSIONS.md)).
 - The shell learns the new epoch only from the maintenance output. No state
   query reports the current epoch to a client.
 - Maintenance runs inside the single-loop service like a commit.

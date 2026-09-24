@@ -71,12 +71,12 @@ fn print(operation: impl Into<Printed>) {
 }
 /// Deterministic test content a host harness can recompute: byte `i` of seed
 /// `s` is `s*31 + 7*i + i/509` modulo 256, so distinct seeds differ everywhere.
-fn pattern_byte(seed: u8, index: u32) -> u8 {
+pub(super) fn pattern_byte(seed: u8, index: u32) -> u8 {
     seed.wrapping_mul(31)
         .wrapping_add(index.wrapping_mul(7) as u8)
         .wrapping_add((index / 509) as u8)
 }
-fn replacement(a: &Args<'_>) -> Result<Replacement, Error> {
+pub(super) fn replacement(a: &Args<'_>) -> Result<Replacement, Error> {
     Ok(Replacement {
         workspace: argument(a, 1)?.parse()?,
         resource: argument(a, 2)?.parse()?,

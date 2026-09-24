@@ -23,8 +23,9 @@ run after the service has resolved current-epoch outcomes. The host-only
 `upgrade_v5_to_v7` converter copies a v5 source to distinct disposable media,
 preserving supported scoped recovery records and refusing ambiguous or invalid
 history. The explicit `mode=terminal-v7` fixture now selects a V7 service with
-bounded reads and [profile-2 tracked writes](FILES-V7-WRITES.md) announced in
-its readiness report; production/default `mode=terminal` remains v5-backed, and
+bounded reads, [profile-2 tracked writes](FILES-V7-WRITES.md) and
+[profile-2 staged admissions](FILES-V7-ADMISSIONS.md) announced in its
+readiness report; production/default `mode=terminal` remains v5-backed, and
 no capability advertisement is wired. The v6 direct probe remains separate.
 
 ## Why a successor
@@ -340,8 +341,11 @@ while the admission publication polls.
 
 Limits: stage writes are not yet pollable, and a dropped token keeps its
 reservation until `release_stages`, a fence or a remount. The V7 file service
-uses tracked stages for [profile-2 tracked writes](FILES-V7-WRITES.md); no
-service uses admission stages. Owner identity is
+uses tracked stages for [profile-2 tracked writes](FILES-V7-WRITES.md) and
+admission stages for [profile-2 staged admissions](FILES-V7-ADMISSIONS.md),
+whose `finish_admission`, `prepare_execute` and `prepare_cancellation`
+publications it polls to settlement inside one request through a synchronous
+disk adapter. Owner identity is
 distinct only within one program; tokens are not meant to cross processes.
 
 ## Bounded range reads

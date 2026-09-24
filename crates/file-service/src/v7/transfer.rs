@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
-//! One client's streamed profile-2 replacement: 40-byte packets accumulate into
-//! one 512-byte sector that is handed to the volume's stage as soon as it is
-//! full, so a transfer never holds more than one sector of the file.
+//! One client's streamed profile-2 replacement or admission: 40-byte packets
+//! accumulate into one 512-byte sector that is handed to the volume's stage as
+//! soon as it is full, so a transfer never holds more than one sector of the
+//! file. The stage kind fixed at open decides which requests may continue and
+//! finish it.
 //!
 //! The SHA-256 covers the bytes the client supplied. A fresh stage writes
 //! exactly those bytes, and an exact retry only finishes when every supplied
 //! byte equals the retained snapshot, so the digest is the stored content's in
 //! both cases.
-use crate::reply;
+use crate::{disk::Synchronous, reply};
 use rustic_abi::files::{Error, operation::Replacement};
-use rustic_fs::{Disk, Stage7, Volume7, format7::Record7};
+use rustic_fs::{Disk, Stage7, Stage7Kind, Volume7, format7::Record7};
 use sha2::{Digest, Sha256};
 
 const SECTOR: usize = 512;
@@ -24,6 +26,7 @@ pub(super) enum Fault {
 
 pub(super) struct Transfer {
     stage: Stage7,
+    kind: Stage7Kind,
     request: Replacement,
     size: u32,
     received: u32,
@@ -33,9 +36,10 @@ pub(super) struct Transfer {
 }
 
 impl Transfer {
-    pub(super) fn new(stage: Stage7, request: Replacement, size: u32) -> Self {
+    pub(super) fn new(stage: Stage7, kind: Stage7Kind, request: Replacement, size: u32) -> Self {
         Self {
             stage,
+            kind,
             request,
             size,
             received: 0,
@@ -47,6 +51,10 @@ impl Transfer {
 
     pub(super) fn object(&self) -> u32 {
         self.request.resource.object()
+    }
+
+    pub(super) fn kind(&self) -> Stage7Kind {
+        self.kind
     }
 
     pub(super) fn request(&self) -> Replacement {
@@ -104,6 +112,24 @@ impl Transfer {
                 Err(reply::error(error))
             }
         }
+    }
+
+    /// Finish the complete admission stage and publish it synchronously. The
+    /// result is the admitted record, or for an exact retry the retained
+    /// record in its current state. Any failure leaves no stage open.
+    pub(super) fn finish_admission(
+        mut self,
+        volume: &mut Volume7,
+        disk: &mut impl Disk,
+    ) -> Result<Record7, Error> {
+        let mut disk = Synchronous(disk);
+        let refused = match volume.finish_admission(&mut disk, &mut self.stage) {
+            Ok(publication) => return super::settle::settle(publication),
+            Err(error) => error,
+        };
+        // Only an `Invalid` refusal leaves a stage open; release it.
+        let _ = volume.abort_stage(self.stage);
+        Err(reply::error(refused))
     }
 
     /// Release the stage without I/O. A stage the volume already ended is

@@ -3,7 +3,7 @@
 //!
 //! The table only records what the owner installed. Storage effects of losing a
 //! slot (aborting a stage, forgetting a receipt) belong to the composing server.
-use rustic_abi::files::{Error, INSPECT_RIGHT, READ_RIGHT, WRITE_RIGHT};
+use rustic_abi::files::{CANCEL_RIGHT, Error, INSPECT_RIGHT, READ_RIGHT, WRITE_RIGHT};
 use rustic_fs::Volume7;
 
 /// Independent client authority slots.
@@ -14,6 +14,9 @@ pub const READ_ONLY7: u8 = READ_RIGHT;
 /// Tracked-write profile: reads plus profile-2 tracked replacement and
 /// inspection of the receipts this slot produced.
 pub const TRACKED_WRITE7: u8 = READ_RIGHT | WRITE_RIGHT | INSPECT_RIGHT;
+/// Admission profile: the tracked-write profile plus `CANCEL`, which lets the
+/// holder durably cancel its own subject's admissions within its scope.
+pub const ADMISSION7: u8 = TRACKED_WRITE7 | CANCEL_RIGHT;
 
 /// Authority the owner asks to install in one slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,10 +25,10 @@ pub struct GrantRequest7 {
     pub endpoint: u64,
     /// Directory or file below the workspaces root that bounds every request.
     pub scope: u32,
-    /// Exactly [`READ_ONLY7`] or [`TRACKED_WRITE7`].
+    /// Exactly [`READ_ONLY7`], [`TRACKED_WRITE7`] or [`ADMISSION7`].
     pub rights: u8,
-    /// Retry subject persisted in tracked records. Zero for read-only grants,
-    /// nonzero for tracked writes.
+    /// Retry subject persisted in tracked and admitted records. Zero for
+    /// read-only grants, nonzero for the other profiles.
     pub subject: u64,
     /// Zero means no expiry; otherwise requests at or after this time are denied.
     pub expires: u64,
@@ -83,7 +86,7 @@ impl Grants {
     ) -> Result<Grant7, Error> {
         let subject_valid = match request.rights {
             READ_ONLY7 => request.subject == 0,
-            TRACKED_WRITE7 => request.subject != 0,
+            TRACKED_WRITE7 | ADMISSION7 => request.subject != 0,
             _ => false,
         };
         if slot >= CLIENTS7

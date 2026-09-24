@@ -7,14 +7,15 @@
 //! job (revoke, then the mount's channel and grant phases); this module owns
 //! the administrative words and the checks on their replies, so they are
 //! exercised directly by host tests. The policy is fixed: the shell always
-//! holds file-service client slot 0 with the tracked-write profile under
-//! subject 2, the retry scope reserved for it.
+//! holds file-service client slot 0 with the admission profile under subject
+//! 2, the retry scope reserved for it.
 use rustic_sdk::abi::files::{GRANT, REVOKE};
 
 /// File-service client slot of the shell's binding.
 pub const SLOT: u64 = 0;
-/// Read, write and inspect: the V7 tracked-write profile.
-pub const RIGHTS: u64 = 7;
+/// Read, write, inspect and cancel: the V7 admission profile, which adds
+/// cancellation of the shell's own admissions to the tracked-write profile.
+pub const RIGHTS: u64 = 15;
 /// Retry scope of the shell's tracked writes, distinct from the host
 /// provisioner's subject 1.
 pub const SUBJECT: u64 = 2;
@@ -65,8 +66,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_shell_grant_is_slot_zero_tracked_write_subject_two_at_the_workspaces_root() {
-        assert_eq!(grant(3, 17), [32, 0, 3, 17, 0, 7, 0, 2]);
+    fn the_shell_grant_is_slot_zero_admission_profile_subject_two_at_the_workspaces_root() {
+        assert_eq!(grant(3, 17), [32, 0, 3, 17, 0, 15, 0, 2]);
         assert_eq!(revoke(), [33, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(rebound(5, 9, 12), [0, 5, 9, 12, 0, 0, 0, 0]);
     }

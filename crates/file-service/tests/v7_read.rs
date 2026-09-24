@@ -322,7 +322,7 @@ fn maximum_profile2_file_size_is_reported_while_range_stays_bounded() {
 }
 
 #[test]
-fn mutations_admissions_and_operation_queries_are_not_dispatched() {
+fn mutations_and_profile_one_requests_are_not_dispatched() {
     let (mut volume, mut disk, workspace, _, _) = setup(b"read only");
     let mut server = Server7::new(&mut volume);
     let authorization = grant(&mut server, 0, workspace, 11, 0);
@@ -348,7 +348,6 @@ fn mutations_admissions_and_operation_queries_are_not_dispatched() {
         replace,
         operation_id,
         admission_open,
-        admission_observe,
     ] {
         let packet = Packet {
             context: authorization.context,
@@ -382,6 +381,19 @@ fn mutations_admissions_and_operation_queries_are_not_dispatched() {
             .status,
         Error::Denied as u8
     );
+    // Profile-2 admissions are served, but a read-only grant (subject 0) has
+    // no admission authority, even to observe.
+    let observe = server.handle(
+        &mut disk,
+        0,
+        11,
+        Packet {
+            context: authorization.context,
+            ..admission_observe
+        },
+        0,
+    );
+    assert_eq!(observe.status, Error::Denied as u8);
     assert_eq!(CLIENTS7, 4);
     assert_eq!(disk.io_ops, io_before);
 }

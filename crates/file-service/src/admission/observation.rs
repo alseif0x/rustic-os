@@ -2,7 +2,7 @@
 //! Projection of retained service facts into the explicitly requested profile.
 use rustic_abi::files::{Error, Packet, admission as a};
 
-pub(super) fn reason(value: rustic_fs::PreventionReason) -> a::PreventionReason {
+pub(crate) fn reason(value: rustic_fs::PreventionReason) -> a::PreventionReason {
     use rustic_fs::PreventionReason as R;
     match value {
         R::Unknown => a::PreventionReason::Unknown,
@@ -12,7 +12,7 @@ pub(super) fn reason(value: rustic_fs::PreventionReason) -> a::PreventionReason 
     }
 }
 
-pub(super) fn reply(view: a::ObservationV2, request: Packet) -> Result<Packet, Error> {
+pub(crate) fn reply(view: a::ObservationV2, request: Packet) -> Result<Packet, Error> {
     match request.arg {
         a::OBSERVATION_VERSION => view.coarse().packet(request.context),
         a::OBSERVATION_V2 => view.packet(request.context),

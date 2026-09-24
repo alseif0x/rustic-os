@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Explicitly selected V7 native service over one exclusively borrowed mounted
-//! volume: bounded range reads, profile-2 tracked replacement, lookups of
-//! retained records and owner-requested retention maintenance.
+//! volume: bounded range reads, profile-2 tracked replacement, profile-2 staged
+//! admission with explicit execution and cancellation, lookups of retained
+//! records and owner-requested retention maintenance.
 //!
 //! The composing [`Server7`] routes each request after the envelope and grant
 //! checks, and keeps the storage consequences of authority changes together:
@@ -9,15 +10,17 @@
 //! stage and forgets its receipt. Maintenance is an owner operation with no
 //! client packet: the serving layer calls [`Server7::maintain_retention`] only
 //! for its administrative channel. The v5 `Server` is unaffected.
+mod admission;
 mod grants;
 mod lookup;
 mod read;
 mod retention;
 mod scope;
+mod settle;
 mod transfer;
 mod write;
 
-pub use grants::{CLIENTS7, Grant7, GrantRequest7, READ_ONLY7, TRACKED_WRITE7};
+pub use grants::{ADMISSION7, CLIENTS7, Grant7, GrantRequest7, READ_ONLY7, TRACKED_WRITE7};
 pub use retention::Maintenance7;
 
 use rustic_abi::files::*;
@@ -152,6 +155,9 @@ impl<'a> Server7<'a> {
             }
             _ if write::selected(&packet) => {
                 self.writes.request(self.volume, disk, slot, grant, packet)
+            }
+            _ if admission::selected(&packet) => {
+                admission::request(&mut self.writes, self.volume, disk, slot, grant, packet)
             }
             _ => Err(Error::Unsupported),
         }
