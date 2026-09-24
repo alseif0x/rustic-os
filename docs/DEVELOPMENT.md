@@ -182,7 +182,8 @@ dormant child (and refuse stale pins) before and after that restart, and verify
 the provisioned volume is unchanged. It writes no volume image to the tracked workspace or to
 `artifacts/terminal/data.raw`; evidence is stored in
 `artifacts/boot/terminal-v7/`. The harness uses only the read protocol, although
-the shell now holds a V7 tracked-write grant. The
+the shell now holds a V7 admission-profile grant (tracked writes and staged
+admissions). The
 temporary QEMU data backend is not opened read-only because V7 mount requires an
 initial flush, which this host's read-only QEMU backend rejects; before/after
 volume hashes independently check for mutation.
@@ -258,6 +259,20 @@ Evidence is stored in `artifacts/boot/terminal-v7-faults/`;
 event plan, the generation classification and the parsers have unit tests in
 `tools/tests/test_v7_faults.py`. See
 [interrupted publication](FILES-V7-WRITES.md#interrupted-publication).
+
+`python3 tools/v7_admission_test.py` builds the same image, seeds another fresh
+temporary volume with `seed7 --scratch` and boots it twice. Boot 1 admits a
+64 KiB pattern with `admit-pattern-v7`, repeats it exactly, queries it by retry
+identity, ID and observation v2, and has the owner's `maintain-v7` refused
+with `Busy`, all with an unchanged image digest. Boot 2 executes the admission
+and looks up its completion receipt by ID and retry key. A second admission is
+overtaken by a tracked write: execution is `Version`, then an explicit cancel
+records the `requested` cause. The final maintenance succeeds. `oracle7` checks
+the image while the guest is idle after every phase and after each shutdown.
+Evidence is stored in `artifacts/boot/terminal-v7-admission/`, and
+`python3 tools/boot.py test` runs it after `tools/v7_faults_test.py`. The output
+parsers and the oracle comparison have unit tests in
+`tools/tests/test_v7_admission.py`. See [V7 staged admissions](FILES-V7-ADMISSIONS.md).
 
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer

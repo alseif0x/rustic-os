@@ -11,7 +11,10 @@ use rustic_abi::files::{
 };
 use sha2::{Digest, Sha256};
 
-/// One profile-2 transfer opened on the client's current binding.
+/// One profile-2 transfer opened on the client's current binding, either a
+/// tracked replacement or a staged admission (see
+/// [`Client::workspace_admission_open`]); the kind fixed at open selects the
+/// chunk and abort requests, and only the matching finish accepts it.
 ///
 /// It carries no authority of its own: it only remembers the request, the next
 /// offset and the running SHA-256 of the acknowledged bytes. If the binding is
@@ -22,9 +25,29 @@ pub struct WorkspaceTransfer {
     size: u32,
     offset: u32,
     digest: Sha256,
+    admission: bool,
 }
 
 impl WorkspaceTransfer {
+    pub(super) fn new(request: operation::Replacement, size: u32, admission: bool) -> Self {
+        Self {
+            request,
+            size,
+            offset: 0,
+            digest: Sha256::new(),
+            admission,
+        }
+    }
+
+    /// Whether this transfer stages an admission rather than a replacement.
+    pub fn admission(&self) -> bool {
+        self.admission
+    }
+
+    pub(super) fn request(&self) -> operation::Replacement {
+        self.request
+    }
+
     /// Bytes the service has acknowledged so far.
     pub fn offset(&self) -> u32 {
         self.offset
@@ -72,12 +95,7 @@ impl<P: crate::rpc::Progress> Client<P> {
         }
         let open = Replacement { request }.packet(size as usize, self.context)?;
         empty_ack(self.operation_exchange(open)?)?;
-        Ok(WorkspaceTransfer {
-            request,
-            size,
-            offset: 0,
-            digest: Sha256::new(),
-        })
+        Ok(WorkspaceTransfer::new(request, size, false))
     }
 
     /// Send the next chunk of at most 40 bytes, produced by `fill(offset,
@@ -92,7 +110,11 @@ impl<P: crate::rpc::Progress> Client<P> {
             return Err(Error::Offset);
         }
         let count = (transfer.size - transfer.offset).min(DATA as u32) as usize;
-        let mut p = Packet::new(REPLACE_CHUNK);
+        let mut p = Packet::new(if transfer.admission {
+            admission::CHUNK
+        } else {
+            REPLACE_CHUNK
+        });
         p.id = transfer.request.resource.object();
         p.arg = transfer.offset;
         p.count = count as u8;
@@ -105,7 +127,11 @@ impl<P: crate::rpc::Progress> Client<P> {
 
     /// Release an open transfer on the service without committing it.
     pub fn workspace_abort(&mut self, transfer: WorkspaceTransfer) -> Result<(), Error> {
-        let mut p = Packet::new(REPLACE_ABORT);
+        let mut p = Packet::new(if transfer.admission {
+            admission::ABORT
+        } else {
+            REPLACE_ABORT
+        });
         p.id = transfer.request.resource.object();
         empty_ack(self.operation_exchange(p)?)
     }
@@ -115,6 +141,11 @@ impl<P: crate::rpc::Progress> Client<P> {
     /// refused with [`Error::Offset`]. Any failure after the commit request is
     /// sent is [`Error::Uncertain`]; see [`Self::workspace_replace`].
     pub fn workspace_commit(&mut self, transfer: WorkspaceTransfer) -> Result<Operation, Error> {
+        if transfer.admission {
+            // An admission is finished by `workspace_accept`, never committed.
+            let _ = self.workspace_abort(transfer);
+            return Err(Error::Protocol);
+        }
         if transfer.offset != transfer.size {
             let _ = self.workspace_abort(transfer);
             return Err(Error::Offset);
@@ -202,7 +233,7 @@ impl<P: crate::rpc::Progress> Client<P> {
     }
 }
 
-fn empty_ack(p: Packet) -> Result<(), Error> {
+pub(super) fn empty_ack(p: Packet) -> Result<(), Error> {
     if p.id != 0 || p.arg != 0 || p.version != 0 || p.count != 0 {
         return Err(Error::Protocol);
     }

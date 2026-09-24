@@ -14,6 +14,7 @@ mod selection;
 mod staging;
 mod transport;
 mod workspace;
+mod workspace_admission;
 pub use rustic_abi::files::recovery::{Receipt, Retry};
 mod metadata;
 mod paths;

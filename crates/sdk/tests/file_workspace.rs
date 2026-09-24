@@ -309,3 +309,115 @@ fn a_stepwise_transfer_advances_only_on_acknowledged_chunks() {
         ]
     );
 }
+
+/// An admission stand-in: profile-2 OPEN, CHUNK into `store`, ACCEPT and
+/// RETRY answered with an admitted status of `lineage`, ABORT acknowledged.
+fn admission_service(lineage: [u8; 16]) -> Rc<RefCell<Vec<u8>>> {
+    use rustic_abi::files::admission::{self as a, AdmissionId, State, Status};
+    transport::reset();
+    let received = Rc::new(RefCell::new(Vec::new()));
+    let store = received.clone();
+    transport::respond(move |p| {
+        let mut reply = Packet::new(p.op);
+        reply.context = p.context;
+        let admitted = Status {
+            id: AdmissionId::new(lineage, 12).unwrap(),
+            state: State::Admitted,
+            service_instance: Instance::new(lineage, 11).unwrap(),
+            terminal: 0,
+        };
+        match p.op {
+            a::OPEN => {
+                assert_eq!(p.count, 40, "profile-2 admission open carries the marker");
+                assert_eq!(p.data[36..40], workspace::PROFILE.to_le_bytes());
+                store.borrow_mut().clear();
+            }
+            a::CHUNK => {
+                assert_eq!(p.arg as usize, store.borrow().len());
+                store.borrow_mut().extend_from_slice(p.payload());
+            }
+            a::ACCEPT => return admitted.packet(p.op, p.context).unwrap(),
+            a::RETRY => {
+                assert_eq!(p.count, 28, "profile-2 retry carries the marker");
+                return admitted.packet(p.op, p.context).unwrap();
+            }
+            a::ABORT => {}
+            op => panic!("unexpected op {op}"),
+        }
+        reply
+    });
+    received
+}
+
+#[test]
+fn an_admission_streams_through_admission_requests_and_returns_its_status() {
+    use rustic_abi::files::admission::{self as a, State};
+    let bytes = pattern(3 * 1024 + 5);
+    let received = admission_service([7; 16]);
+    let mut client = files::Client::new(1, 7, 11);
+    let status = client
+        .workspace_admit(request(), bytes.len() as u32, |offset, buffer| {
+            let start = offset as usize;
+            buffer.copy_from_slice(&bytes[start..start + buffer.len()]);
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!((status.state, status.id.number()), (State::Admitted, 12));
+    assert_eq!(*received.borrow(), bytes);
+    let ops = ops();
+    assert_eq!(ops.first(), Some(&a::OPEN));
+    assert_eq!(ops.last(), Some(&a::ACCEPT));
+    assert!(ops[1..ops.len() - 1].iter().all(|op| *op == a::CHUNK));
+
+    let retried = client
+        .admission_retry7(request().workspace, request().retry)
+        .unwrap();
+    assert_eq!(retried, status);
+}
+
+#[test]
+fn an_admission_source_failure_aborts_and_a_foreign_status_is_uncertain() {
+    use rustic_abi::files::admission as a;
+    admission_service([7; 16]);
+    let mut client = files::Client::new(1, 7, 11);
+    let result = client.workspace_admit(request(), 1000, |offset, buffer| {
+        if offset >= 400 {
+            return Err(FileError::Io);
+        }
+        buffer.fill(1);
+        Ok(())
+    });
+    assert_eq!(result, Err(FileError::Io));
+    assert_eq!(ops().last(), Some(&a::ABORT));
+    assert!(!ops().contains(&a::ACCEPT));
+
+    admission_service([9; 16]);
+    let mut client = files::Client::new(1, 7, 11);
+    assert_eq!(
+        client.workspace_admit(request(), 10, |_, buffer| {
+            buffer.fill(2);
+            Ok(())
+        }),
+        Err(FileError::Uncertain)
+    );
+    assert_eq!(
+        client.admission_retry7(request().workspace, request().retry),
+        Err(FileError::Protocol)
+    );
+}
+
+#[test]
+fn an_admission_transfer_cannot_be_committed() {
+    use rustic_abi::files::admission as a;
+    admission_service([7; 16]);
+    let mut client = files::Client::new(1, 7, 11);
+    let mut transfer = client.workspace_admission_open(request(), 3).unwrap();
+    client
+        .workspace_chunk(&mut transfer, |_, buffer| {
+            buffer.fill(3);
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(client.workspace_commit(transfer), Err(FileError::Protocol));
+    assert_eq!(ops(), [a::OPEN, a::CHUNK, a::ABORT]);
+}

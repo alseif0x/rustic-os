@@ -3,6 +3,8 @@
 mod active;
 mod authority;
 mod observation;
+// Profile projections shared with the V7 service's retained admissions.
+pub(crate) use observation::{reason as prevention_reason, reply as observation_reply};
 mod scheduling;
 mod scope;
 pub use scheduling::ExecutionQueue;

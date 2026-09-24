@@ -3,6 +3,10 @@
 //! completed-operation receipt, abort, lookups of retained records and receipt
 //! parts for the receipt this slot last produced or looked up.
 //!
+//! The per-slot transfer table is shared with staged admission: one slot holds
+//! at most one transfer of either stage kind, and each kind's requests can only
+//! continue, finish or abort a transfer of that kind.
+//!
 //! Policy lives here: which rights each step needs, which retry subject and
 //! service instance are persisted, and when transfer state is dropped. The
 //! volume enforces versions, retry scopes, the retained-record budget and
@@ -16,7 +20,10 @@ use rustic_abi::files::{
     workspace::{Lookup, Operation, Replacement},
     *,
 };
-use rustic_fs::{Disk, Stage7Kind, Volume7, WriteIdentity7, format7::Record7};
+use rustic_fs::{
+    Disk, Stage7Kind, Volume7, WriteIdentity7,
+    format7::{Record7, RecordState},
+};
 
 /// Whether `p` selects the profile-2 write path. Open and lookups carry an
 /// explicit profile marker, so profile-1 lookups stay `Unsupported`; chunk,
@@ -86,8 +93,6 @@ impl Writes {
         if slot >= CLIENTS7 {
             return Err(Error::Denied);
         }
-        let mut ack = Packet::new(p.op);
-        ack.context = p.context;
         match p.op {
             OPERATION_PART => self.part(slot, grant, p),
             OPERATION_ID | OPERATION_RETRY => {
@@ -97,31 +102,13 @@ impl Writes {
                 Ok(first)
             }
             REPLACE_OPEN => {
-                self.open(volume, slot, grant, p)?;
-                Ok(ack)
+                let request = Replacement::decode(&p)?.request;
+                self.open(volume, slot, grant, request, p.arg, Stage7Kind::Tracked)?;
+                Ok(ack(&p))
             }
-            REPLACE_CHUNK => {
-                grant.holds(WRITE_RIGHT)?;
-                if p.count == 0 || p.version != 0 {
-                    return Err(Error::Protocol);
-                }
-                let transfer = self.transfer(slot, p.id)?;
-                match transfer.chunk(volume, disk, p.arg, p.payload()) {
-                    Ok(()) => Ok(ack),
-                    Err(Fault::Refused(error)) => Err(error),
-                    Err(Fault::Ended(error)) => {
-                        self.transfers[slot] = None;
-                        Err(error)
-                    }
-                }
-            }
+            REPLACE_CHUNK => self.chunk(volume, disk, slot, grant, Stage7Kind::Tracked, p),
             REPLACE_COMMIT => {
-                grant.holds(WRITE_RIGHT)?;
-                bare(&p)?;
-                if !self.transfer(slot, p.id)?.complete() {
-                    return Err(Error::Offset);
-                }
-                let transfer = self.transfers[slot].take().ok_or(Error::NoTransfer)?;
+                let transfer = self.take_complete(slot, grant, Stage7Kind::Tracked, &p)?;
                 let request = transfer.request();
                 let (record, sha256) = transfer.finish(volume, disk)?;
                 // The effect is committed from here on: any failure to describe
@@ -136,32 +123,29 @@ impl Writes {
                 self.receipts[slot] = Some(receipt);
                 Ok(first)
             }
-            REPLACE_ABORT => {
-                grant.holds(WRITE_RIGHT)?;
-                bare(&p)?;
-                self.transfer(slot, p.id)?;
-                if let Some(transfer) = self.transfers[slot].take() {
-                    transfer.abort(volume);
-                }
-                Ok(ack)
-            }
+            REPLACE_ABORT => self.abort(volume, slot, grant, Stage7Kind::Tracked, p),
             _ => Err(Error::Unsupported),
         }
     }
 
-    fn open(
+    /// Open a streamed transfer of `size` bytes whose stage finishes as `kind`.
+    ///
+    /// Both kinds need write and inspection (the finish reply is a receipt or
+    /// an admission status) and a nonzero retry subject. An admission may not
+    /// reuse a retry identity that names a direct tracked write.
+    pub(super) fn open(
         &mut self,
         volume: &mut Volume7,
         slot: usize,
         grant: Grant7,
-        p: Packet,
+        request: operation::Replacement,
+        size: u32,
+        kind: Stage7Kind,
     ) -> Result<(), Error> {
-        // The commit reply is a receipt, so writing also needs inspection.
         grant.holds(WRITE_RIGHT | INSPECT_RIGHT)?;
-        if grant.subject == 0 {
+        if grant.subject == 0 || slot >= CLIENTS7 {
             return Err(Error::Denied);
         }
-        let request = Replacement::decode(&p)?.request;
         let workspace = request.workspace.root();
         let object = request.resource.object();
         scope::authorized_resource(volume, grant.scope, workspace, object)?;
@@ -179,7 +163,7 @@ impl Writes {
         let key = request.retry.key.value();
         // An exact retry must present the instance its record persisted, which
         // may belong to an earlier mount; a fresh operation uses this mount's.
-        let instance = volume
+        let retained = volume
             .retained_records()
             .map_err(reply::error)?
             .iter()
@@ -190,25 +174,85 @@ impl Writes {
                     && record.retry_epoch == epoch
                     && record.retry_key == key
             })
-            .map_or(self.instance, |record| record.instance);
+            .copied();
+        if kind == Stage7Kind::Admission
+            && retained.is_some_and(|record| record.state == RecordState::DirectCommitted)
+        {
+            return Err(Error::IdempotencyConflict);
+        }
         let identity = WriteIdentity7 {
             subject: grant.subject,
             workspace,
             object,
-            instance,
+            instance: retained.map_or(self.instance, |record| record.instance),
             retry_epoch: epoch,
             retry_key: key,
         };
         let stage = volume
-            .open_stage(
-                identity,
-                request.expected_version.value(),
-                p.arg,
-                Stage7Kind::Tracked,
-            )
+            .open_stage(identity, request.expected_version.value(), size, kind)
             .map_err(reply::error)?;
-        self.transfers[slot] = Some(Transfer::new(stage, request, p.arg));
+        self.transfers[slot] = Some(Transfer::new(stage, kind, request, size));
         Ok(())
+    }
+
+    /// Accept the next client bytes of this slot's `kind` transfer.
+    pub(super) fn chunk(
+        &mut self,
+        volume: &mut Volume7,
+        disk: &mut impl Disk,
+        slot: usize,
+        grant: Grant7,
+        kind: Stage7Kind,
+        p: Packet,
+    ) -> Result<Packet, Error> {
+        grant.holds(WRITE_RIGHT)?;
+        if p.count == 0 || p.version != 0 {
+            return Err(Error::Protocol);
+        }
+        let transfer = self.transfer(slot, p.id, kind)?;
+        match transfer.chunk(volume, disk, p.arg, p.payload()) {
+            Ok(()) => Ok(ack(&p)),
+            Err(Fault::Refused(error)) => Err(error),
+            Err(Fault::Ended(error)) => {
+                self.transfers[slot] = None;
+                Err(error)
+            }
+        }
+    }
+
+    /// Remove this slot's complete `kind` transfer so it can be finished. An
+    /// incomplete transfer stays open and is refused with `Offset`.
+    pub(super) fn take_complete(
+        &mut self,
+        slot: usize,
+        grant: Grant7,
+        kind: Stage7Kind,
+        p: &Packet,
+    ) -> Result<Transfer, Error> {
+        grant.holds(WRITE_RIGHT)?;
+        bare(p)?;
+        if !self.transfer(slot, p.id, kind)?.complete() {
+            return Err(Error::Offset);
+        }
+        self.transfers[slot].take().ok_or(Error::NoTransfer)
+    }
+
+    /// Release this slot's `kind` transfer without I/O.
+    pub(super) fn abort(
+        &mut self,
+        volume: &mut Volume7,
+        slot: usize,
+        grant: Grant7,
+        kind: Stage7Kind,
+        p: Packet,
+    ) -> Result<Packet, Error> {
+        grant.holds(WRITE_RIGHT)?;
+        bare(&p)?;
+        self.transfer(slot, p.id, kind)?;
+        if let Some(transfer) = self.transfers[slot].take() {
+            transfer.abort(volume);
+        }
+        Ok(ack(&p))
     }
 
     /// Receipt parts are served only for the operation this slot last
@@ -225,15 +269,30 @@ impl Writes {
         receipt.part(OPERATION_PART, p.context, p.arg as usize)
     }
 
-    fn transfer(&mut self, slot: usize, object: u32) -> Result<&mut Transfer, Error> {
-        self.transfers[slot]
-            .as_mut()
-            .filter(|transfer| transfer.object() == object)
+    /// This slot's open transfer, when it targets `object` and finishes as
+    /// `kind`; a transfer of the other kind is not addressable here.
+    fn transfer(
+        &mut self,
+        slot: usize,
+        object: u32,
+        kind: Stage7Kind,
+    ) -> Result<&mut Transfer, Error> {
+        self.transfers
+            .get_mut(slot)
+            .and_then(Option::as_mut)
+            .filter(|transfer| transfer.object() == object && transfer.kind() == kind)
             .ok_or(Error::NoTransfer)
     }
 }
 
-/// Commit and abort carry only the object identity.
+/// An empty acknowledgement of `p`.
+fn ack(p: &Packet) -> Packet {
+    let mut ack = Packet::new(p.op);
+    ack.context = p.context;
+    ack
+}
+
+/// Commit, accept and abort carry only the object identity.
 fn bare(p: &Packet) -> Result<(), Error> {
     if p.count != 0 || p.arg != 0 || p.version != 0 {
         return Err(Error::Protocol);
@@ -269,7 +328,6 @@ mod tests {
         operation::{Key, Retry},
         reference::{Epoch, References, Version},
     };
-    use rustic_fs::format7::RecordState;
 
     const LINEAGE: [u8; 16] = [0x5c; 16];
 

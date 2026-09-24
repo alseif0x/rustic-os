@@ -20,5 +20,7 @@ mod transfer;
 mod v7;
 pub use authority::{CLIENTS, Grant};
 pub use dispatch::Server;
-pub use v7::{CLIENTS7, Grant7, GrantRequest7, Maintenance7, READ_ONLY7, Server7, TRACKED_WRITE7};
+pub use v7::{
+    ADMISSION7, CLIENTS7, Grant7, GrantRequest7, Maintenance7, READ_ONLY7, Server7, TRACKED_WRITE7,
+};
 mod validation;

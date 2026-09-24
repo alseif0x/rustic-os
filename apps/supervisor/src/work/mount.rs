@@ -80,8 +80,9 @@ impl Mount {
                 let w = k::decode(m.payload()).map_err(|_| 4u64)?;
                 let ready = match profile {
                     FileProfile::V5 => [0, 1, 32, 1024, 0, 0, 0, 0],
-                    // Word 5 bit 0: profile-2 tracked writes are served.
-                    FileProfile::V7 => [0, 2, 256, 524288, 8, 1, 0, 0],
+                    // Word 5: profile-2 tracked writes (bit 0) and staged
+                    // admissions (bit 1) are served.
+                    FileProfile::V7 => [0, 2, 256, 524288, 8, 3, 0, 0],
                 };
                 if m.sender() != state.files || m.correlation() != 0 || w != ready {
                     return Err(4);
@@ -112,9 +113,10 @@ impl Mount {
                 }
             }
             4 => {
-                // V7 policy: the shell may read and make tracked replacements
-                // as subject 2, a retry scope distinct from the host
-                // provisioner's subject 1 records. The owner stays read-only.
+                // V7 policy: the shell may read, make tracked replacements and
+                // admit, execute and cancel its own admissions as subject 2, a
+                // retry scope distinct from the host provisioner's subject 1
+                // records. The owner stays read-only.
                 let words = match profile {
                     FileProfile::V5 => [32, 0, state.shell, self.shell[0], 0, 15, 0, 1],
                     FileProfile::V7 => shell_binding::grant(state.shell, self.shell[0]),

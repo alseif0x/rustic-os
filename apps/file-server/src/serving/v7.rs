@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Explicit V7 dispatch: bounded reads and profile-2 tracked replacement only.
-//! No V5 mutation or admission path is reachable. Requests are served one at a
-//! time; a chunk that fills a sector, a commit and the owner's retention
-//! maintenance perform blocking disk I/O. Maintenance is reachable only from
-//! the administrative channel.
+//! Explicit V7 dispatch: bounded reads, profile-2 tracked replacement and
+//! profile-2 staged admission only. No V5 mutation or admission path is
+//! reachable. Requests are served one at a time; a chunk that fills a sector,
+//! a commit, an admission acceptance, execution or cancellation and the
+//! owner's retention maintenance perform blocking disk I/O (an admission
+//! publication is polled to settlement inside its request). Maintenance is
+//! reachable only from the administrative channel.
 use rustic_file_service::{CLIENTS7, GrantRequest7, Server7};
 use rustic_sdk::{
     abi::{files, runtime as wire},
@@ -15,9 +17,11 @@ const ADMIN_SLOT: usize = CLIENTS7;
 const WORKSPACES_ROOT: u32 = 4;
 /// Word 5 bit 0: profile-2 tracked writes are served.
 const TRACKED_WRITES: u64 = 1;
+/// Word 5 bit 1: profile-2 staged admissions are served.
+const ADMISSIONS: u64 = 1 << 1;
 /// Ready report: status, profile, nodes, maximum file bytes, retained records,
 /// feature bits.
-const READY: [u64; 8] = [0, 2, 256, 524288, 8, TRACKED_WRITES, 0, 0];
+const READY: [u64; 8] = [0, 2, 256, 524288, 8, TRACKED_WRITES | ADMISSIONS, 0, 0];
 
 fn close_slot(
     server: &mut Server7<'_>,
