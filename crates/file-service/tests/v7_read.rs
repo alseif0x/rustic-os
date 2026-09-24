@@ -5,7 +5,7 @@ use rustic_abi::files::{
     read::{Header, Request},
     reference::{References, Version},
 };
-use rustic_file_service::{READ_CLIENTS7, ReadGrant7, ReadServer7};
+use rustic_file_service::{CLIENTS7, Grant7, GrantRequest7, READ_ONLY7, Server7};
 use rustic_fs::{Disk, Error as FsError, Kind, Volume7, WriteIdentity7};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -82,15 +82,20 @@ fn read_request(
     }
 }
 
-fn grant(
-    server: &mut ReadServer7<'_>,
-    slot: usize,
-    scope: u32,
-    peer: u64,
-    expiry: u64,
-) -> ReadGrant7 {
+fn read_only(peer: u64, endpoint: u64, scope: u32, expires: u64) -> GrantRequest7 {
+    GrantRequest7 {
+        peer,
+        endpoint,
+        scope,
+        rights: READ_ONLY7,
+        subject: 0,
+        expires,
+    }
+}
+
+fn grant(server: &mut Server7<'_>, slot: usize, scope: u32, peer: u64, expiry: u64) -> Grant7 {
     server
-        .grant(slot, peer, 90 + slot as u64, scope, expiry)
+        .grant(slot, read_only(peer, 90 + slot as u64, scope, expiry))
         .unwrap()
 }
 
@@ -101,8 +106,8 @@ fn digest(bytes: &[u8]) -> [u8; 32] {
 #[test]
 fn references_open_and_chunk_use_the_mounted_v7_identity_and_exact_range_bytes() {
     let content = b"bounded V7 read";
-    let (volume, mut disk, workspace, file, _) = setup(content);
-    let mut server = ReadServer7::new(&volume);
+    let (mut volume, mut disk, workspace, file, _) = setup(content);
+    let mut server = Server7::new(&mut volume);
     let authorization = grant(&mut server, 0, workspace, 11, 0);
     assert_eq!(authorization.endpoint, 90);
     assert_eq!(server.grant_at(0), Some(authorization));
@@ -144,11 +149,11 @@ fn references_open_and_chunk_use_the_mounted_v7_identity_and_exact_range_bytes()
 
 #[test]
 fn verified_ancestry_scope_and_lineage_are_all_required() {
-    let (volume, mut disk, workspace, file, sibling) = setup(b"inside");
-    let mut server = ReadServer7::new(&volume);
+    let (mut volume, mut disk, workspace, file, sibling) = setup(b"inside");
+    let mut server = Server7::new(&mut volume);
     let directory_grant = grant(&mut server, 0, workspace, 11, 0);
     assert_eq!(
-        server.grant(3, 33, 93, 1, 0),
+        server.grant(3, read_only(33, 93, 1, 0)),
         Err(Error::Denied),
         "a grant cannot widen outside the workspaces tree"
     );
@@ -171,7 +176,7 @@ fn verified_ancestry_scope_and_lineage_are_all_required() {
         );
     }
 
-    let mut file_scoped = ReadServer7::new(&volume);
+    let mut file_scoped = Server7::new(&mut volume);
     let scoped_grant = grant(&mut file_scoped, 0, file, 11, 0);
     let denied_sibling = read_request(workspace, sibling, LINEAGE, 0, 1, None)
         .packet(READ_OPEN, scoped_grant.context)
@@ -186,8 +191,8 @@ fn verified_ancestry_scope_and_lineage_are_all_required() {
 
 #[test]
 fn slots_bind_peer_context_expiry_and_endpoint_lifecycle() {
-    let (volume, mut disk, workspace, file, _) = setup(b"slot");
-    let mut server = ReadServer7::new(&volume);
+    let (mut volume, mut disk, workspace, file, _) = setup(b"slot");
+    let mut server = Server7::new(&mut volume);
     let first = grant(&mut server, 0, workspace, 11, 10);
     let second = grant(&mut server, 1, file, 22, 0);
     assert_ne!(first.context, second.context);
@@ -246,8 +251,8 @@ fn slots_bind_peer_context_expiry_and_endpoint_lifecycle() {
 #[test]
 fn eof_version_and_request_validation_keep_the_existing_read_contract() {
     let content = b"abc";
-    let (volume, mut disk, workspace, file, _) = setup(content);
-    let mut server = ReadServer7::new(&volume);
+    let (mut volume, mut disk, workspace, file, _) = setup(content);
+    let mut server = Server7::new(&mut volume);
     let authorization = grant(&mut server, 0, workspace, 11, 0);
 
     let eof = read_request(workspace, file, LINEAGE, 3, 1, None)
@@ -290,8 +295,8 @@ fn maximum_profile2_file_size_is_reported_while_range_stays_bounded() {
     let bytes: Vec<u8> = (0..rustic_abi::files::workspace::MAX_FILE_BYTES)
         .map(|index| index as u8)
         .collect();
-    let (volume, mut disk, workspace, file, _) = setup(&bytes);
-    let mut server = ReadServer7::new(&volume);
+    let (mut volume, mut disk, workspace, file, _) = setup(&bytes);
+    let mut server = Server7::new(&mut volume);
     let authorization = grant(&mut server, 0, workspace, 11, 0);
     let offset = bytes.len() as u64 - 1;
     let open = read_request(workspace, file, LINEAGE, offset, 1, None)
@@ -318,8 +323,8 @@ fn maximum_profile2_file_size_is_reported_while_range_stays_bounded() {
 
 #[test]
 fn mutations_admissions_and_operation_queries_are_not_dispatched() {
-    let (volume, mut disk, workspace, _, _) = setup(b"read only");
-    let mut server = ReadServer7::new(&volume);
+    let (mut volume, mut disk, workspace, _, _) = setup(b"read only");
+    let mut server = Server7::new(&mut volume);
     let authorization = grant(&mut server, 0, workspace, 11, 0);
     let io_before = disk.io_ops;
 
@@ -377,6 +382,6 @@ fn mutations_admissions_and_operation_queries_are_not_dispatched() {
             .status,
         Error::Denied as u8
     );
-    assert_eq!(READ_CLIENTS7, 4);
+    assert_eq!(CLIENTS7, 4);
     assert_eq!(disk.io_ops, io_before);
 }

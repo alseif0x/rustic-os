@@ -18,10 +18,10 @@ after final flush settlement. Maintenance refuses open admissions and must only
 run after the service has resolved current-epoch outcomes. The host-only
 `upgrade_v5_to_v7` converter copies a v5 source to distinct disposable media,
 preserving supported scoped recovery records and refusing ambiguous or invalid
-history. The explicit `mode=terminal-v7` fixture now selects a read-only V7
-service and profile-2 file-size readiness; production/default `mode=terminal`
-remains v5-backed, and no profile-2 write path or capability advertisement is
-wired. The v6 direct probe remains separate.
+history. The explicit `mode=terminal-v7` fixture now selects a V7 service with
+bounded reads and [profile-2 tracked writes](FILES-V7-WRITES.md) announced in
+its readiness report; production/default `mode=terminal` remains v5-backed, and
+no capability advertisement is wired. The v6 direct probe remains separate.
 
 ## Why a successor
 
@@ -219,11 +219,13 @@ legacy `operation` module. The kernel's 64-byte packet stays unchanged.
   or small files. Receipt fragment framing remains unchanged; complete receipt
   decoding establishes the selected profile.
 
-This marker does not negotiate availability. The explicit V7 fixture selects a
-read-only service; its readiness records the 512 KiB file limit and eight
-retained-record geometry, but the service accepts only stable references and
-bounded reads. No profile-2 write, receipt, descriptor or generic service-v1
-capability is exposed. Existing clients and schema hashes retain their original
+This marker does not negotiate availability. The explicit V7 fixture's readiness
+records the 512 KiB file limit, the eight retained-record geometry and, in word
+5 bit 0, that profile-2 tracked writes are served. The service accepts stable
+references, bounded reads, and profile-2 tracked replacements with their
+receipts to write-authorized grants ([V7 tracked writes](FILES-V7-WRITES.md)).
+Profile-2 ID and retry lookups of retained records, descriptors and generic
+service-v1 capabilities are not exposed. Existing clients and schema hashes retain their original
 meaning and 1 KiB limit.
 
 ## Direct tracked replacement
@@ -331,9 +333,10 @@ borrowed admission's barriers and cut points. As in the poll retry path, a
 corrupt admission retry fences. Stage writes use the blocking `Disk` interface,
 while the admission publication polls.
 
-Limits: this is a host-tested owner API only. Stage writes are not yet pollable,
-no service or protocol uses streamed staging, and a dropped token keeps its
-reservation until `release_stages`, a fence or a remount. Owner identity is
+Limits: stage writes are not yet pollable, and a dropped token keeps its
+reservation until `release_stages`, a fence or a remount. The V7 file service
+uses tracked stages for [profile-2 tracked writes](FILES-V7-WRITES.md); no
+service uses admission stages. Owner identity is
 distinct only within one program; tokens are not meant to cross processes.
 
 ## Bounded range reads

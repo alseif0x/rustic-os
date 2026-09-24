@@ -23,6 +23,8 @@ const V7_IMAGE_BYTES: u64 = V7_IMAGE_SECTORS * format7::SECTOR_BYTES;
 /// can confirm, so a later migration is checked against an independent source.
 const SEEDED: &[u8] = b"a v5 record";
 const V7_WORKSPACE_NAME: &[u8] = b"application";
+/// Writable file `seed7 --scratch` adds for guest tracked-write harnesses.
+const V7_SCRATCH_NAME: &[u8] = b"scratch.bin";
 
 pub(crate) fn provision(image: &Path, lineage: &str) -> Result<String, String> {
     let mut disk = FileDisk::create(image, IMAGE_SECTORS)?;
@@ -191,6 +193,7 @@ pub(crate) fn seed7(
     lineage: &str,
     elf_path: &Path,
     manifest_path: &Path,
+    scratch: bool,
 ) -> Result<String, String> {
     let lineage = parse_lineage(lineage)?;
     let elf_name = source_name(elf_path, ".elf", "ELF")?;
@@ -267,13 +270,30 @@ pub(crate) fn seed7(
         )
         .map_err(|error| format!("v7 manifest write refused: {error:?}"))?;
 
+    // An empty, untracked file for guest writes, so tracked-write harnesses do
+    // not replace the application pair other harnesses depend on. Creating it
+    // consumes no retained record.
+    let scratch = if scratch {
+        let node = volume
+            .create(&mut disk, workspace.id, V7_SCRATCH_NAME, Kind::File)
+            .map_err(|error| format!("v7 scratch creation refused: {error:?}"))?;
+        format!(
+            ",\"scratch\":{{\"id\":{},\"version\":{},\"size\":0,\"resource\":\"{}\"}}",
+            node.id,
+            node.version,
+            resource_text(lineage, workspace.id, node.id)?,
+        )
+    } else {
+        String::new()
+    };
+
     let workspace_text = workspace_text(lineage, workspace.id)?;
     let elf_resource = resource_text(lineage, workspace.id, elf_node.id)?;
     let manifest_resource = resource_text(lineage, workspace.id, manifest_node.id)?;
     Ok(format!(
         "{{\"lineage\":\"{}\",\"workspace\":{{\"id\":{},\"text\":\"{}\"}},\
          \"elf\":{{\"id\":{},\"version\":{},\"size\":{},\"resource\":\"{}\"}},\
-         \"manifest\":{{\"id\":{},\"version\":{},\"size\":{},\"resource\":\"{}\"}}}}",
+         \"manifest\":{{\"id\":{},\"version\":{},\"size\":{},\"resource\":\"{}\"}}{}}}",
         hex(&lineage),
         workspace.id,
         workspace_text,
@@ -285,6 +305,7 @@ pub(crate) fn seed7(
         manifest_record.committed,
         manifest.len(),
         manifest_resource,
+        scratch,
     ))
 }
 
@@ -666,7 +687,7 @@ mod tests {
         let (elf_path, manifest_path) = write_inputs(dir.path(), &elf);
         let manifest = fixture_manifest(&elf);
 
-        let result = seed7(&image, LINEAGE, &elf_path, &manifest_path).unwrap();
+        let result = seed7(&image, LINEAGE, &elf_path, &manifest_path, false).unwrap();
         assert_eq!(std::fs::metadata(&image).unwrap().len(), V7_IMAGE_BYTES);
 
         let lineage = parse_lineage(LINEAGE).unwrap();
@@ -727,6 +748,38 @@ mod tests {
     }
 
     #[test]
+    fn seed7_scratch_adds_an_empty_untracked_file_and_keeps_the_pair_and_records() {
+        let dir = TempDir::new();
+        let image = dir.path().join("fixture.raw");
+        let elf = fixture_elf(4096);
+        let (elf_path, manifest_path) = write_inputs(dir.path(), &elf);
+        let result = seed7(&image, LINEAGE, &elf_path, &manifest_path, true).unwrap();
+        let scratch_text = format!("rs_{LINEAGE}_00000005_00000008");
+        assert!(result.ends_with(&format!(
+            ",\"scratch\":{{\"id\":8,\"version\":7,\"size\":0,\"resource\":\"{scratch_text}\"}}}}"
+        )));
+        assert!(result.contains("\"elf\":{\"id\":6,\"version\":5,"));
+
+        let mut disk = FileDisk::open_read_only(&image).unwrap();
+        let mut volume = Volume7::EMPTY;
+        volume.mount_into(&mut disk).unwrap();
+        let scratch = volume.node(8).unwrap().copied().unwrap();
+        assert_eq!(
+            (
+                scratch.kind,
+                scratch.parent,
+                scratch.version,
+                scratch.length
+            ),
+            (Kind::File, 5, 7, 0)
+        );
+        assert_eq!(scratch.name(), V7_SCRATCH_NAME);
+        let records = volume.retained_records().unwrap();
+        assert_eq!(records.iter().flatten().count(), 2);
+        assert!(records.iter().flatten().all(|record| record.object != 8));
+    }
+
+    #[test]
     fn seed7_rejects_manifest_for_different_executable_before_creating_image() {
         let dir = TempDir::new();
         let image = dir.path().join("fixture.raw");
@@ -736,7 +789,7 @@ mod tests {
         *changed_elf.last_mut().unwrap() ^= 1;
         std::fs::write(&elf_path, changed_elf).unwrap();
 
-        let error = seed7(&image, LINEAGE, &elf_path, &manifest_path).unwrap_err();
+        let error = seed7(&image, LINEAGE, &elf_path, &manifest_path, false).unwrap_err();
         assert!(error.contains("digest does not match"));
         assert!(!image.exists());
     }
@@ -748,7 +801,7 @@ mod tests {
 
         let existing_file = dir.path().join("existing.raw");
         std::fs::write(&existing_file, b"preserve this image").unwrap();
-        assert!(seed7(&existing_file, LINEAGE, &elf_path, &manifest_path).is_err());
+        assert!(seed7(&existing_file, LINEAGE, &elf_path, &manifest_path, false).is_err());
         assert_eq!(
             std::fs::read(&existing_file).unwrap(),
             b"preserve this image"
@@ -756,7 +809,7 @@ mod tests {
 
         let existing_dir = dir.path().join("existing-dir.raw");
         std::fs::create_dir(&existing_dir).unwrap();
-        assert!(seed7(&existing_dir, LINEAGE, &elf_path, &manifest_path).is_err());
+        assert!(seed7(&existing_dir, LINEAGE, &elf_path, &manifest_path, false).is_err());
         assert!(existing_dir.is_dir());
 
         #[cfg(unix)]
@@ -766,7 +819,7 @@ mod tests {
             let link = dir.path().join("link.raw");
             std::fs::write(&target, b"symlink target stays intact").unwrap();
             symlink(&target, &link).unwrap();
-            assert!(seed7(&link, LINEAGE, &elf_path, &manifest_path).is_err());
+            assert!(seed7(&link, LINEAGE, &elf_path, &manifest_path, false).is_err());
             assert_eq!(
                 std::fs::read(&target).unwrap(),
                 b"symlink target stays intact"
@@ -787,7 +840,7 @@ mod tests {
         let (elf_path, manifest_path) = write_inputs(dir.path(), &elf);
         let image = dir.path().join("must-not-exist.raw");
 
-        let error = seed7(&image, LINEAGE, &elf_path, &manifest_path).unwrap_err();
+        let error = seed7(&image, LINEAGE, &elf_path, &manifest_path, false).unwrap_err();
         assert!(error.contains("maximum"));
         assert!(!image.exists());
     }
