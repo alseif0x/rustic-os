@@ -198,8 +198,15 @@ V7 volume, and in each boot stages the pair, checks the start refusals, starts
 the child control-only with `start-staged PID exit`, reads the variant tag from
 `permissions PID` and reaps exit code 7. It records the image, kernel and
 variant digests and the unchanged volume digests in
-`artifacts/boot/terminal-v7-launch/`. `python3 tools/boot.py test` runs it after
-`tools/v7_read_test.py`.
+`artifacts/boot/terminal-v7-launch/`. The same run then boots the same image
+bytes a third time for executable rollback (`tools/terminal_support/v7_rollback.py`):
+it migrates a `seed5-history receipts` source with `migrate7`, publishes the
+tag-1 and then the tag-2 pair into `/workspaces/migrated` with `rustic-volume
+add7`, and in one boot starts the tag-2 pair and then the older tag-1 pair,
+requiring an unchanged volume digest, `report7` and `oracle7` view and an
+unchanged v5 source digest; evidence is in `artifacts/boot/terminal-v7-rollback/`
+and the decision helpers have unit tests in `tools/tests/test_v7_rollback.py`.
+`python3 tools/boot.py test` runs it after `tools/v7_read_test.py`.
 
 `python3 tools/v7_corrupt_test.py` builds the `terminal-v7` image and boots it
 twice on damaged temporary copies of a fresh V7 volume: one with a flipped ELF
@@ -295,6 +302,7 @@ The deliberate v5 -> v7 data migration has its own host commands:
 ```sh
 cargo run -p rustic-volume -- seed5-history <v5-image> <32-hex-lineage> <receipts|admissions|completed>
 cargo run -p rustic-volume -- migrate7 <v5-image> <v7-target> <32-hex-lineage>
+cargo run -p rustic-volume -- add7 <v7-image> <node-id|ws_text|/workspaces/path> <name> <file>
 ```
 
 `seed5-history` exclusively creates a disposable v5 source with two-record
@@ -302,7 +310,9 @@ scoped history, and `migrate7` reads an exact legacy-size v5 image, creates the
 target exclusively, removes it on any failure and prints `report7` with the
 source SHA-256 before and after; see
 [deliberate data migration](WORKSPACE-FORMAT7.md#deliberate-data-migration-of-a-disposable-image).
-Neither accepts or touches `artifacts/terminal/data.raw`.
+Neither accepts or touches `artifacts/terminal/data.raw`. `add7` adds one new
+file to an existing exact-size V7 image with one tracked commit; see
+[adding a file](WORKSPACE-FORMAT7.md#adding-a-file-to-a-disposable-image).
 `python3 tools/v7_migration_test.py` seeds and migrates all three sets in a
 temporary directory and boots the `terminal-v7` image four times on the
 migrated images: receipts (lookup, exact replay, mismatched retry, hidden
@@ -313,7 +323,8 @@ boots, and the v5 source digests must not change. Evidence is stored in
 `artifacts/boot/terminal-v7-migration/`, and `python3 tools/boot.py test` runs
 it after `tools/v7_authority_test.py`. The host-side comparison has unit tests
 in `tools/tests/test_v7_migration.py`. It does not exercise executable
-rollback, which stays in the launch harness (#52). See
+rollback, which the launch harness evidences on a separate migrated volume
+(see above). See
 [migrated history in the guest](FILES-V7-ADMISSIONS.md#migrated-history-in-the-guest).
 
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)

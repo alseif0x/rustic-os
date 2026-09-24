@@ -129,4 +129,19 @@ commit, admission, cancellation and executed admission in the guest
 ([deliberate data migration](WORKSPACE-FORMAT7.md#deliberate-data-migration-of-a-disposable-image)).
 Records from real v5 terminal volumes carry subject 1 and stay invisible to the
 V7 shell (subject 2); subject remapping and the 4 GiB terminal disk size are
-outside this step. Executable rollback remains with the launch harness (#52).
+outside this step.
+
+**Data migration and executable rollback are separate.** Data migration is a
+one-way host step that converts a v5 image into a new V7 image and never
+mutates its source (its SHA-256 is checked before, after and, in the rollback
+run, after the guest boot). Executable rollback is a guest selection on
+unchanged data: `rustic-volume add7` publishes a tag-1 and then a tag-2
+`utility` pair beside a migrated history, and one boot of the unchanged kernel
+image starts the tag-2 pair and then the older tag-1 pair with the volume, its
+`oracle7` view and its migrated records unchanged
+([executable rollback](NATIVE-RUNTIME.md#executable-rollback-on-one-migrated-volume),
+[adding a file](WORKSPACE-FORMAT7.md#adding-a-file-to-a-disposable-image)).
+Rollback here is owner-pinned selection only: there is no persistent "current
+version" pointer or activation record, "older" means published earlier (both
+variants declare the same manifest version), and SHA-256 pins do not
+authenticate a publisher. Nothing rolls data back.

@@ -71,6 +71,20 @@ impl FileDisk {
         })
     }
 
+    /// Open an existing regular image file for reading and writing. A
+    /// directory, device or other non-regular file is refused.
+    pub(crate) fn open_regular(path: &Path) -> Result<Self, String> {
+        let disk = Self::open(path)?;
+        let metadata = disk
+            .file
+            .metadata()
+            .map_err(|error| format!("cannot size {}: {error}", path.display()))?;
+        if !metadata.is_file() {
+            return Err(format!("{} is not a regular image file", path.display()));
+        }
+        Ok(disk)
+    }
+
     pub(crate) fn open_read_only(path: &Path) -> Result<Self, String> {
         let file =
             File::open(path).map_err(|error| format!("cannot open {}: {error}", path.display()))?;

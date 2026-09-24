@@ -347,8 +347,57 @@ migrated from such a volume stay invisible to the V7 shell (`OutcomeUnknown`).
 The seed uses subject 2 deliberately; remapping subjects would change who may
 replay or inspect an operation and needs a separate decision. The 4 GiB v5
 terminal disk is also refused by size, and nothing here migrates the owner's
-volume. Data migration is independent of executable rollback, which belongs to
-the launch harness (#52).
+volume. Data migration is independent of executable rollback; see
+[executable rollback](NATIVE-RUNTIME.md#executable-rollback-on-one-migrated-volume).
+
+### Adding a file to a disposable image
+
+`rustic-volume add7 <v7-image> <workspace> <name> <file>` publishes one new file
+into an existing disposable V7 image through the `Volume7` API: `create`, then
+one `replace_tracked` direct commit, so the retained record names the exact
+bytes. `<workspace>` is a node ID, the `ws_` text of the image's own lineage, or
+an absolute path such as `/workspaces/migrated`; it must be a directory inside
+`/workspaces`, the root the V7 service grants from. The commit uses the host
+subject `1`, as `seed7` does, the image's current retry epoch and the first
+retry key from the new object ID that no retained host record holds in that
+workspace and epoch. The answer is JSON: lineage, the resulting sequence,
+workspace ID and text, the file's ID, name, creation and committed versions,
+size, SHA-256 and resource text, and the new record in `report7`'s shape. V5
+files stop at 1 KiB, so this is how one image holds several utility pairs.
+
+Everything below is refused before the image is written, with the image
+byte-identical (the tool's tests check each digest):
+
+| Input | Answer |
+| --- | --- |
+| Name that is not 1..=31 of `[A-Za-z0-9._-]`, or `.`/`..` | name refusal |
+| Empty, unreadable, non-regular or larger than 512 KiB source | source refusal |
+| Image that is not exactly 131,282 sectors (short, long, a v5 image) or not a regular file | size refusal |
+| Image path that is a symbolic link (as `seed7` and `migrate7` refuse) | symlink refusal, target unchanged |
+| Image that does not mount (blank) | `v7 mount refused` |
+| Missing node, a file, a directory outside `/workspaces`, a bad path, `ws_` text of another lineage | workspace refusal |
+| Name already present in the workspace | `already exists` |
+| All eight retained-record slots held | refused, never an eviction |
+| Fewer free payload sectors than the file needs | space refusal |
+| Enough free sectors, but not within the eight largest free runs (the `Volume7` planner takes the largest remaining run at most eight times) | extent refusal; the test fragments a fresh image into nine one-sector holes, refuses a nine-sector file with the image byte-identical, then publishes an eight-sector one |
+
+The commit can still be refused after the create, although every refusal the
+preflight knows about happens earlier. In that case the tool publishes a second
+generation that removes the empty node and says whether that removal
+succeeded; if the removal publication itself fails (`Uncertain`), whether the
+empty node remains on the image is unknown until the next mount. No test
+reaches this path. `add7` is a host
+publication step on a V7 image, not a migration: it never reads a v5 source.
+A migrated image stops reporting `recovered` after its first `add7`, because
+that is its first V7 publication. `python3 tools/fs7_test.py` adds two files
+beside a migrated `receipts` history and checks with `oracle7` and `report7` that
+the migrated files and records are unchanged and that the two new records name
+the added bytes.
+
+The records `add7` retains carry the host subject `1`. The V7 shell holds
+subject `2`, so, like the subject-1 record of a migrated `receipts` history,
+they are invisible to its lookups (`OutcomeUnknown`); they still occupy
+retained-record slots until retention maintenance retires them.
 
 ## Streamed staging
 

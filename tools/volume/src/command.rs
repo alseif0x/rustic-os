@@ -17,8 +17,8 @@ use crate::disk::FileDisk;
 
 /// The smallest image this tool will touch: a volume's structures plus payload.
 pub(crate) const IMAGE_SECTORS: u64 = VOLUME_SECTORS;
-const V7_IMAGE_SECTORS: u64 = format7::VOLUME_SECTORS;
-const V7_IMAGE_BYTES: u64 = V7_IMAGE_SECTORS * format7::SECTOR_BYTES;
+pub(crate) const V7_IMAGE_SECTORS: u64 = format7::VOLUME_SECTORS;
+pub(crate) const V7_IMAGE_BYTES: u64 = V7_IMAGE_SECTORS * format7::SECTOR_BYTES;
 /// The fixture `seed` writes: a directory and a file whose bytes a v5 reader
 /// can confirm, so a later migration is checked against an independent source.
 const SEEDED: &[u8] = b"a v5 record";
@@ -376,7 +376,7 @@ pub(crate) fn report7(image: &Path) -> Result<String, String> {
 }
 
 /// One verified retained record, for comparison with an independent reader.
-fn record_json(slot: usize, record: &Record7) -> String {
+pub(crate) fn record_json(slot: usize, record: &Record7) -> String {
     let state = match record.state {
         RecordState::DirectCommitted => "direct_committed",
         RecordState::Admitted => "admitted",
@@ -432,7 +432,7 @@ fn source_name(path: &Path, suffix: &str, label: &str) -> Result<String, String>
     Ok(name.to_owned())
 }
 
-fn valid_name(name: &[u8]) -> bool {
+pub(crate) fn valid_name(name: &[u8]) -> bool {
     !name.is_empty()
         && name.len() <= 31
         && name != b"."
@@ -442,7 +442,7 @@ fn valid_name(name: &[u8]) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(byte))
 }
 
-fn read_bounded(path: &Path, label: &str, max: u64) -> Result<Vec<u8>, String> {
+pub(crate) fn read_bounded(path: &Path, label: &str, max: u64) -> Result<Vec<u8>, String> {
     let file =
         File::open(path).map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     let metadata = file

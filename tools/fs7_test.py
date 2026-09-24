@@ -6,7 +6,7 @@
 that hold every retained record state, a removal with a retained snapshot, an
 executed admission, a noncontiguous file and an advanced retry epoch. The same
 tool also builds three disposable v5 sources with `seed5-history` and converts
-each with `migrate7`. This suite reads each v7 image with
+each with `migrate7`, and `add7` adds files beside one migrated history. This suite reads each v7 image with
 `terminal_support.oracle7`, written from `docs/WORKSPACE-FORMAT7.md` rather than
 from the Rust code, checks the bytes against payload patterns it regenerates
 itself, compares the reader with the tool's own verified `report7`, compares
@@ -308,6 +308,64 @@ def verify_migrations(output):
     return summary
 
 
+def verify_additions(output):
+    """`add7` two files beside a migrated history; both readers must see the history untouched."""
+    volumes = output / "volumes"
+    source, target = volumes / "add-receipts.v5", volumes / "add-receipts.v7"
+    for path in (source, target):
+        path.unlink(missing_ok=True)
+    seeded, refused = volume_tool("seed5-history", source, MIGRATION_LINEAGE, "receipts")
+    if refused:
+        raise SystemExit(f"seed5-history receipts refused: {refused}")
+    source_digest = file_sha(source)
+    _, refused = volume_tool("migrate7", source, target, MIGRATION_LINEAGE)
+    if refused:
+        raise SystemExit(f"migrate7 receipts refused: {refused}")
+    _, migrated = read_image(target)
+    workspace = "/workspaces/migrated"
+    added = {}
+    for index, (name, content) in enumerate((("tag.elf", pattern(21, 131_360)), ("tag.manifest", pattern(22, 128)))):
+        path = volumes / f"add-input-{name}"
+        path.write_bytes(content)
+        answer, refused = volume_tool("add7", target, workspace, name, path)
+        path.unlink()
+        if refused:
+            raise SystemExit(f"add7 {name} refused: {refused}")
+        if (answer["file"]["name"], answer["file"]["size"], answer["file"]["sha256"], answer["workspace"]["id"],
+                answer["record"]["state"], answer["record"]["committed"]) != \
+                (name, len(content), sha(content), seeded["workspace"]["id"], "direct_committed",
+                 answer["file"]["version"]):
+            raise SystemExit(f"add7 {name} answered another file: {answer}")
+        added[f"{workspace}/{name}"] = (answer["file"]["version"], content)
+    _, state = read_image(target)
+    expected = {entry["path"]: (entry["version"], migrated["contents"][entry["path"]]) for entry in migrated["files"]}
+    expect_files(state, {**expected, **added}, "add7")
+    keep = ("slot", "state", "cause", "subject", "workspace", "object", "instance", "epoch", "key", "previous",
+            "committed", "admission", "terminal", "length", "sha256")
+    before = [{key: record[key] for key in keep} for record in migrated["records"]]
+    after = [{key: record[key] for key in keep} for record in state["records"]]
+    if after[:len(before)] != before:
+        raise SystemExit("add7: a migrated record changed")
+    fresh = [(record["state"], record["target"] and record["target"]["path"], record["sha256"])
+             for record in state["records"][len(before):]]
+    if fresh != [("direct_committed", path, sha(content)) for path, (_, content) in added.items()]:
+        raise SystemExit(f"add7: the new records do not name the added bytes: {fresh}")
+    digest = file_sha(target)
+    probe = volumes / "add-input-again"
+    probe.write_bytes(b"again")
+    again, existing = volume_tool("add7", target, workspace, "tag.elf", probe)
+    probe.unlink()
+    if again is not None or file_sha(target) != digest:
+        raise SystemExit("add7: an existing name was not refused with the image unchanged")
+    if file_sha(source) != source_digest:
+        raise SystemExit("add7: the v5 source changed")
+    summary = {"source_sha256": source_digest, "sequence": state["sequence"], "recovered": state["recovered"],
+               "files": state["files"], "records": after, "existing_name": existing}
+    source.unlink()
+    target.unlink()
+    return summary
+
+
 # Damage writers: these produce checksum-valid structural faults, so a refusal
 # shows the structural rule, not only a checksum, was enforced.
 
@@ -592,6 +650,7 @@ def main():
     images = export(output)
     summary, history = verify_images(output, images)
     migrations = verify_migrations(output)
+    additions = verify_additions(output)
     damage = verify_damage(output, images / "v7-history.img", history)
     sweep = differential_sweep(output, images, arguments.sweep, arguments.seed)
     evidence = {
@@ -599,6 +658,7 @@ def main():
         "worktree_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=environment.ROOT).decode(),
         "images": summary,
         "migrations": migrations,
+        "additions": additions,
         "damage": damage,
         "sweep": sweep,
         "exported": {name: {"bytes": (images / name).stat().st_size, "sha256": sha((images / name).read_bytes())}
@@ -608,6 +668,7 @@ def main():
     refused = sum(1 for case in damage if case["expected"] == "refused")
     print(f"V7 images verified independently: {len(summary)} images agree with report7; "
           f"{len(migrations)} migrated v5 histories agree with the v5 reader and kept their source digest; "
+          f"add7 placed {len(additions['records']) - 2} files beside a migrated history without changing it; "
           f"{len(damage)} damaged copies: {refused} refused and {len(damage) - refused} accepted "
           f"by both oracle7 and the Rust mount; {sweep['accepted'] + sweep['refused']} resealed perturbations "
           f"agree ({sweep['refused']} refused, {sweep['accepted']} accepted)")

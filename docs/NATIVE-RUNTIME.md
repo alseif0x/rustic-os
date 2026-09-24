@@ -63,6 +63,48 @@ The utility reports its compile-time build tag (`RUSTIC_UTILITY_TAG`, default `0
 
 "Independently built" here means separate build invocations from the same source, differing only in the tag, with distinct ELF digests and distinct observable behaviour; it does not mean separate source trees, toolchains or publishers. `python3 tools/v7_read_test.py` also asks to start its staged `file-server` child and checks the identity refusal (`11`) leaves it dormant. Not exercised in the guest: real channel-table exhaustion, which the V7 profile cannot reach. The shell cannot name a file there (V7 path resolution is `Unsupported`), and the supervisor launches file-access utility roles, the only ones with a second (data) channel, only in the V5 profile (`administrative_ready`), so the peak is four resident channels, two control-only utilities and this start: seven of eight. Also not exercised: the features refusal (`13`), which no shipped utility manifest triggers; the host tests cover it.
 
+#### Executable rollback on one migrated volume
+
+Here "executable rollback" means only this: on unchanged data and an unchanged
+kernel image, the owner stages and starts an older, already published
+executable pair after a newer one. It is a selection, not a write, and it is a
+separate operation from data migration:
+
+| Step | Where | What changes |
+| --- | --- | --- |
+| Data migration: `seed5-history` source, then `migrate7` into a new V7 image | host, once | a new V7 image; the v5 source is only read and never booted, and its SHA-256 is checked unchanged |
+| Publishing executables: `add7` the tag-1 pair, then the tag-2 pair into `/workspaces/migrated` | host | the V7 image gains four files and four retained records beside the migrated ones, which stay unchanged |
+| Rollback: stage and start tag 2, then stage and start tag 1 | guest, one boot | nothing: the volume digest, `report7` and the `oracle7` view are identical before and after |
+
+`python3 tools/v7_launch_test.py`, after its two launch boots, runs this on the
+same built `terminal-v7` image (`tools/terminal_support/v7_rollback.py`). It
+freezes the image again and requires its digest and that of the kernel inside it
+to match the image metadata, and the launch and rollback runs to report the same
+image and kernel digests. Tag 1 is published first, so every tag-1 file has a
+lower V7 version than every tag-2 file. In one boot the owner runs the FINISH
+case above for tag 2 (report `bytes=2`, exit `1`/`7`, reap), then for tag 1 by its
+older pins (report `bytes=1`), each time with the refusals, the second-start
+refusal and process/channel counts back at their baseline. The stage job's
+completion echoes the pinned ELF and manifest versions, and the harness checks
+that echo, but the echo is not the enforcement: the supervisor refuses any range
+whose observed version differs from the pin (`image_pair`). The rollback claim
+therefore rests on four checks: each `add7` answer's SHA-256 equals the digest of
+the variant build it published; every tag-1 file has a lower V7 version than
+every tag-2 file; the tag in each FINISH report comes from the ELF that is
+running; and the volume is unchanged by the boot. Evidence is
+`artifacts/boot/terminal-v7-rollback/terminal-v7-rollback.json`; in the first
+recorded run the two 131,360-byte stages took 1,455 and 1,635 ticks.
+
+Limits. Selection is owner-pinned for every stage: there is no persistent
+"current version" pointer, no install or activation record, and nothing that
+survives a reboot to say which pair is selected. Both variants declare the same
+manifest identity and semantic version; "older" is publication order on the
+volume. Pins and SHA-256 bind the ELF to its manifest and to what the owner
+asked for; they do not authenticate a publisher. Only control-only roles of the
+`rustic.utility` identity can run from storage, so this does not show rollback of
+a service with file or device authority, and it does not show rollback of data:
+data migration is one-way and needs a caller-owned copy of its source.
+
 ## Accounting and limitations
 
 The normal topology is three resident processes and four channels: supervisor–files admin, supervisor–files owner data, supervisor–shell control and shell–files data. Two scoped utilities raise it to five processes and eight channels. In `mode=terminal-v7` a started staged child adds one process and one channel. Each program has at most 256 data/code/stack pages, including 16 stack pages; page tables are separately accounted. Pending wait sets copy at most eight tokens. Block capacity remains two request records/four grants, with one active device operation and three DMA frames.
