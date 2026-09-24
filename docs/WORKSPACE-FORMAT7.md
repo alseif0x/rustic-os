@@ -399,6 +399,19 @@ subject `2`, so, like the subject-1 record of a migrated `receipts` history,
 they are invisible to its lookups (`OutcomeUnknown`); they still occupy
 retained-record slots until retention maintenance retires them.
 
+`rustic-volume maintain7 <v7-image>` is that maintenance on the host: the same
+exact-image and symlink checks as `add7`, then one `Volume7::maintain_retention`
+call, which advances the retry epoch by one, drops every terminal record and
+frees the sectors only their snapshots held. It answers JSON with the lineage,
+sequence, previous and new epoch, the records dropped and the free sectors
+before and after. An unresolved admission makes it refuse with `Busy` before
+anything is written, as the owner's `MAINTAIN_V7` job does. It never selects
+records: all terminal records go. Its purpose is fixtures with more files than
+the eight record slots allow, such as the 200-object volume of
+`tools/v7_capacity_test.py`; the tool's tests cover the dropped records and
+continued `add7`, exact reclamation of snapshot-only sectors, the `Busy`
+refusal with the image unchanged, and bad images.
+
 ## Streamed staging
 
 The owner can also receive a file one 512-byte sector at a time, so a caller

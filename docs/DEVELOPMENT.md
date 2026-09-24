@@ -303,6 +303,7 @@ The deliberate v5 -> v7 data migration has its own host commands:
 cargo run -p rustic-volume -- seed5-history <v5-image> <32-hex-lineage> <receipts|admissions|completed>
 cargo run -p rustic-volume -- migrate7 <v5-image> <v7-target> <32-hex-lineage>
 cargo run -p rustic-volume -- add7 <v7-image> <node-id|ws_text|/workspaces/path> <name> <file>
+cargo run -p rustic-volume -- maintain7 <v7-image>
 ```
 
 `seed5-history` exclusively creates a disposable v5 source with two-record
@@ -313,6 +314,9 @@ source SHA-256 before and after; see
 Neither accepts or touches `artifacts/terminal/data.raw`. `add7` adds one new
 file to an existing exact-size V7 image with one tracked commit; see
 [adding a file](WORKSPACE-FORMAT7.md#adding-a-file-to-a-disposable-image).
+`maintain7` runs retention maintenance on such an image (epoch plus one, terminal
+records dropped, `Busy` while an admission is unresolved) so a fixture can add
+more files than the eight record slots allow.
 `python3 tools/v7_migration_test.py` seeds and migrates all three sets in a
 temporary directory and boots the `terminal-v7` image four times on the
 migrated images: receipts (lookup, exact replay, mismatched retry, hidden
@@ -326,6 +330,22 @@ in `tools/tests/test_v7_migration.py`. It does not exercise executable
 rollback, which the launch harness evidences on a separate migrated volume
 (see above). See
 [migrated history in the guest](FILES-V7-ADMISSIONS.md#migrated-history-in-the-guest).
+
+`python3 tools/v7_capacity_test.py` builds an optimized `rustic-volume`
+(`cargo build --release -p rustic-volume`; the fill mounts the growing 64 MiB
+image once per `add7`, which takes minutes unoptimized) and fills a temporary
+V7 volume to 200 objects with exactly 100 free payload sectors through `seed7
+--scratch`, `add7` and `maintain7`. Boot 1 remounts it with `restart files
+timed`, reads objects 48, 72 and 200 by reference and is refused 64 KiB and
+512 KiB writes with `Full`, leaving the image digest and the `oracle7` view
+unchanged. Boot 2 commits two 8 KiB writes, is refused a 76-sector write, runs
+`maintain-v7` (it must free exactly the snapshot-only sectors) and then commits
+that write. A host copy fills the 256-entry object table and checks that `add7`
+is refused. The run takes about two minutes, records mount, commit and
+maintenance ticks in `artifacts/boot/terminal-v7-capacity/result.json`, and
+`python3 tools/boot.py test` runs it after `tools/v7_migration_test.py`. The
+fill plan and parsers have unit tests in `tools/tests/test_v7_capacity.py`. See
+[storage exhaustion on a nearly full volume](FILES-V7-WRITES.md#storage-exhaustion-on-a-nearly-full-volume).
 
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer

@@ -17,8 +17,11 @@ service agrees with the independent reader on which generation survived. The
 system memory used by the file service and the owner's control latency are
 [measured around large writes](#memory-and-control-latency). The same service
 now also serves [profile-2 staged admissions](FILES-V7-ADMISSIONS.md) with
-explicit execution and cancellation. The v5 service stays the default and is
-unchanged.
+explicit execution and cancellation. On a [nearly full volume](#storage-exhaustion-on-a-nearly-full-volume)
+with 200 objects, a write that the free payload sectors cannot hold is refused
+with `Full` without changing anything, and the time the single-loop service
+spends [blocked in a commit, a maintenance or a mount](#blocking-sections-commit-maintenance-and-mount)
+is measured. The v5 service stays the default and is unchanged.
 
 ## What is verified
 
@@ -144,6 +147,13 @@ inferred from the acknowledged bytes), and the owner
   to `artifacts/boot/terminal-v7-faults/result.json`. The event plan, the
   generation classification and the parsers have unit tests in
   `tools/tests/test_v7_faults.py`.
+
+- Guest: `python3 tools/v7_capacity_test.py` builds a nearly full volume on
+  the host and boots it twice; see
+  [storage exhaustion on a nearly full volume](#storage-exhaustion-on-a-nearly-full-volume).
+  Evidence is written to `artifacts/boot/terminal-v7-capacity/result.json`;
+  the fill plan and the parsers have unit tests in
+  `tools/tests/test_v7_capacity.py`.
 
 Guest timing from one run under QEMU TCG on the reference machine (build
 `4108eab5007c3569`), measured by the shell from before the open to after the
@@ -369,6 +379,55 @@ aborts the transfer and prints
 At `Full` only an exact retry of a retained write can hold a transfer, because
 a fresh one needs a record slot.
 
+## Storage exhaustion on a nearly full volume
+
+The payload region of format 7 is 131,072 sectors (64 MiB) and the object table
+holds 256 entries, directories included. `tools/v7_capacity_test.py` builds a
+disposable volume with the host tool: `seed7 --scratch` (8 objects), then 64
+small files of 200 to 1,019 bytes (objects 9 to 72), then 512 KiB files and one
+shorter tail file with `add7` until exactly 100 payload sectors are free.
+Every `add7` retains one record, so whenever all eight slots are held the
+harness runs `rustic-volume maintain7`, the host form of the owner's
+maintenance (`Volume7::maintain_retention` on the image; it refuses with `Busy`
+while an admission is unresolved). A last `maintain7` leaves every record slot
+free, so a refusal can only be for storage. In the recorded run (build
+`ceb91d20b26f791b`; an earlier run of build `4735fd782d8a3d8a` built the same
+layout) the volume held 200 objects (195 files: 127 files of
+512 KiB and a 13,312-byte tail), `oracle7` counted 130,972 used and 100 free
+payload sectors, and the fill took 25 host seconds with 25 host maintenances.
+
+Boot 1 changes nothing. It remounts with `restart files timed` (see
+[blocking sections](#blocking-sections-commit-maintenance-and-mount)), reads
+object 48 and object 72 completely and the highest object, 200, for its first
+KiB by reference, each byte-identical to the host file, and then asks for a
+64 KiB (128-sector) and a 512 KiB tracked write of `scratch.bin` and the 64 KiB
+write again. Each open answers `Full`: `Volume7::open_stage` plans the payload
+before any I/O and refuses a plan the free map cannot hold (the same status as a
+full record table; here all eight slots are free). The repeat answers `Full`
+rather than `Busy`, so the refused open left no transfer on the slot. The image
+digest and the `oracle7` view (sequence, epoch, records, free sectors, every
+file) are unchanged by the boot.
+
+Boot 2 commits two 8 KiB writes; the first one's 16 sectors are then held only
+by its retained snapshot, and 68 sectors are free. A 76-sector (38,912-byte)
+write is refused with `Full`. `maintain-v7` drops the two records and frees
+exactly those 16 snapshot-only sectors, as `oracle7` counts them before and
+after while the guest is idle (68 to 84 free). The same 76-sector write then
+commits in the new epoch, and the service answers as before, so the refusal was
+honest rather than a wedged service. After the boot `oracle7` finds one record
+matching that receipt, `scratch.bin` holding its pattern, 24 free sectors (the
+superseded 8 KiB payload was released at commit) and every other file
+unchanged. So retention maintenance reclaims space here only where snapshots
+outlived the live file; files published by `add7` whose records alias the live
+payload free nothing.
+
+The object table cannot be exhausted from the guest: the V7 file service has no
+create request, so a guest create is impossible by construction, not refused.
+The harness shows the host limit instead, on a copy of the pre-boot image: 56
+more one-sector files through `add7` bring the table to 256 entries (44 payload
+sectors still free), and the next `add7` is refused (`v7 file creation
+refused: Full`) with the copy byte-identical.
+
 ## Interrupted publication
 
 The V7 file server's disk adapter (`apps/file-server/src/disk.rs`) issues one
@@ -495,6 +554,50 @@ before it sends the query, so the probe shows that the owner control path
 answers while a transfer is open between chunks. It does not measure a query
 that competes with a blocking disk command in flight.
 
+### Blocking sections: commit, maintenance and mount
+
+The file server is one loop. While it publishes a commit or a maintenance, or
+mounts after `restart files`, it answers no other request, including the
+owner's administrative ones (`REVOKE_SHELL_V7`, `MAINTAIN_V7`); the supervisor
+itself keeps answering the owner console. These sections are blocking by
+design and stay so; the numbers below are the delay they impose on owner
+control of the file service. They are observed maxima at 10 ms resolution
+under QEMU TCG on the reference machine, not proven bounds.
+
+`replace-pattern-v7` now drives the stepwise SDK calls and prints
+`commit_ticks`, the ticks from sending `REPLACE_COMMIT` until the receipt has
+been received and verified. The service publishes the whole generation inside
+that exchange (payload sectors were already written as chunks arrived), so
+commit time does not grow with file size:
+
+| Commit of | Samples (ticks) | Max |
+| --- | --- | ---: |
+| 8 KiB, fresh volume | 21, 1, 3, 11, 12 | 21 |
+| 64 KiB, fresh volume | 1, 1, 14, 1, 1 | 14 |
+| 512 KiB, fresh volume | 6, 7, 33, 2, 1 | 33 |
+| 8 KiB, nearly full volume | 3, 8, 6, 2 | 8 |
+| 38,912 B, nearly full volume | 2, 3 | 3 |
+
+The fresh-volume samples are five `tools/v7_write_test.py` runs of build
+`4735fd782d8a3d8a` (the recorded run is the first); the nearly full samples are
+the recorded capacity run and the earlier one. Most commits take 1 to 7 ticks; the spread reflects the
+host, not the size. Maintenance, one metadata publication with its flushes,
+took 2 ticks in each of three cycles of `tools/v7_retention_test.py` and 3 and 2
+ticks on the nearly full volume.
+
+The mount is the long blocking section. It verifies the CRC of every live and
+retained payload sector, one block request per sector, so it grows with the
+allocated payload, about 0.38 s per MiB here. `restart files timed` on the
+nearly full volume took 2,436 ticks (24.4 s) in the recorded run and 2,426 in
+the earlier one. Under the ordinary 1,000-tick
+owner-job deadline a volume above roughly 22 MiB of allocated payload timed out
+at startup (status 4, files unavailable), so the supervisor now gives V7 start
+and restart jobs a measured budget of 6,000 ticks (`V7_BUDGET_TICKS` in
+`apps/supervisor/src/work/restart.rs`), about 2.5 times those measurements. The
+V5 profile keeps the default. During the mount the file service is
+unavailable, not wedged: the owner console answers and the job ends at the
+budget if the device stalls.
+
 ### Stalled device
 
 V7 tracked-write I/O stays blocking in this increment, and there is no V7 I/O
@@ -511,7 +614,8 @@ anything:
   ends at the supervisor's 1,000-tick job deadline with status 4 and marks the
   supervisor degraded.
 - `restart files` is the recovery path. Its fresh service mounts whichever
-  generation is durable.
+  generation is durable; a V7 restart job has the measured 6,000-tick budget
+  described above.
 
 The supervisor answers `ps`, `services`, `mem` and `io-status` itself. A held
 V7 command is not exercised in the guest. The existing
@@ -540,7 +644,11 @@ The shell command
 `replace-pattern-v7 WORKSPACE RESOURCE VERSION EPOCH KEY SEED SIZE` writes
 byte `i` = `(SEED*31 + 7*i + i/509) mod 256`, so a harness can recompute it. It
 prints the receipt in the same format as `replace-ref` and then
-`write-v7 size=SIZE ticks=TICKS`. With `cut CHUNKS` appended it performs the
+`write-v7 size=SIZE ticks=TICKS commit_ticks=COMMIT`, where `COMMIT` covers
+only the commit exchange (see
+[blocking sections](#blocking-sections-commit-maintenance-and-mount)).
+`restart files timed` restarts the file service like `restart files` and adds
+`restart-files ticks=T`, the guest ticks of the whole restart job. With `cut CHUNKS` appended it performs the
 [owner revocation](#owner-revocation-during-a-transfer) diagnostic instead.
 With `probe K` appended it commits while timing owner `INFO` round trips (see
 [memory and control latency](#memory-and-control-latency)).
@@ -560,12 +668,19 @@ and resource. Creating it uses no retained record.
 - Maintenance relies on the owner's declaration that outcomes are resolved.
   The service refuses only what it can see (open transfers, stages and
   admitted records); a client that has not yet looked up a completed outcome
-  loses it. `rustic-volume` does not expose maintenance. The refusal for an
+  loses it. `rustic-volume maintain7` exposes maintenance only for host
+  fixtures on disposable images. The refusal for an
   unresolved admission is now shown in the guest by
   `tools/v7_admission_test.py` ([V7 staged admissions](FILES-V7-ADMISSIONS.md)).
 - The shell learns the new epoch only from the maintenance output. No state
   query reports the current epoch to a client.
-- Maintenance runs inside the single-loop service like a commit.
+- Maintenance runs inside the single-loop service like a commit. Commit,
+  maintenance and mount durations are observed maxima, not bounds; the mount
+  grows with allocated payload and a slower device or host can exceed the
+  6,000-tick V7 restart budget on a full volume.
+- Storage exhaustion is shown for one layout: payload allocated contiguously by
+  the host, free space in one run. A fragmented free map that fails the
+  eight-largest-runs plan is host-tested only (`add7`).
 - The file server serves one request at a time. A chunk that completes a
   sector issues one blocking write, and a commit runs the whole blocking
   publication while other clients wait. Stage writes are not pollable, and
