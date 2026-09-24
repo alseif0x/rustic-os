@@ -1,18 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Explicit read-only V7 dispatch. No V5 mutation or admission path is reachable.
-use rustic_file_service::{READ_CLIENTS7, ReadServer7};
+//! Explicit V7 dispatch: bounded reads and profile-2 tracked replacement only.
+//! No V5 mutation or admission path is reachable. Requests are served one at a
+//! time; a chunk that fills a sector and a commit perform blocking disk I/O.
+use rustic_file_service::{CLIENTS7, GrantRequest7, Server7};
 use rustic_sdk::{
     abi::{files, runtime as wire},
     ipc::{Endpoint, Message},
     runtime,
 };
 
-const ADMIN_SLOT: usize = READ_CLIENTS7;
+const ADMIN_SLOT: usize = CLIENTS7;
 const WORKSPACES_ROOT: u32 = 4;
+/// Word 5 bit 0: profile-2 tracked writes are served.
+const TRACKED_WRITES: u64 = 1;
+/// Ready report: status, profile, nodes, maximum file bytes, retained records,
+/// feature bits.
+const READY: [u64; 8] = [0, 2, 256, 524288, 8, TRACKED_WRITES, 0, 0];
 
 fn close_slot(
-    server: &mut ReadServer7<'_>,
-    replies: &mut [Option<Message>; READ_CLIENTS7 + 1],
+    server: &mut Server7<'_>,
+    replies: &mut [Option<Message>; CLIENTS7 + 1],
     slot: usize,
 ) {
     if let Some(grant) = server.grant_at(slot) {
@@ -24,19 +31,19 @@ fn close_slot(
 
 pub(crate) fn run(
     disk: &mut super::super::disk::Disk,
-    server: &mut ReadServer7<'_>,
+    server: &mut Server7<'_>,
     admin: Endpoint,
 ) -> u64 {
-    let ready = Message::new(0, &wire::encode([0, 2, 256, 524288, 8, 0, 0, 0])).unwrap();
+    let ready = Message::new(0, &wire::encode(READY)).unwrap();
     if admin.send(&ready).is_err() {
         return 1;
     }
 
     let mut administrator = 0;
-    let mut replies: [Option<Message>; READ_CLIENTS7 + 1] = [const { None }; READ_CLIENTS7 + 1];
+    let mut replies: [Option<Message>; CLIENTS7 + 1] = [const { None }; CLIENTS7 + 1];
     loop {
         for slot in 0..=ADMIN_SLOT {
-            if slot < READ_CLIENTS7 && replies[slot].is_some() {
+            if slot < CLIENTS7 && replies[slot].is_some() {
                 let now = runtime::clock();
                 match server.grant_at(slot) {
                     Some(grant) if grant.expires == 0 || now < grant.expires => {}
@@ -81,7 +88,7 @@ pub(crate) fn run(
         }
 
         let now = runtime::clock();
-        for slot in 0..READ_CLIENTS7 {
+        for slot in 0..CLIENTS7 {
             if let Some(grant) = server.grant_at(slot)
                 && grant.expires != 0
                 && now >= grant.expires
@@ -121,10 +128,10 @@ pub(crate) fn run(
         }
 
         if replies.iter().all(Option::is_none) {
-            let mut tokens = [0; READ_CLIENTS7 + 1];
+            let mut tokens = [0; CLIENTS7 + 1];
             tokens[0] = admin.token();
             let mut count = 1;
-            for slot in 0..READ_CLIENTS7 {
+            for slot in 0..CLIENTS7 {
                 if let Some(grant) = server.grant_at(slot) {
                     tokens[count] = grant.endpoint;
                     count += 1;
@@ -136,8 +143,8 @@ pub(crate) fn run(
 }
 
 fn admin_request(
-    server: &mut ReadServer7<'_>,
-    replies: &mut [Option<Message>; READ_CLIENTS7 + 1],
+    server: &mut Server7<'_>,
+    replies: &mut [Option<Message>; CLIENTS7 + 1],
     words: [u64; 8],
 ) -> [u64; 8] {
     let mut result = [0; 8];
@@ -145,12 +152,7 @@ fn admin_request(
         let slot = usize::try_from(words[1]).map_err(|_| files::Error::Invalid)?;
         match words[0] {
             command if command == u64::from(files::GRANT) => {
-                if slot >= READ_CLIENTS7
-                    || words[2] == 0
-                    || words[3] == 0
-                    || words[5] != u64::from(files::READ_RIGHT)
-                    || words[7] != 0
-                {
+                if slot >= CLIENTS7 || words[2] == 0 || words[3] == 0 {
                     return Err(files::Error::Invalid);
                 }
                 let old = server.grant_at(slot);
@@ -159,7 +161,16 @@ fn admin_request(
                 } else {
                     u32::try_from(words[4]).map_err(|_| files::Error::Invalid)?
                 };
-                let grant = server.grant(slot, words[2], words[3], scope, words[6])?;
+                // The service validates the rights profile and subject.
+                let request = GrantRequest7 {
+                    peer: words[2],
+                    endpoint: words[3],
+                    scope,
+                    rights: u8::try_from(words[5]).map_err(|_| files::Error::Invalid)?,
+                    subject: words[7],
+                    expires: words[6],
+                };
+                let grant = server.grant(slot, request)?;
                 replies[slot] = None;
                 if let Some(old) = old
                     && old.endpoint != grant.endpoint
@@ -169,14 +180,14 @@ fn admin_request(
                 result[1] = u64::from(grant.context);
             }
             command if command == u64::from(files::REVOKE) => {
-                if slot >= READ_CLIENTS7 || words[2..].iter().any(|word| *word != 0) {
+                if slot >= CLIENTS7 || words[2..].iter().any(|word| *word != 0) {
                     return Err(files::Error::Invalid);
                 }
                 server.revoke(slot)?;
                 close_slot(server, replies, slot);
             }
             34 if words[1..].iter().all(|word| *word == 0) => {}
-            35 if slot < READ_CLIENTS7 && words[2..].iter().all(|word| *word == 0) => {
+            35 if slot < CLIENTS7 && words[2..].iter().all(|word| *word == 0) => {
                 close_slot(server, replies, slot);
             }
             _ => return Err(files::Error::Protocol),

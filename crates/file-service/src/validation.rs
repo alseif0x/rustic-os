@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 use rustic_abi::files::*;
-pub(super) fn request(p: &Packet) -> Result<(), Error> {
+/// Transport envelope shared by every request profile: no status, a bounded
+/// payload and zero bytes after it. Per-operation shape is checked separately.
+pub(super) fn envelope(p: &Packet) -> Result<(), Error> {
     if p.status != 0
         || p.count as usize > DATA
         || p.data[usize::from(p.count)..].iter().any(|b| *b != 0)
     {
         return Err(Error::Protocol);
     }
+    Ok(())
+}
+pub(super) fn request(p: &Packet) -> Result<(), Error> {
+    envelope(p)?;
     let valid = match p.op {
         LOOKUP | CREATE | MKDIR => (1..=31).contains(&p.count) && p.arg == 0 && p.version == 0,
         STAT | REMOVE | COMMIT | ABORT => p.count == 0 && p.arg == 0 && p.version == 0,

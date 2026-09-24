@@ -52,8 +52,10 @@ For a subsequent range of the same file version, replace `-` with the returned `
 `cat PATH` now uses the same `Client::references` and `Client::read_range` SDK methods, selecting the file's namespace root as its workspace. It prints verified bytes using the existing safe terminal presentation. Only a legacy store without the required lineage/recovery metadata permits a fallback to the older native read. Other errors, including denial, corruption and version conflict, propagate. `ref` and `read-ref` remain `Unavailable` on that legacy store until the owner performs the [explicit upgrade](FILE-RECOVERY.md); reading a file never upgrades or reformats its volume.
 
 The separate `mode=terminal-v7` fixture is intentionally narrower: V7 has no
-path lookup/stat, mutation or legacy-file route, so use canonical workspace and
-resource IDs returned by `rustic-volume seed7` with `read-ref`. Its
+path lookup/stat, untracked mutation or legacy-file route, so use canonical
+workspace and resource IDs returned by `rustic-volume seed7` with `read-ref`.
+Its only mutation is the streamed profile-2 tracked replacement described in
+[V7 tracked writes](FILES-V7-WRITES.md). Its
 `python3 tools/v7_read_test.py` acceptance reads the full selected native ELF
 (324,528 bytes in the latest run) and its 128-byte manifest through the guest
 SDK/service in two boots, plus a read after service restart. The same run has
@@ -62,7 +64,7 @@ the supervisor stage that pair as a dormant, never-started child with
 [storage-sourced dormant images](NATIVE-RUNTIME.md#storage-sourced-dormant-images-modeterminal-v7).
 It records byte/hash, version, staging and unchanged-volume evidence under
 `artifacts/boot/terminal-v7/`; it is not an application start/launch test or a
-write-profile acceptance.
+write-profile acceptance (`python3 tools/v7_write_test.py` is).
 
 The deterministic `act PID api-read` action also uses the full SDK path. `act PID read-open` and `read-next` expose a controlled pause between chunks for owner-edit/revocation tests. `act PID fill` replaces the granted file with the fixed 1,024-byte binary fixture and therefore requires write authority. These are native acceptance diagnostics, not additional advertised service-v1 operations.
 
@@ -108,7 +110,7 @@ IPC retains its 64-byte payload. The existing file packet supplies native protoc
 
 The 30-byte read-request payload contains lineage at 0–15, workspace directory ID at 16–19, absolute byte offset at 20–27 and logical service version at 28–29. Integers are little endian and the remaining ten bytes are zero. `REFERENCES` is a native bootstrap helper for an already authorized object; it is not live capability discovery.
 
-The explicit read-only V7 service path reports the complete file size through the profile-2 limit of 512 KiB in `READ_OPEN.arg`; each request remains limited to a 1,024-byte range, and chunks remain limited to 40 bytes. This uses the existing read packet and adds no profile marker or generic negotiation. The production v5 `Server` remains the default, and this path does not advertise or implement profile-2 writes, receipts or capabilities.
+The explicit read-only V7 service path reports the complete file size through the profile-2 limit of 512 KiB in `READ_OPEN.arg`; each request remains limited to a 1,024-byte range, and chunks remain limited to 40 bytes. This uses the existing read packet and adds no profile marker or generic negotiation. The production v5 `Server` remains the default. The same V7 service now also serves [profile-2 tracked writes](FILES-V7-WRITES.md) to grants with write rights and reports them in its ready word; it still advertises no capabilities or negotiation.
 
 Known read opcodes with another logical service version return `UnsupportedVersion`. A missing usable lineage/epoch returns `Unavailable`. Invalid ranges return native validation errors; scope failure, expiry or revocation remains a denial. Canonical error replies contain only opcode/status/context, with all result fields zero. Malformed framing, response mismatch, closure and interruption are local client failures, never successful logical results or invented remote responses.
 

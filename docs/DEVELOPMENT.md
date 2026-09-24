@@ -181,7 +181,8 @@ boots, restart the file service between reads, stage the pinned pair as a
 dormant child (and refuse stale pins) before and after that restart, and verify
 the provisioned volume is unchanged. It writes no volume image to the tracked workspace or to
 `artifacts/terminal/data.raw`; evidence is stored in
-`artifacts/boot/terminal-v7/`. The service grants only the read protocol. The
+`artifacts/boot/terminal-v7/`. The harness uses only the read protocol, although
+the shell now holds a V7 tracked-write grant. The
 temporary QEMU data backend is not opened read-only because V7 mount requires an
 initial flush, which this host's read-only QEMU backend rejects; before/after
 volume hashes independently check for mutation.
@@ -204,6 +205,18 @@ usable, and one with a torn newest header copy, which must mount the older
 generation and read its exact bytes. Evidence is stored in
 `artifacts/boot/terminal-v7-corrupt/`; `python3 tools/boot.py test` runs it after
 `tools/v7_launch_test.py`.
+
+`python3 tools/v7_write_test.py` builds the same image, seeds a fresh temporary
+volume with `rustic-volume seed7 ... --scratch` and boots it twice. Boot 1
+streams six deterministic patterns (513 B to 512 KiB) into `scratch.bin` with
+`replace-pattern-v7` until the eight-record budget is full, and checks a stale
+version and the following `Full`. Boot 2 replays one write exactly and checks
+two mismatched retries. After each boot `oracle7` must find retained records
+that match every printed receipt, and the volume digest must not change across
+boot 2. Evidence, including guest ticks per write size, is stored in
+`artifacts/boot/terminal-v7-write/`; `python3 tools/boot.py test` runs it after
+`tools/v7_corrupt_test.py`. The receipt parsing and record matching have unit
+tests in `tools/tests/test_v7_write.py`. See [V7 tracked writes](FILES-V7-WRITES.md).
 
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer

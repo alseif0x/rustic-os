@@ -28,6 +28,12 @@ In `mode=terminal-v7` the owner can start the one child the supervisor staged fr
 
 The policy (`rustic_supervisor::storage_launch`, host-tested) accepts only the manifest identity `rustic.utility` and only the roles that need none of the withheld authority (FINISH, FAULT, SPIN), and requires the manifest to request `ipc`, which the issued channel implies. Other identities, including the `file-server` image the same request can stage, are refused before any role is considered. The identity is the name the manifest declares, bound to the ELF bytes by SHA-256; it is not an authenticated publisher. The started child stays in the single storage slot rather than a utility slot, and the owner stops it with the same `kill`/`reap` path. A refused start leaves the child dormant without an endpoint.
 
+## V7 tracked-write authority
+
+In `mode=terminal-v7` the file service accepts exactly two grant profiles: read-only (rights `1`, subject 0) and tracked write (rights `7` = read, write and inspect, with a nonzero subject). It refuses any other rights value, a write grant without a subject and a read-only grant with one, all as `Invalid`. The subject is the retry scope the service persists in every record the grant creates, so exact retries and conflicts are decided per subject, workspace, epoch and key. It is service policy, not a kernel identity.
+
+The supervisor's policy is fixed. Its own owner binding stays read-only with subject 0, and it uses that binding to read the pinned pair it stages. The shell receives rights `7` and subject 2, scoped to the workspaces root. Subject 2 is deliberately distinct from subject 1, which `rustic-volume seed7` uses for the host provisioner's records, so the shell can neither replay nor inspect them. Receipt parts are served only to the slot that completed the operation. Revoking, detaching, expiring or replacing a slot aborts its open stage without I/O before any later request is admitted, so a revoked client cannot commit a staged write. A write that already committed is never undone. No utility, staged child or helper receives V7 write authority. Revocation during a guest transfer is host-tested only; see [V7 tracked writes](FILES-V7-WRITES.md#limits-and-pending-work).
+
 ## Try the deterministic mission
 
 Use the actual PIDs printed by `session` and `helper`; 4 and 5 below are examples. These actors are diagnostic native clients from the fixed catalog, not an application loader or a general agent framework. Their prepared replacement is the fixed text `session client edit`.

@@ -22,7 +22,7 @@ fn run(block: u64, admin: u64, initialize: u64) -> u64 {
         2 => match startup::mount_v7(&mut disk) {
             Ok(volume) => serving::v7::run(
                 &mut disk,
-                &mut rustic_file_service::ReadServer7::new(volume),
+                &mut rustic_file_service::Server7::new(volume),
                 endpoint,
             ),
             Err(error) => startup_error(endpoint, error),

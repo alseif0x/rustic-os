@@ -6,8 +6,8 @@
 //! namespace queries/create/removal, existing-file direct commits, durable
 //! staged admission, explicit execution/cancellation, terminal-record
 //! retention maintenance and owner-side streamed staging with bounded memory.
-//! The out-of-place v5 converter is explicit and storage-only; service
-//! integration and capability advertisement remain separate work.
+//! The out-of-place v5 converter is explicit and storage-only. The file
+//! service owns authority and wire integration over this owner.
 
 use crate::extent::MAP_WORDS;
 use crate::format7::{Header7, MAP_WORDS as FORMAT_MAP_WORDS, NODES, Node7, RETAINED, Record7};

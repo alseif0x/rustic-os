@@ -14,7 +14,9 @@ usage: rustic-volume <command>
   write <image> <parent> <name> <source>   place a host file in a v6 image
   migrate <image> <lineage>     migrate a v5 image to v6 in place
   report <image>                print a v6 image as JSON
-  seed7 <image> <lineage> <elf> <manifest>  create a fresh v7 application fixture
+  seed7 <image> <lineage> <elf> <manifest> [--scratch]
+                                create a fresh v7 application fixture; --scratch
+                                also creates an empty writable scratch.bin
   report7 <image>               verify a v7 image and print its metadata as JSON
 A lineage is 32 hex characters. Images are exactly one volume long; a shorter
 file is refused so a truncated image cannot be read as a volume. `seed7` uses an
@@ -52,7 +54,19 @@ fn run(args: &[String]) -> Result<String, String> {
             lineage,
             Path::new(elf),
             Path::new(manifest),
+            false,
         ),
+        [command, image, lineage, elf, manifest, flag]
+            if command == "seed7" && flag == "--scratch" =>
+        {
+            command::seed7(
+                Path::new(image),
+                lineage,
+                Path::new(elf),
+                Path::new(manifest),
+                true,
+            )
+        }
         [command, image] if command == "report7" => command::report7(Path::new(image)),
         _ => Err(USAGE.to_owned()),
     }
