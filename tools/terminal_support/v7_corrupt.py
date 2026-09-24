@@ -34,7 +34,7 @@ from . import oracle7
 from .connection import Connection
 from .machine import machine
 from .read_cases import read as read_range
-from .v7_read import version_text, volume_json
+from .v7_read import UART_BUDGET, version_text, volume_json
 
 
 ROOT = environment.ROOT
@@ -128,7 +128,7 @@ def boot(image, data, output, name, body):
         sock = sock_dir / "uart.sock"
         transcript = output / f"serial-{name}.log"
         with machine(image, data, f"unix:{sock},server=on,wait=off", output / f"qemu-{name}.log") as vm:
-            uart = Connection(sock, vm, transcript, BOOT_TIMEOUT, output / f"commands-{name}.jsonl")
+            uart = Connection(sock, vm, transcript, BOOT_TIMEOUT, output / f"commands-{name}.jsonl", budget=UART_BUDGET)
             try:
                 banner = uart.until()
                 observed = body(uart, banner)

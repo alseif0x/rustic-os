@@ -3,10 +3,13 @@
 import json
 import socket
 import time
+# Default cap on the UART evidence one connection may retain.
+EVIDENCE_BUDGET = 1024 * 1024
 class Connection:
-    def __init__(self, path, process, transcript, timeout=60, timings=None):
+    def __init__(self, path, process, transcript, timeout=60, timings=None, budget=EVIDENCE_BUDGET):
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self.process, self.transcript, self.timeout = process, transcript, timeout
+        self.budget = budget
         self.commands = 0
         self.attempts = 0
         self.timings = timings
@@ -41,8 +44,8 @@ class Connection:
                 raise RuntimeError(f"UART closed; tail={bytes(self.data[-4000:])!r}")
             self.data.extend(chunk)
             self.pending.extend(chunk)
-            if len(self.data) > 1024 * 1024:
-                raise RuntimeError("UART evidence exceeds budget")
+            if len(self.data) > self.budget:
+                raise RuntimeError(f"UART evidence exceeds budget ({self.budget} bytes)")
         end = self.pending.index(marker) + len(marker)
         result = bytes(self.pending[:end])
         del self.pending[:end]
