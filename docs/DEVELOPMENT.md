@@ -165,7 +165,9 @@ python3 tools/fs7_test.py [--sweep N] [--seed S]
 ```
 
 reads them plus a `seed7` fixture with the reader, compares each with
-`rustic-volume report7`, and requires the reader and the Rust mount to give the
+`rustic-volume report7`, migrates the three `seed5-history` v5 sources with
+`migrate7` and compares each result with the independent v5 reader's view of
+its unchanged source, and requires the reader and the Rust mount to give the
 same accept/refuse verdict on 17 named damaged copies and on a deterministic
 sweep of resealed field perturbations (default 60 per image; the run fails if
 either verdict occurs fewer than one time in ten). It needs only the
@@ -287,6 +289,32 @@ every phase and after each shutdown. Evidence is stored in
 it after `tools/v7_admission_test.py`. The output parser has unit tests in
 `tools/tests/test_v7_authority.py`. See
 [owner control during a publication](FILES-V7-ADMISSIONS.md#owner-control-during-a-publication).
+
+The deliberate v5 -> v7 data migration has its own host commands:
+
+```sh
+cargo run -p rustic-volume -- seed5-history <v5-image> <32-hex-lineage> <receipts|admissions|completed>
+cargo run -p rustic-volume -- migrate7 <v5-image> <v7-target> <32-hex-lineage>
+```
+
+`seed5-history` exclusively creates a disposable v5 source with two-record
+scoped history, and `migrate7` reads an exact legacy-size v5 image, creates the
+target exclusively, removes it on any failure and prints `report7` with the
+source SHA-256 before and after; see
+[deliberate data migration](WORKSPACE-FORMAT7.md#deliberate-data-migration-of-a-disposable-image).
+Neither accepts or touches `artifacts/terminal/data.raw`.
+`python3 tools/v7_migration_test.py` seeds and migrates all three sets in a
+temporary directory and boots the `terminal-v7` image four times on the
+migrated images: receipts (lookup, exact replay, mismatched retry, hidden
+subject-1 record), admissions (Busy lookup and maintenance, requested cause,
+execution, then a reboot with identical output) and an executed admission
+(identical replays). `oracle7` checks every image before, during and after the
+boots, and the v5 source digests must not change. Evidence is stored in
+`artifacts/boot/terminal-v7-migration/`, and `python3 tools/boot.py test` runs
+it after `tools/v7_authority_test.py`. The host-side comparison has unit tests
+in `tools/tests/test_v7_migration.py`. It does not exercise executable
+rollback, which stays in the launch harness (#52). See
+[migrated history in the guest](FILES-V7-ADMISSIONS.md#migrated-history-in-the-guest).
 
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer

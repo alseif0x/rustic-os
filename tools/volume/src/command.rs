@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use crate::disk::FileDisk;
 
 /// The smallest image this tool will touch: a volume's structures plus payload.
-const IMAGE_SECTORS: u64 = VOLUME_SECTORS;
+pub(crate) const IMAGE_SECTORS: u64 = VOLUME_SECTORS;
 const V7_IMAGE_SECTORS: u64 = format7::VOLUME_SECTORS;
 const V7_IMAGE_BYTES: u64 = V7_IMAGE_SECTORS * format7::SECTOR_BYTES;
 /// The fixture `seed` writes: a directory and a file whose bytes a v5 reader
@@ -530,13 +530,13 @@ fn le_u64(bytes: &[u8], offset: usize) -> u64 {
     u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap())
 }
 
-fn workspace_text(lineage: [u8; 16], root: u32) -> Result<String, String> {
+pub(crate) fn workspace_text(lineage: [u8; 16], root: u32) -> Result<String, String> {
     Workspace::new(lineage, root)
         .map(|workspace| workspace.to_string())
         .map_err(|error| format!("invalid workspace identity: {error:?}"))
 }
 
-fn resource_text(lineage: [u8; 16], root: u32, object: u32) -> Result<String, String> {
+pub(crate) fn resource_text(lineage: [u8; 16], root: u32, object: u32) -> Result<String, String> {
     let workspace = Workspace::new(lineage, root)
         .map_err(|error| format!("invalid workspace identity: {error:?}"))?;
     Resource::new(workspace, object)
@@ -590,43 +590,17 @@ fn escape(name: &[u8]) -> String {
         .collect()
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::TempDir;
     use rustic_abi::files::reference::{Resource, Workspace};
     use std::path::PathBuf;
     use std::str::FromStr;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
-
-    struct TempDir(PathBuf);
-
-    impl TempDir {
-        fn new() -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "rustic-volume-v7-{}-{}",
-                std::process::id(),
-                NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
-            ));
-            std::fs::create_dir(&path).unwrap();
-            Self(path)
-        }
-
-        fn path(&self) -> &Path {
-            &self.0
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.0);
-        }
-    }
 
     const LINEAGE: &str = "000102030405060708090a0b0c0d0e0f";
 

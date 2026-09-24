@@ -285,9 +285,11 @@ lookups:
 The scope check comes before the state, so an out-of-scope record always
 gets exactly the answer a missing one would: `OutcomeUnknown`, or
 `ExpiredEpoch` for a retry key outside the current epoch. A record whose file was removed stays visible through its
-live workspace. The V7 service creates only direct-committed records; the
-admitted and cancelled answers apply to records a host provisioner created and
-are not exercised by tests. Lookups make no writes or flushes, and a lookup of
+live workspace. The `Busy` and `Unsupported` answers are exercised in the
+guest on records migrated from v5 (`python3 tools/v7_migration_test.py`, see
+[migrated history in the guest](FILES-V7-ADMISSIONS.md#migrated-history-in-the-guest)),
+which also looks up, replays and conflicts with a migrated direct commit and
+finds a subject-1 record `OutcomeUnknown`. Lookups make no writes or flushes, and a lookup of
 a 512 KiB record reads 1,024 payload sectors while other clients wait.
 
 ## Owner revocation during a transfer

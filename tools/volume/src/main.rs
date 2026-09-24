@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Host tool for v5/v6 volume images and explicit disposable v7 fixtures.
-//! It never touches the owner's terminal volume and never guesses a lineage.
+//! Host tool for v5/v6 volume images, explicit disposable v7 fixtures and the
+//! deliberate out-of-place v5 -> v7 data migration. It never touches the
+//! owner's terminal volume and never guesses a lineage.
 use std::path::Path;
 use std::process::ExitCode;
 
 mod command;
 mod disk;
+mod history5;
+mod migrate7;
+#[cfg(test)]
+mod testing;
 
 const USAGE: &str = "\
 usage: rustic-volume <command>
@@ -18,9 +23,15 @@ usage: rustic-volume <command>
                                 create a fresh v7 application fixture; --scratch
                                 also creates an empty writable scratch.bin
   report7 <image>               verify a v7 image and print its metadata as JSON
+  seed5-history <image> <lineage> <receipts|admissions|completed>
+                                create a disposable v5 source with scoped history
+  migrate7 <v5-image> <v7-target> <lineage>
+                                copy a v5 image into a new v7 image (data only)
 A lineage is 32 hex characters. Images are exactly one volume long; a shorter
-file is refused so a truncated image cannot be read as a volume. `seed7` uses an
-exclusive create and refuses an existing image path.";
+file is refused so a truncated image cannot be read as a volume. `seed7`,
+`seed5-history` and `migrate7` targets use an exclusive create and refuse an
+existing path; `migrate7` only reads its source and removes a target it created
+when the migration fails.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -68,6 +79,12 @@ fn run(args: &[String]) -> Result<String, String> {
             )
         }
         [command, image] if command == "report7" => command::report7(Path::new(image)),
+        [command, image, lineage, set] if command == "seed5-history" => {
+            history5::seed5_history(Path::new(image), lineage, set)
+        }
+        [command, source, target, lineage] if command == "migrate7" => {
+            migrate7::migrate7(Path::new(source), Path::new(target), lineage)
+        }
         _ => Err(USAGE.to_owned()),
     }
 }

@@ -22,7 +22,9 @@ after final flush settlement. Maintenance refuses open admissions and must only
 run after the service has resolved current-epoch outcomes. The host-only
 `upgrade_v5_to_v7` converter copies a v5 source to distinct disposable media,
 preserving supported scoped recovery records and refusing ambiguous or invalid
-history. The explicit `mode=terminal-v7` fixture now selects a V7 service with
+history; `rustic-volume migrate7` runs it on disposable image files, and a
+guest run exercises the migrated history
+([deliberate data migration](#deliberate-data-migration-of-a-disposable-image)). The explicit `mode=terminal-v7` fixture now selects a V7 service with
 bounded reads, [profile-2 tracked writes](FILES-V7-WRITES.md) and
 [profile-2 staged admissions](FILES-V7-ADMISSIONS.md) announced in its
 readiness report; production/default `mode=terminal` remains v5-backed, and
@@ -290,6 +292,63 @@ history that cannot be represented before writing the target. The target may be
 partial after I/O failure, so it must be disposable and backed up; this is not
 rollback atomicity or production service integration. Never experiment on the
 owner's `artifacts/terminal/data.raw`.
+
+### Deliberate data migration of a disposable image
+
+`rustic-volume migrate7 <v5-image> <v7-target> <lineage>` runs the converter on
+image files. It refuses a malformed or all-zero lineage and a source that is not
+exactly the legacy tool image (67,213,824 bytes, what `seed` and
+`seed5-history` create) before it creates anything, opens the source read-only,
+creates the target exclusively (an existing path, including the source, is
+never overwritten), remounts the result with the full `Volume7` mount and prints
+`report7`'s JSON as `target` together with the source's SHA-256 before and after,
+both streamed through the one read-only handle the migration reads, which must
+be equal. When anything after the target's creation fails, the target is
+removed, but only while its path still names the regular file this invocation
+created (same device and inode); anything else found there is left and named in
+the error. The tool's own tests cover each refusal:
+
+| Source | Answer |
+| --- | --- |
+| Malformed or all-zero lineage | lineage refusal, no target created |
+| Size other than the legacy tool image (short, long, V7-sized) | size refusal, no target created |
+| Existing target path | `cannot create new`, target and source unchanged |
+| Envelope naming another lineage | `Lineage`, target removed |
+| Recovery lineage (no envelope) naming another lineage | `Lineage`, target removed |
+| Retained record without an operation scope (legacy tracked receipt) | `Unsupported`, target removed |
+| Live payload whose v5 CRC does not match | `Corrupt`, target removed |
+| Checksum-valid live version below its own committed receipt | `Corrupt` (v7 history validation), target removed |
+| All-zero source | `Empty`, target removed |
+
+`seed5-history <image> <lineage> <receipts|admissions|completed>` builds such
+disposable v5 sources. It writes the provisioning envelope first, as the v5
+terminal host does, then records operations as one v5 service incarnation in
+`/workspaces/migrated` with the V7 shell's replace-pattern bytes. A v5 volume
+retains only two records, so the history is split: `receipts` holds a current
+direct commit of subject 2 and one of subject 1; `admissions` an unresolved
+admission and a `Requested` cancellation of subject 2; `completed` an executed
+admission of subject 2. v5 can represent all four record states, and the
+converter carries each; a unit test also migrates a source that enabled scoped
+operations only (no admissions or prevention causes) with every record field
+and snapshot byte preserved; a migrated image reports `recovered: true` until its
+first V7 publication, because its only header is generation 0 at a
+non-initial sequence; the guest run confirms the first execution publishes into
+the other slot and clears it.
+
+`python3 tools/fs7_test.py` migrates each set and compares the result with the
+independent v5 reader's view of the source (identity, file versions and bytes,
+every record field and snapshot digest) and with `oracle7` and `report7`.
+`python3 tools/v7_migration_test.py` boots the migrated images in the guest; see
+[migrated history in the guest](FILES-V7-ADMISSIONS.md#migrated-history-in-the-guest).
+
+**Limits.** Real v5 terminal volumes record their operations under subject 1
+(the v5 shell's owner client), while the V7 shell holds subject 2, so records
+migrated from such a volume stay invisible to the V7 shell (`OutcomeUnknown`).
+The seed uses subject 2 deliberately; remapping subjects would change who may
+replay or inspect an operation and needs a separate decision. The 4 GiB v5
+terminal disk is also refused by size, and nothing here migrates the owner's
+volume. Data migration is independent of executable rollback, which belongs to
+the launch harness (#52).
 
 ## Streamed staging
 
