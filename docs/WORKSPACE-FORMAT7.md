@@ -61,19 +61,45 @@ payload. Runs must be nonempty, in bounds, nonoverlapping within the record, and
 total exactly `ceil(length / 512)`; unused runs are zero. Length is `u32`, capped
 at 524,288 bytes. An empty file has no runs.
 
-The header stores lineage at byte 12, retry epoch at 28, global sequence at 36,
-monotonic next identity at 44, and node/map/receipt aggregate CRCs at 48/52/56.
-Bytes 60..89 carry the exact geometry/features; other reserved bytes are zero.
+The header copy for generation `g` is stored in sector `8 + g`:
+
+| Byte | Field |
+| --- | --- |
+| 0 / 8 / 9 / 10 / 11 | magic, version `u8` 7, layout `u8` 1, generation `u8`, reserved zero |
+| 12 / 28 / 36 / 44 | lineage (16 bytes), retry epoch `u64`, global sequence `u64`, next identity `u32` |
+| 48 / 52 / 56 | node table, allocation map and retained-record block aggregate CRCs, `u32` |
+| 60 / 64 / 68 / 72 | objects 256, node bytes 128, map bytes 16,384, payload sectors 131,072, all `u32` |
+| 76 / 80 / 84 / 88 | retained records 8, feature mask 15, record bytes 192 (`u32`); runs per record 8 (`u8`) |
+| 89..508 / 508 | reserved zero / header CRC |
+
 The CRC at 508 covers the entire sector with that field zeroed. Epoch and sequence
 start at 1; epoch cannot exceed sequence. Next identity starts at 5 and never
 means live-object count. `u32::MAX` is the exhausted watermark, not an allocatable
-identity. Generation must be 0 or 1.
+identity. Generation must be 0 or 1. The lineage is nonzero.
 
-Nodes store identity/parent/version/length at 0/4/8/16, kind/space/run count/name
-length at 20/21/22/23, runs at 24, a zero-padded 32-byte name at 88, payload CRC
-at 120 and record CRC at 124. Directory payload is empty. An empty node slot is
-all zero. Names retain the existing namespace rules. Per-node decoding does not
-establish parentage, namespace validity or global allocation ownership.
+Every CRC in this format is CRC-32/IEEE (reflected polynomial `0xEDB88320`,
+initial value and final XOR `0xFFFFFFFF`, check value `0xCBF43926` for
+`123456789`; the same function as zlib's `crc32`). Each aggregate covers the raw
+bytes of its whole region in the named generation: all 32,768 node-table bytes,
+all 16,384 map bytes, and all 2,048 retained-record block bytes including the
+512 zero padding bytes. The allocation map is 2,048 little-endian `u64` words;
+payload sector `s` is bit `s % 64` of word `s / 64`, and a set bit means
+allocated.
+
+Nodes store identity `u32`/parent `u32`/version `u64`/length `u32` at 0/4/8/16,
+kind/space/run count/name length (`u8` each) at 20/21/22/23, runs at 24, a
+zero-padded 32-byte name at 88, payload CRC at 120 and a record CRC over bytes
+0..124 at 124. Kind 1 is a file and 2 a directory; space is 1..=4; identity and
+version are nonzero. Directory payload is empty (length, payload CRC and run
+count zero). An empty node slot is all zero. Names keep the existing namespace
+rules: 1..=31 bytes of ASCII letters, digits, `.`, `_` or `-`, excluding `.`
+and `..`, zero padded to 32 bytes. Per-node decoding does not establish
+parentage, namespace validity or global allocation ownership.
+
+A payload CRC (node byte 120, record byte 76) covers exactly `length` bytes read
+in run order; an empty payload's CRC is 0. The bytes after `length` in the final
+sector are not covered: writers zero them, and readers neither check nor return
+them.
 
 Retained record offsets:
 
@@ -87,10 +113,14 @@ Retained record offsets:
 | 88 | eight extent pairs |
 | 188 | CRC over bytes 0..188 |
 
-Other bytes are reserved zero. Lineage is shared through the header. Subject,
+State bytes are 0 direct committed, 1 admitted, 2 cancelled and 3 admitted
+committed. A cancelled record's cause byte is 0 unknown (legacy), 1 requested,
+2 version conflict or 3 authority lost; the cause byte is 0 in every other
+state. Other bytes (83..88 and 152..188) are reserved zero. Lineage is shared through the header. Subject,
 workspace, instance, previous version and retry fields are nonzero; object is above the four root
 identities and differs from workspace. Contextual validation requires both
-identities below the watermark and all sequences within the header sequence.
+identities below the watermark and the retry epoch, previous version and all
+sequences at most the header sequence.
 
 States preserve the existing prevention causes, including unknown legacy cause:
 
@@ -110,8 +140,11 @@ CRCs detect corruption; they do not authenticate storage or prove payload equali
 
 `format7::validate_generation` checks decoded structures together before a future
 mount owner trusts them. It requires the four named roots, unique live identities
-and sibling names, same-space directory ancestry without cycles, and live IDs and
-versions below the header watermarks. Retained records must belong to the current
+and sibling names, same-space directory ancestry without cycles, live IDs below
+the identity watermark and live versions at most the header sequence. The roots
+are directories with parent 0: identity 1 `system`, 2 `data`, 3 `config` and 4
+`workspaces`, each in the space equal to its identity; no other node has parent
+0, and every other node's parent is a live directory in the same space. Retained records must belong to the current
 retry epoch, have unique retry identities and event sequences, and agree with any
 still-live target's kind and version history. Successful records for the same
 object must form a monotonic commit history, and all retained version
@@ -120,6 +153,21 @@ requires every retained observation between its admission and commit to see the
 same previous version. An unresolved admission may become stale after a later
 commit, but a still-live target cannot have advanced past its recorded previous
 version before that admission's sequence.
+
+Precisely, a record observes its previous version at its committed sequence
+when direct and at its admission sequence otherwise. For two records on one
+object: their observation sequences differ and the later observation's previous
+version is not lower; an admitted commit requires any other observation strictly
+between its admission and commit to have the same previous version; an
+observation after any commit has a previous version at least that commit; and of
+two commits, the later one's previous version is at least the earlier commit.
+Across all records, retry identities (subject, workspace, epoch, key) are unique
+and no nonzero admission, committed or terminal sequence is shared. A still-live
+target must be a file whose version is at least the record's previous version;
+for an admitted or cancelled record it is not in `(previous, admission]`; for a
+committed record it is at least the commit, and when equal the node's length,
+payload CRC and runs are exactly the record's. An empty retained snapshot has
+payload CRC 0.
 
 The persisted allocation map must exactly equal ownership by live file extents
 and retained payload snapshots. The only shared ownership allowed is one exact
@@ -134,7 +182,9 @@ their CRCs. It neither mounts nor publishes a generation.
 The physical slot (sector 8 or 9) must match the generation in its header. Mount
 flushes the device before reading. A CRC-invalid or otherwise invalid header copy
 is not a candidate; if the other copy is valid, mount may select it and must
-report that it recovered from an invalid copy. When both copies are valid, they
+report that it recovered from an invalid copy. The one exception to that report
+is a freshly provisioned volume: a lone valid generation-0 copy with sequence 1,
+epoch 1 and next identity 5 whose other copy is entirely zero is not a recovery. When both copies are valid, they
 must share lineage, name opposite generations, have adjacent sequences, and have
 nondecreasing epoch and identity watermark; mount selects the higher sequence.
 Stale inactive metadata is not decoded while selecting the head because a
@@ -147,6 +197,12 @@ fall back to a lower valid header in that case: doing so could silently discard 
 committed generation. CRCs detect damage; they do not establish atomic sector
 writes. Recovery relies on the device honoring successful flush ordering, as
 required by `Disk`.
+
+Mount reads only the header copies, the selected generation and the payload
+sectors referenced by live files and retained snapshots. It does not check the
+medium's capacity: a medium that lacks a referenced sector fails the mount with
+`Io`, while a missing unused sector is left to the caller. The host
+`rustic-volume report7` requires an image of exactly 131,282 sectors.
 
 ## Native payload profile
 
@@ -253,6 +309,60 @@ explicit read-only service routes the existing SDK range API to V7; the
 `terminal-v7` QEMU harness verifies the selected 324,344-byte ELF and 128-byte
 manifest byte-for-byte in two boots, with another bounded read after service
 restart. It does not execute the file from the workspace or exercise V7 writes.
+
+## Independent reader and damaged input
+
+`tools/terminal_support/oracle7.py` is a second reader written from this
+document with Python's `zlib.crc32` and `hashlib`; it does not import or call
+`rustic-fs`. It applies the header selection rule above, verifies the three
+aggregates, every node and record CRC, the namespace and root rules, the
+retained-record state, scope, epoch and same-object history rules, exact map
+ownership (live files plus retained snapshots, the one exact committed alias
+excepted) and every live and retained payload CRC. It lists each file's path,
+identity, version, size and SHA-256 and each retained record's state, cause,
+sequences, snapshot SHA-256 and target binding. Like `report7`, it reads only an image of
+exactly 131,282 sectors. Writing it exposed only documentation gaps (CRC function,
+aggregate coverage, header geometry offsets, map bit order, kind/state/cause
+byte values, name and root rules, payload padding, the genesis recovery
+exception, version bound, the precise temporal rules and mount capacity), now
+stated above; it found no disagreement with the Rust mount.
+
+`python3 tools/fs7_test.py` (host only, no guest) reads the `seed7` fixture and
+three full-size images exported by `cargo test -p rustic-fs --test fs7_image`:
+all four record states, a removal whose snapshot stays owned, an executed
+admission, a three-run noncontiguous file and an epoch advanced by retention
+maintenance. It regenerates the payload patterns, compares each view with
+`report7` (which now also reports `recovered` and the retained records), and
+damages copies of the history image. Both readers refuse a flipped live or
+retained-only payload byte, both broken header copies, a broken aggregate named
+by the valid newest header (no fallback), a resealed older header with a
+non-adjacent sequence or a higher identity watermark, a resealed map leak, a
+resealed retained snapshot overlapping a live file, a broken record CRC, a
+resealed orphaned node and a resealed record from another epoch. Both refuse an
+image truncated inside a live payload, truncated by one unused tail sector or one
+sector too long; for those three the Rust refusal is `report7`'s exact-size
+precheck, not the mount, whose own `Io` refusal of a missing referenced sector is
+covered by `crates/fs/tests/fs7_image.rs`. Both accept a torn newest header
+by selecting the complete older generation and reporting recovery, and both
+accept a flipped padding byte after a file's last byte. A deterministic sweep of
+resealed field perturbations must also produce the same accept/refuse verdict
+from both readers. Evidence is written to `artifacts/fs7/evidence.json`.
+
+`python3 tools/v7_corrupt_test.py` boots `terminal-v7` on two damaged disposable
+copies of a fresh `seed7` volume. With one ELF payload byte flipped, mount
+refuses the volume: the guest does not panic, the file service exits with its
+startup status 5 (`Corrupt`), the supervisor's mount job reports status 4, the
+shell reports the service unavailable and range reads return `Unavailable`, a
+service restart is refused the same way, and `ps`, `mem`, `services` and `exit`
+keep working. With the newest header copy's checksum broken, mount selects the
+older generation: the guest reads the ELF byte-for-byte at its version and the
+manifest at its older, empty version, while the newer manifest version is a
+version conflict. The volume digest is unchanged in both cases; mount does not
+repair the torn copy. The mount's `recovered` flag is visible only on the host.
+Evidence is written to `artifacts/boot/terminal-v7-corrupt/result.json`. This
+covers mount-time detection only: an external change after mount is still not
+detected by range reads, and damaged metadata other than a header copy, guest
+publication faults and repair are not exercised in the guest.
 
 ## Evidence boundary
 

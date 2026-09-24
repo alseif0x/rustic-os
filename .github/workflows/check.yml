@@ -25,6 +25,8 @@ jobs:
           cargo xtask check 2>&1 | tee artifacts/check.log
       - name: Verify v6 volume images with the independent reader
         run: python3 tools/fs6_test.py
+      - name: Verify v7 volume images and damage refusal with the independent reader
+        run: python3 tools/fs7_test.py
       - name: Verify failure detection
         run: bash tools/check-failure.sh
       - name: Check finite operation model
