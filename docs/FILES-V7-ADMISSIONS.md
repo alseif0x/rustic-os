@@ -179,6 +179,55 @@ service stays the default and is unchanged. Tracked writes are described in
   above; single observations under varying host load). `file-server.elf` is
   406,096 bytes.
 
+## Migrated history in the guest
+
+`python3 tools/v7_migration_test.py` (also run by `python3 tools/boot.py test`)
+evidences deliberate v5 -> v7 data migration separately from executable
+rollback. Under one fresh lineage, `rustic-volume seed5-history` builds three
+disposable v5 sources and `migrate7` converts each into a new V7 image
+([deliberate data migration](WORKSPACE-FORMAT7.md#deliberate-data-migration-of-a-disposable-image));
+the harness requires each migrated record to match the seed in `oracle7`, each
+migrated image to hold only its generation-0 header (reported `recovered`), and
+the sources, which are never given to QEMU, to keep their SHA-256 through the
+whole run. The migrated images carry no application pair: `mode=terminal-v7`
+mounts them and serves them without one. Evidence is in
+`artifacts/boot/terminal-v7-migration/result.json`, with `serial.log` and
+`commands-*.jsonl`.
+
+- `receipts` (one boot): the migrated subject-2 direct commit is found by
+  `operation-v7 op_...` and by `operation-v7 WS EPOCH KEY` with identical
+  lines, the seeded version, the v5 service instance and the pattern's
+  SHA-256. The exact `replace-pattern-v7` replay prints the identical receipt;
+  the same key with another seed is `error: IdempotencyConflict`. The
+  subject-1 record is `error: OutcomeUnknown` by ID and by retry key. The
+  image digest is unchanged.
+- `admissions` (two boots): the migrated admission prints `state=admitted` by
+  `admission ID`, by `admission-v7` and on an exact `admit-pattern-v7` retry
+  (identical lines); its receipt lookup is `error: Busy`, observation v2 shows
+  `prevention=none` and `maintain-v7` is `error: Busy`. The migrated
+  cancellation prints `state=cancelled` with its seeded terminal, observation
+  v2 shows `prevention=requested`, and its receipt lookup is
+  `error: Unsupported`. The image digest is unchanged up to here.
+  `execute-admission` then commits it: `oracle7` finds exactly one new
+  publication (sequence + 1) in the other header slot, which ends the migrated
+  image's `recovered` report, an `admitted_committed` record and the pattern as
+  the live file,
+  and the completion receipt matches by ID and retry key. Execute and cancel
+  replays are identical with an unchanged image. After a reboot every status,
+  the cause and both receipts are identical, the image digest does not change,
+  and after shutdown `oracle7` finds the same generation.
+- `completed` (one boot): the migrated executed admission prints
+  `state=committed` with its completion; the receipt matches by ID and retry
+  key; exact admission, `admission-v7`, execute and cancel replays print the
+  same status without changing the image.
+
+The recorded run on 2026-09-24 (Ubuntu 26.04, QEMU 10.2.1, build
+`f04c38d57527c852`, the unchanged guest image) took 24.9 s for four boots,
+including seeding and migration; the migrated execution took 0.034 s host
+time, including the UART round trip. The seeded records use subject 2 because the V7 shell holds it;
+records migrated from a real v5 terminal volume carry subject 1 and remain
+invisible to the V7 shell until a separate subject-remapping decision exists.
+
 ## Wire
 
 All requests use the profile-2 marker where the shape carries one. Status
@@ -339,4 +388,6 @@ not cancel.
 - **No guest fault injection yet** on admission, execution or cancellation
   publications. The host tests cover only successful publications and
   refusals before I/O.
-- The v5-to-v7 migration of admission history in the guest is still pending.
+- **Migrated subject-1 history.** Records migrated from a real v5 terminal
+  volume carry subject 1 and stay invisible to the V7 shell (subject 2); no
+  subject remapping exists.

@@ -121,3 +121,12 @@ formats remain frozen.
 1. The host-tested v7 owner provisions and validates mounts, publishes a narrow `DirectCommitted` replacement with version conflicts, exact-byte retry and dual-generation copy-on-write, and explicitly advances retry epochs to reclaim terminal snapshots. The v6 direct probe remains a separate tested precursor, not the production backend.
 2. Implement bounded staged writes, durable admission and pollable cancellation without evicting unresolved evidence. Add deliberate compatibility/upgrade behavior on disposable copies. The owner now also accepts a file one sector at a time through host-tested streamed stages with in-memory reservations ([streamed staging](WORKSPACE-FORMAT7.md#streamed-staging)); stage writes are not pollable yet and no service uses them.
 3. Integrate the service and explicitly selected native profile, then run the selected consumer above today's limits. Independently verify data, versions and operation identity under full storage/retention, interrupted publication, reboot/remount, corrupt input and bounded RAM/control latency.
+
+Deliberate data migration is evidenced separately from executable rollback:
+`rustic-volume migrate7` converts disposable v5 images built by
+`seed5-history`, and `tools/v7_migration_test.py` exercises the migrated direct
+commit, admission, cancellation and executed admission in the guest
+([deliberate data migration](WORKSPACE-FORMAT7.md#deliberate-data-migration-of-a-disposable-image)).
+Records from real v5 terminal volumes carry subject 1 and stay invisible to the
+V7 shell (subject 2); subject remapping and the 4 GiB terminal disk size are
+outside this step. Executable rollback remains with the launch harness (#52).
