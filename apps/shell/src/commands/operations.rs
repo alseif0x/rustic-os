@@ -173,6 +173,27 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 return match argument(a, 8)? {
                     "cut" => cut(s, request, size, number(a, 9)?, fill),
                     "hold" => hold(s, request, size, number(a, 9)?, fill),
+                    "probe" => {
+                        let started = rustic_sdk::runtime::clock();
+                        let (operation, probed) =
+                            super::transfer_probe::probe(s, request, size, number(a, 9)?, fill)?;
+                        let ticks = rustic_sdk::runtime::clock().saturating_sub(started);
+                        print(operation);
+                        output::format(format_args!("write-v7 size={size} ticks={ticks}\r\n"));
+                        output::format(format_args!(
+                            "probe-v7 every={} probes={} max={} p50={} total={} free_min={} free_max={} heap_min={} heap_max={}\r\n",
+                            probed.every,
+                            probed.count,
+                            probed.max,
+                            probed.p50(),
+                            probed.total,
+                            probed.free_frames.0,
+                            probed.free_frames.1,
+                            probed.heap_pages.0,
+                            probed.heap_pages.1
+                        ));
+                        Ok(())
+                    }
                     _ => Err(Error::Usage),
                 };
             }
@@ -211,6 +232,8 @@ fn cut(
         }
     }
     let sent = transfer.offset();
+    // Revocation latency: from the owner's request to the completed job.
+    let started = rustic_sdk::runtime::clock();
     let job = match s.request([sv::REVOKE_SHELL_V7, 0, 0, 0, 0, 0, 0, 0]) {
         Ok(job) if job[0] == 5 => job[1],
         refused => {
@@ -219,6 +242,7 @@ fn cut(
         }
     };
     let status = s.wait_status(job)?;
+    let ticks = rustic_sdk::runtime::clock().saturating_sub(started);
     if status[3] != 0 {
         // The job failed, but the revocation may still have happened before a
         // later step failed, so this abort is best effort: on a revoked
@@ -232,7 +256,7 @@ fn cut(
     // The same transfer on the adopted binding names nothing the service holds.
     let new = s.files.workspace_chunk(&mut transfer, fill);
     output::format(format_args!(
-        "cut-v7 chunks={chunks} bytes={sent} job={job} old={} new={}\r\n",
+        "cut-v7 chunks={chunks} bytes={sent} job={job} old={} new={} ticks={ticks}\r\n",
         Outcome(old),
         Outcome(new)
     ));

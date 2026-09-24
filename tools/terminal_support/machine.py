@@ -51,7 +51,11 @@ def disk(path, initialize=False, upgrade_recovery=False):
         os.close(lock_fd)
 
 @contextlib.contextmanager
-def machine(image, data, serial, log, fault=None, readonly=False):
+def machine(image, data, serial, log, fault=None, readonly=False, rules=None):
+    """`fault` names a v5 replacement cut; `rules` is a prepared blkdebug
+    configuration from `recovery_faults.rules` for another event sequence."""
+    if fault is not None and rules is not None:
+        raise ValueError("a boot takes either a v5 cut or prepared blkdebug rules")
     image = Path(image).resolve()
     metadata = json.loads((image.parent / "image.json").read_text())
     if environment.digest(image) != metadata["image_sha256"]:
@@ -63,9 +67,13 @@ def machine(image, data, serial, log, fault=None, readonly=False):
         drive = str(data)
         if fault is not None:
             from .recovery_faults import configuration
-            rules = Path(temporary) / "blkdebug.conf"
-            rules.write_text(configuration(fault))
-            drive = f"blkdebug:{rules}:{data}"
+            rules = configuration(fault)
+        if rules is not None:
+            if not isinstance(rules, str) or "[inject-error]" not in rules:
+                raise ValueError("blkdebug rules must arm one injected error")
+            path = Path(temporary) / "blkdebug.conf"
+            path.write_text(rules)
+            drive = f"blkdebug:{path}:{data}"
         data_options = f"if=none,id=rusticdata,format=raw,cache=writeback,file={drive}"
         if readonly:
             data_options += ",readonly=on"

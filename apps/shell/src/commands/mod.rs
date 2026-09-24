@@ -16,6 +16,7 @@ mod retention;
 mod staging;
 mod takeover;
 mod tasks;
+mod transfer_probe;
 use super::{output, session::Session};
 use rustic_shell::parser::Args;
 #[derive(Debug)]

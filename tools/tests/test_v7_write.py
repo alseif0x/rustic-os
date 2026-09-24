@@ -79,13 +79,15 @@ class Lookup(unittest.TestCase):
 
 class Cut(unittest.TestCase):
     def test_the_cut_line_reports_both_observations(self):
-        text = "replace-pattern-v7 a b c d e 6 524288 cut 400\r\ncut-v7 chunks=400 bytes=16000 job=3 old=Closed new=NoTransfer\r\n> "
-        self.assertEqual(decode_cut(text), {"chunks": 400, "bytes": 16000, "job": 3, "old": "Closed", "new": "NoTransfer"})
+        text = "replace-pattern-v7 a b c d e 6 524288 cut 400\r\ncut-v7 chunks=400 bytes=16000 job=3 old=Closed new=NoTransfer ticks=2\r\n> "
+        self.assertEqual(decode_cut(text), {"chunks": 400, "bytes": 16000, "job": 3, "old": "Closed", "new": "NoTransfer",
+                                            "ticks": 2})
         self.assertEqual(decode_cut("error: Version\r\n"), {"error": "Version"})
 
     def test_a_committed_or_ambiguous_cut_is_rejected(self):
-        for text in (answer(), "cut-v7 chunks=400 bytes=16000 job=3 old=Closed new=NoTransfer\r\nerror: Full\r\n",
-                     "cut-v7 chunks=400 bytes=16000 job=3 old=Closed\r\n"):
+        for text in (answer(), "cut-v7 chunks=400 bytes=16000 job=3 old=Closed new=NoTransfer ticks=2\r\nerror: Full\r\n",
+                     "cut-v7 chunks=400 bytes=16000 job=3 old=Closed ticks=2\r\n",
+                     "cut-v7 chunks=400 bytes=16000 job=3 old=Closed new=NoTransfer\r\n"):
             with self.assertRaises(ValueError):
                 decode_cut(text)
 

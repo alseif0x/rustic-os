@@ -10,7 +10,12 @@ looked up cold by operation ID or retry key, and the owner can revoke the
 shell's binding in the middle of a transfer. When the eight-record budget is
 `Full`, the owner can explicitly run
 [retention maintenance](#owner-retention-maintenance) to reclaim the records
-and advance the retry epoch, so useful writes can continue. The v5 service
+and advance the retry epoch, so useful writes can continue. A write or a
+maintenance [interrupted at a publication boundary](#interrupted-publication)
+in the guest reports `Uncertain`. After `restart files` and a reboot, the
+service agrees with the independent reader on which generation survived. The
+system memory used by the file service and the owner's control latency are
+[measured around large writes](#memory-and-control-latency). The v5 service
 stays the default and is unchanged.
 
 ## What is verified
@@ -125,6 +130,18 @@ inferred from the acknowledged bytes), and the owner
   the reboot the last write is looked up by ID and by retry key with the lines
   printed at commit, and a key of the previous epoch is `ExpiredEpoch`. Evidence
   is written to `artifacts/boot/terminal-v7-retention/result.json`.
+- Guest: `python3 tools/v7_faults_test.py` interrupts an 8 KiB tracked write
+  at twelve device events and retention maintenance at nine. Each case runs on
+  its own copy of a base image with one QEMU `blkdebug` EIO, and each copy is
+  then rebooted cleanly. The cases, what each must show and the results are in
+  [interrupted publication](#interrupted-publication). A boot that only mounts
+  a fresh volume must leave the image digest unchanged. The same run records
+  system memory and control latency around two 512 KiB writes and an owner
+  revocation, see [memory and control latency](#memory-and-control-latency).
+  The run takes 44 boots and writes its evidence, including every transcript,
+  to `artifacts/boot/terminal-v7-faults/result.json`. The event plan, the
+  generation classification and the parsers have unit tests in
+  `tools/tests/test_v7_faults.py`.
 
 Guest timing from one run under QEMU TCG on the reference machine (build
 `4108eab5007c3569`), measured by the shell from before the open to after the
@@ -154,7 +171,8 @@ longer than the 513-byte one in an earlier run, and in this run the 513-byte
 write took longer than the 8 KiB one. A cold
 lookup reads the retained snapshot once, one blocking sector read per 512
 bytes, and makes three receipt round trips. These are single measurements, not
-a benchmark.
+a benchmark. The [fault run](#memory-and-control-latency) adds control-path
+timings measured during 512 KiB writes.
 
 ## Selection and authority
 
@@ -286,7 +304,9 @@ transfer with `Client::workspace_open`, sends `CHUNKS` chunks (fewer than the
 whole file), starts the job and waits for it without adopting the new binding.
 It then sends the next chunk on the old endpoint, adopts the binding and sends
 the same chunk again, and prints
-`cut-v7 chunks=N bytes=B job=J old=OUTCOME new=OUTCOME`. It never commits.
+`cut-v7 chunks=N bytes=B job=J old=OUTCOME new=OUTCOME ticks=T`, where `T` is
+the guest ticks from the owner's revocation request to the completed job. It
+never commits.
 
 ## Owner retention maintenance
 
@@ -337,6 +357,154 @@ aborts the transfer and prints
 At `Full` only an exact retry of a retained write can hold a transfer, because
 a fresh one needs a record slot.
 
+## Interrupted publication
+
+The V7 file server's disk adapter (`apps/file-server/src/disk.rs`) issues one
+blocking copied-sector command at a time, so the device sees the owner's
+commands in program order. A fresh tracked write of `n` sectors starts with
+`n` payload writes, one per completed sector, with no separate payload flush.
+The publication in `crates/fs/src/volume7/publication.rs` follows: 64 node,
+32 map and 4 receipt sectors of the inactive generation, a flush, the header
+write and a final flush, 103 events in all. Maintenance is the same
+publication without payload. A mount only reads and flushes, and an exact
+retry or a lookup only reads.
+
+`tools/terminal_support/v7_faults.py` arms one EIO at a chosen event with the
+`blkdebug` rules from `recovery_faults.rules`. The rules count only the
+expected write and flush events, ignore reads and inject once. The failed
+request never reaches the image, and the service fences itself on the error
+and issues no further writes. Every earlier write has already reached the host
+page cache that the independent reader sees, so each case is a fail-stop after
+the event before the cut. The mount job of every armed boot must succeed
+before the operation starts, which shows that the mount's own flush and reads
+did not reach the armed event.
+
+For each cut the operation must report `Uncertain`. While the service is
+fenced, `services` and `mem` still answer from the supervisor (`services`
+shows the file service as `control-pending`), `pending_io` is 0 and a lookup
+of the key is `Uncertain`. After `restart files`, while the guest is idle,
+`oracle7` decides which generation the image holds:
+
+- New generation after a write: exactly one new record for the key, whose
+  committed version is the live version and whose snapshot is the pattern.
+- New generation after maintenance: the next epoch, every record dropped and
+  exactly the snapshot-only sectors freed.
+- Old generation: the base image's view, unchanged.
+
+Anything in between fails the case. For a write, the harness also derives the
+planned payload run from the base image, as the owner's planner does (the first
+of the largest free runs of the oracle-verified allocation map). Before the
+reboot's retry can reuse that run, it checks that every payload sector before
+the cut holds its part of the pattern on the image and that the failed sector
+does not: 0, 1 and 15 sectors for the payload cuts, all 16 for the others. When
+the write is published, the live file must occupy exactly that run. The guest
+must then agree with the reader.
+For a write, a lookup by retry key gives the receipt (with the pattern's
+SHA-256) or `OutcomeUnknown`, and a range read shows the version the image
+holds. For maintenance, lookups of the last base write by key and by ID give
+its commit-time receipt, or `ExpiredEpoch` and `OutcomeUnknown`. A clean reboot
+must give the same answers. For a write, an exact retry then replays the
+receipt with the image digest unchanged, or commits the next version for the
+first time. For maintenance, a second `maintain-v7` reports the observed epoch
+as its previous epoch and reclaims either the base records or nothing.
+`oracle7` then checks the final image, including an allocation map equal to
+the sectors that live files and snapshots own.
+
+Results from one run (build `94bf6886cee5340f`). The write base is a fresh
+`seed7 --scratch` volume; the maintenance base holds five records and 2,048
+reclaimable snapshot-only sectors:
+
+| Operation | Cut (event index) | Status | Generation after restart and reboot | Lookup | Retry or repeat |
+| --- | --- | --- | --- | --- | --- |
+| 8 KiB write | first, second, last payload sector (0, 1, 15) | `Uncertain` | old | `OutcomeUnknown` | first commit |
+| 8 KiB write | first, last node sector (16, 79) | `Uncertain` | old | `OutcomeUnknown` | first commit |
+| 8 KiB write | first, last map sector (80, 111) | `Uncertain` | old | `OutcomeUnknown` | first commit |
+| 8 KiB write | first, last receipt sector (112, 115) | `Uncertain` | old | `OutcomeUnknown` | first commit |
+| 8 KiB write | metadata flush (116) | `Uncertain` | old | `OutcomeUnknown` | first commit |
+| 8 KiB write | header write (117) | `Uncertain` | old | `OutcomeUnknown` | first commit |
+| 8 KiB write | final flush (118) | `Uncertain` | new | receipt | identical replay, no write |
+| Maintenance | first, last node sector (0, 63) | `Uncertain` | old epoch, five records | receipt by key and ID | reclaims five records |
+| Maintenance | first, last map sector (64, 95) | `Uncertain` | old epoch, five records | receipt by key and ID | reclaims five records |
+| Maintenance | first, last receipt sector (96, 99) | `Uncertain` | old epoch, five records | receipt by key and ID | reclaims five records |
+| Maintenance | metadata flush (100) | `Uncertain` | old epoch, five records | receipt by key and ID | reclaims five records |
+| Maintenance | header write (101) | `Uncertain` | old epoch, five records | receipt by key and ID | reclaims five records |
+| Maintenance | final flush (102) | `Uncertain` | next epoch, no records | `ExpiredEpoch` / `OutcomeUnknown` | reclaims nothing |
+
+A cut at the final flush legitimately ends in the new generation. The header
+write before it reached the host page cache, and the restarted service's mount
+reads that header, even though the service that issued it reported
+`Uncertain`. The host sweeps in `rustic-fs`
+(`every_streamed_tracked_cut_is_uncertain_and_remounts_the_old_head`,
+`every_maintenance_write_and_flush_cut_remounts_the_old_generation`) model a
+disk that loses every write since the last successful flush, so there a failed
+final flush also loses the header and the old generation survives. Separate
+host tests cover a final flush that fails after the header became durable.
+Both outcomes are allowed by `Uncertain`, and the guest harness asserts the one
+its fault model produces. The header cut ending old and the final-flush cut
+ending new also pin the event count: one extra or missing write before the
+header would move one of these two cases to the other generation.
+
+## Memory and control latency
+
+The kernel's `INFO` reports free frames and user heap pages for the whole
+system. The file server uses no heap and keeps the V7 volume state in its
+image's static data. The loader maps every PT_LOAD page and 16 stack pages
+when it starts the process. The static bound for the file server is therefore
+its PT_LOAD pages plus 16 stack pages. For the `file-server.elf` of this run
+that is 77 + 16 = 93 pages (380,928 bytes: 53 text, 3 read-only and 21
+writable data pages), against the loader's 256-page image budget. The page
+tables that map those pages are not included.
+
+In the same run, `mem` reported `free_frames=51462 heap_pages=0` at all 110
+points where it was read: idle in each of the 44 boots, while fenced and after
+`restart files` in each of the 21 fault cases, after 12 exact retries and 9
+repeated maintenances, after each of two 512 KiB commits and after an owner
+revocation. The harness requires every point to equal the first boot's idle
+value. The
+`probe` diagnostic saw the same values at every sample while a 512 KiB
+transfer was open. Repeated large writes, interrupted operations and service
+restarts did not change system memory.
+
+The shell diagnostic `replace-pattern-v7 ... SIZE probe K` streams the write
+through the stepwise SDK calls. It issues one owner `INFO` to the supervisor
+before every `K`-th chunk and once more before the commit. It then commits and
+prints the receipt, `write-v7`, and
+`probe-v7 every=K probes=N max=M p50=P total=T free_min=.. free_max=.. heap_min=.. heap_max=..`.
+Round trips are in guest ticks (100 per second). During two 512 KiB writes
+with `K=64` (206 samples each), the round trip had a maximum of 1 tick
+(under 20 ms) and a median of 0 ticks in each of three runs of the same build.
+The totals were 2 and 7 ticks in the recorded run (17 and 10, and 8 and 5, in
+the earlier runs). The probed writes took 542 and 461 ticks in the recorded run
+(585 and 501, and 432 and 550, earlier); these times include their 206 `INFO`
+round trips. The owner revocation (`cut-v7`, 400 chunks into a 512 KiB write)
+took 1 tick in the recorded run and 0 ticks in the two earlier ones, so under
+20 ms. These are single measurements at 10 ms resolution. The shell waits for each chunk's reply
+before it sends the query, so the probe shows that the owner control path
+answers while a transfer is open between chunks. It does not measure a query
+that competes with a blocking disk command in flight.
+
+### Stalled device
+
+V7 I/O stays blocking in this increment, and there is no V7 I/O deadline.
+While a device command is stalled, the file server cannot answer anything:
+
+- A shell write waits for its chunk or commit reply until the command
+  completes, or until the operator interrupts the wait with Ctrl-C. The
+  interrupt does not cancel an effect already submitted.
+- An owner job that needs the file service (`MAINTAIN_V7`, `REVOKE_SHELL_V7`)
+  ends at the supervisor's 1,000-tick job deadline with status 4 and marks the
+  supervisor degraded.
+- `restart files` is the recovery path. Its fresh service mounts whichever
+  generation is durable.
+
+The supervisor answers `ps`, `services`, `mem` and `io-status` itself. A held
+V7 command is not exercised in the guest. The existing
+[delayed-device lab](BLOCK.md#delayed-device-regression) drives the v5 path,
+whose file service polls its I/O. In V7 the shell is the only file client and
+also the owner console. Observing owner commands during a held write would
+therefore need an interrupted client wait, and recovery from that on the V7
+path is untested.
+
 ## SDK and shell
 
 `Client::workspace_replace(request, size, fill)` (`crates/sdk/src/files/workspace.rs`)
@@ -358,6 +526,8 @@ byte `i` = `(SEED*31 + 7*i + i/509) mod 256`, so a harness can recompute it. It
 prints the receipt in the same format as `replace-ref` and then
 `write-v7 size=SIZE ticks=TICKS`. With `cut CHUNKS` appended it performs the
 [owner revocation](#owner-revocation-during-a-transfer) diagnostic instead.
+With `probe K` appended it commits while timing owner `INFO` round trips (see
+[memory and control latency](#memory-and-control-latency)).
 `operation-v7 OPERATION_ID` and `operation-v7 WORKSPACE EPOCH KEY` print a
 retained receipt in the same format, followed by
 `lookup-v7 size=SIZE ticks=TICKS`. `rustic-volume seed7 ... --scratch` adds an
@@ -379,12 +549,21 @@ and resource. Creating it uses no retained record.
   admissions (it is host-tested in `rustic-fs`).
 - The shell learns the new epoch only from the maintenance output. No state
   query reports the current epoch to a client.
-- Maintenance runs inside the single-loop service like a commit. No guest case
-  injects a fault into its publication; that path is host-tested.
+- Maintenance runs inside the single-loop service like a commit.
 - The file server serves one request at a time. A chunk that completes a
   sector issues one blocking write, and a commit runs the whole blocking
-  publication while other clients wait. Stage writes are not pollable.
-- There are no guest fault-injection cases (torn publication, failed flush) for
-  this path. Those failure modes are host-tested in `rustic-fs`.
+  publication while other clients wait. Stage writes are not pollable, and
+  there is no V7 I/O deadline (see [stalled device](#stalled-device)).
+- The guest fault cases are fail-stop EIOs at one event of one 8 KiB write and
+  of one maintenance, over QEMU's host page cache. The guest does not inject
+  torn sector writes, writes lost after the device acknowledged them, read
+  errors during a retry or lookup, faults during the mount after
+  `restart files`, or other write sizes. Every write and flush failure of a
+  streamed tracked publication, and of maintenance, is host-tested in
+  `rustic-fs` over a disk that loses unflushed writes.
+- Latency is measured at 10 ms tick resolution by the same shell that drives
+  the write, between chunks. Memory is the system-wide `free_frames` and
+  `heap_pages`, not a per-process count. The static bound excludes page tables
+  and kernel objects.
 - The shell's subject is fixed supervisor policy. No other client, utility or
   delegated helper receives V7 write authority.
