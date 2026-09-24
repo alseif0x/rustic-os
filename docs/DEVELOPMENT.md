@@ -156,8 +156,9 @@ The explicitly selected V7 read-only guest fixture uses a fresh disposable
 volume and the measured largest shipped native artifact. Run
 `python3 tools/v7_read_test.py` to build the host provisioner and UEFI image,
 read the full `file-server.elf` and manifest over the real guest UART in two
-boots, restart the file service between reads, and verify the provisioned volume
-is unchanged. It writes no volume image to the tracked workspace or to
+boots, restart the file service between reads, stage the pinned pair as a
+dormant child (and refuse stale pins) before and after that restart, and verify
+the provisioned volume is unchanged. It writes no volume image to the tracked workspace or to
 `artifacts/terminal/data.raw`; evidence is stored in
 `artifacts/boot/terminal-v7/`. The service grants only the read protocol. The
 temporary QEMU data backend is not opened read-only because V7 mount requires an

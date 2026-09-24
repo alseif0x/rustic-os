@@ -5,9 +5,12 @@ pub(super) mod launch;
 mod mount;
 mod policy;
 mod restart;
+pub(super) mod stage;
 pub(super) mod tasks;
 use rustic_sdk::runtime;
 use rustic_supervisor::jobs::{History, Ticket};
+/// Deadline of an ordinary owner job, in 100 Hz PIT ticks.
+const DEFAULT_BUDGET_TICKS: u64 = 1000;
 // Exactly one job owns its inline, bounded task snapshot. The native supervisor
 // has no heap; keeping these <=16 rows here avoids shared/global scratch state.
 #[expect(
@@ -18,6 +21,7 @@ enum Task {
     Launch(launch::Draft),
     TasksList(tasks::TaskList),
     Restart(restart::Restart),
+    StageV7(stage::Stage),
     Admin { words: [u64; 8], sent: bool },
 }
 pub(super) struct Active {
@@ -60,12 +64,21 @@ impl Work {
             _ => None,
         }
     }
+    /// Whether the active job may be waiting for a reply on the owner client.
+    pub fn reads_owner(&self) -> bool {
+        matches!(self.active.as_ref().map(|a| &a.task), Some(Task::StageV7(stage)) if stage.reading())
+    }
     fn start(&mut self, kind: u64, task: Task) -> Result<[u64; 8], u64> {
+        self.start_budget(kind, task, DEFAULT_BUDGET_TICKS)
+    }
+    /// Start a job whose deadline is `budget` ticks away. Only a job with a
+    /// documented, measured budget uses anything but the default.
+    fn start_budget(&mut self, kind: u64, task: Task, budget: u64) -> Result<[u64; 8], u64> {
         let ticket = self.history.start(kind).ok_or(3u64)?;
         self.active = Some(Active {
             ticket,
             task,
-            deadline: runtime::clock().saturating_add(1000),
+            deadline: runtime::clock().saturating_add(budget),
         });
         self.phase = 1;
         self.io = 0;

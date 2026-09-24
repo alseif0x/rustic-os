@@ -27,6 +27,8 @@ pub struct State {
     pub(super) degraded: bool,
     pub(super) stopping: bool,
     pub(super) work: super::work::Work,
+    /// The one dormant child staged from storage, until the owner reaps it.
+    pub(super) staged: Option<super::work::stage::Staged>,
     #[cfg(feature = "tasks-acceptance")]
     pub(super) acceptance: super::acceptance::Fixture,
 }
@@ -82,7 +84,7 @@ impl State {
                     }
                 }
                 Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {
-                    let mut tokens = [0; 4];
+                    let mut tokens = [0; 5];
                     tokens[0] = self.control.token();
                     let mut n = 1;
                     for c in self.children.iter().flatten() {
@@ -93,6 +95,11 @@ impl State {
                     }
                     if self.admin.pending() && !self.admin.failed() {
                         tokens[n] = self.admin.endpoint.token();
+                        n += 1;
+                    }
+                    // A stage job waits for its range replies instead of a tick.
+                    if self.work.reads_owner() && self.owner.token() != 0 {
+                        tokens[n] = self.owner.token();
                         n += 1;
                     }
                     let timeout = if self.work.pending()

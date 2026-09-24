@@ -27,6 +27,7 @@ pub fn start(startup: u64) -> Result<State, ()> {
         degraded: true,
         stopping: true,
         work: super::work::Work::new(),
+        staged: None,
         #[cfg(feature = "tasks-acceptance")]
         acceptance: super::acceptance::Fixture::default(),
     };

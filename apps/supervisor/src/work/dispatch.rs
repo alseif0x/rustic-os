@@ -20,6 +20,7 @@ impl State {
                 Task::Launch(d) => d.cancel(self),
                 Task::TasksList(task) => task.cancel(self),
                 Task::Restart(r) => r.cancel(self),
+                Task::StageV7(mut stage) => stage.cancel(self),
                 Task::Admin { .. } => {}
             }
             self.work
@@ -86,6 +87,7 @@ impl State {
                 Task::Launch(d) => d.poll(self),
                 Task::TasksList(task) => task.poll(self),
                 Task::Restart(r) => r.poll(self),
+                Task::StageV7(stage) => stage.poll(self),
                 Task::Admin { words, sent } => poll_admin(self, words, sent),
             }
         };
@@ -136,6 +138,7 @@ impl State {
                     Task::Launch(d) => d.cancel(self),
                     Task::TasksList(task) => task.cancel(self),
                     Task::Restart(r) => r.cancel(self),
+                    Task::StageV7(mut stage) => stage.cancel(self),
                     Task::Admin { .. } => {}
                 }
                 if timeout || self.admin.failed() {

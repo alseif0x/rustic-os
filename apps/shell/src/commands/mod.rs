@@ -12,6 +12,7 @@ mod operations;
 mod processes;
 mod read;
 mod recovery;
+mod staging;
 mod takeover;
 mod tasks;
 use super::{output, session::Session};
@@ -28,6 +29,8 @@ pub enum Error {
     TaskEnable,
     TaskJournal,
     TaskPending(u64),
+    /// A completed stage job refused its pair with this owner status.
+    StageRefused(u64),
 }
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -43,6 +46,10 @@ impl core::fmt::Display for Error {
             }
             Self::TaskPending(key) => {
                 write!(f, "task intent={key} remains unresolved; use tasks recover")
+            }
+            Self::StageRefused(code) => {
+                f.write_str("stage refused: ")?;
+                staging::refusal(f, *code)
             }
             Self::Pending(id) => write!(
                 f,
@@ -151,6 +158,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
             operations::execute(s, a)?
         }
         "ref" | "read-ref" => read::execute(s, a)?,
+        "stage-ref" => staging::execute(s, a)?,
         "job-status" | "hold-io" | "io-status" => management::execute(s, a)?,
         "run" | "ps" | "kill" | "reap" | "permissions" | "revoke" | "services" | "mem"
         | "restart" => processes::execute(s, a)?,
