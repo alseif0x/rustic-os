@@ -74,7 +74,15 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             if !(2..=3).contains(&a.len()) || argument(a, 1)? != "files" {
                 return Err(Error::Usage);
             }
-            if a.len() == 3 {
+            if a.len() == 3 && argument(a, 2)? == "timed" {
+                // Guest ticks for the whole restart job, which a V7 service
+                // spends almost entirely mounting (verifying every payload).
+                let started = rustic_sdk::runtime::clock();
+                s.service([p::RESTART, 0, 0, 0, 0, 0, 0, 0])?;
+                let ticks = rustic_sdk::runtime::clock().saturating_sub(started);
+                output::text("files restarted; utility sessions revoked\r\n");
+                output::format(format_args!("restart-files ticks={ticks}\r\n"));
+            } else if a.len() == 3 {
                 if argument(a, 2)? != "async" {
                     return Err(Error::Usage);
                 }

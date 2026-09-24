@@ -42,6 +42,16 @@ class Decode(unittest.TestCase):
         self.assertEqual(len(result["lines"]), 2)
         self.assertTrue(result["lines"][1].startswith("receipt workspace="))
 
+    def test_commit_ticks_are_decoded_when_printed_and_bounded_by_the_write(self):
+        self.assertNotIn("commit_ticks", decode(answer()))
+        timed = answer().replace("ticks=12\r\n", "ticks=12 commit_ticks=5\r\n")
+        self.assertEqual(decode(timed)["commit_ticks"], 5)
+        self.assertEqual(decode(answer().replace("ticks=12\r\n", "ticks=12 commit_ticks=12\r\n"))["commit_ticks"], 12)
+        for bad in ("ticks=12 commit_ticks=13", "ticks=12 commit_ticks=", "ticks=12 commit_ticks=05",
+                    "ticks=12 commit=5"):
+            with self.assertRaises(ValueError):
+                decode(answer().replace("ticks=12", bad))
+
     def test_one_error_is_a_refusal(self):
         self.assertEqual(decode("replace-pattern-v7 x\r\nerror: Full\r\n> "), {"error": "Full"})
         self.assertEqual(decode("error: IdempotencyConflict\r\n"), {"error": "IdempotencyConflict"})

@@ -46,22 +46,7 @@ pub(crate) fn add7(
         return Err(format!("file {} is empty", source.display()));
     }
 
-    // `seed7` and `migrate7` refuse a symlinked target; so does this.
-    let metadata = std::fs::symlink_metadata(image)
-        .map_err(|error| format!("cannot open {}: {error}", image.display()))?;
-    if metadata.file_type().is_symlink() {
-        return Err(format!(
-            "{} is a symbolic link, not an image file",
-            image.display()
-        ));
-    }
-    let mut disk = FileDisk::open_regular(image)?;
-    if disk.sectors() != V7_IMAGE_SECTORS || disk.bytes()? != V7_IMAGE_BYTES {
-        return Err(format!(
-            "{} is not an exact v7 image of {V7_IMAGE_BYTES} bytes",
-            image.display()
-        ));
-    }
+    let mut disk = open_image(image)?;
     let mut volume = Volume7::EMPTY;
     volume
         .mount_into(&mut disk)
@@ -163,6 +148,28 @@ pub(crate) fn add7(
         resource_text(lineage, directory.id, node.id)?,
         record_json(slot, &record),
     ))
+}
+
+/// Open an existing disposable v7 image for a host publication: a regular,
+/// non-symlinked file of exactly one v7 volume. Nothing is written here.
+pub(crate) fn open_image(image: &Path) -> Result<FileDisk, String> {
+    // `seed7` and `migrate7` refuse a symlinked target; so does this.
+    let metadata = std::fs::symlink_metadata(image)
+        .map_err(|error| format!("cannot open {}: {error}", image.display()))?;
+    if metadata.file_type().is_symlink() {
+        return Err(format!(
+            "{} is a symbolic link, not an image file",
+            image.display()
+        ));
+    }
+    let disk = FileDisk::open_regular(image)?;
+    if disk.sectors() != V7_IMAGE_SECTORS || disk.bytes()? != V7_IMAGE_BYTES {
+        return Err(format!(
+            "{} is not an exact v7 image of {V7_IMAGE_BYTES} bytes",
+            image.display()
+        ));
+    }
+    Ok(disk)
 }
 
 /// Resolve `text` (a node id, `ws_` text of this lineage, or an absolute path

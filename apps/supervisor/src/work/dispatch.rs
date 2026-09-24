@@ -47,10 +47,13 @@ impl State {
                 let _ = c.control.endpoint.close();
             }
         }
-        self.work.start(
-            s::RESTART,
-            Task::Restart(Restart::new(initialize, self.profile)),
-        )
+        let task = Task::Restart(Restart::new(initialize, self.profile));
+        if self.profile == super::super::services::FileProfile::V7 {
+            self.work
+                .start_budget(s::RESTART, task, super::restart::V7_BUDGET_TICKS)
+        } else {
+            self.work.start(s::RESTART, task)
+        }
     }
     pub(in super::super) fn start_admin(
         &mut self,

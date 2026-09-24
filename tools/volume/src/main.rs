@@ -10,6 +10,7 @@ mod add7;
 mod command;
 mod disk;
 mod history5;
+mod maintain7;
 mod migrate7;
 #[cfg(test)]
 mod testing;
@@ -33,12 +34,16 @@ usage: rustic-volume <command>
                                 add a new file to an existing v7 image with one
                                 tracked commit; <workspace> is a node id, ws_
                                 text or /workspaces/... path
+  maintain7 <v7-image>          advance the retry epoch of an existing v7 image,
+                                dropping its terminal retained records (the host
+                                form of the owner's retention maintenance)
 A lineage is 32 hex characters. Images are exactly one volume long; a shorter
 file is refused so a truncated image cannot be read as a volume. `seed7`,
 `seed5-history` and `migrate7` targets use an exclusive create and refuse an
 existing path; `migrate7` only reads its source and removes a target it created
 when the migration fails. `add7` refuses an existing name and a full retention
-table before it writes, and never evicts a record.";
+table before it writes, and never evicts a record; `maintain7` refuses with
+`Busy` while an admission is unresolved.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -95,6 +100,7 @@ fn run(args: &[String]) -> Result<String, String> {
         [command, image, workspace, name, source] if command == "add7" => {
             add7::add7(Path::new(image), workspace, name, Path::new(source))
         }
+        [command, image] if command == "maintain7" => maintain7::maintain7(Path::new(image)),
         _ => Err(USAGE.to_owned()),
     }
 }

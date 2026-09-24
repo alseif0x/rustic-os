@@ -4,7 +4,7 @@ use super::*;
 use rustic_sdk::abi::files::{
     operation::{Instance, Lookup, Operation, OperationId, Replacement, Retry},
     reference::{Epoch, Resource, Version, Workspace},
-    workspace,
+    workspace::{self, Operation as Operation7},
 };
 /// The printed fields of a completed-operation receipt in either profile.
 struct Printed {
@@ -198,14 +198,42 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 };
             }
             let started = rustic_sdk::runtime::clock();
-            let operation = s.files.workspace_replace(request, size, fill)?;
+            let (operation, commit_ticks) = timed_replace(s, request, size, fill)?;
             let ticks = rustic_sdk::runtime::clock().saturating_sub(started);
             print(operation);
-            output::format(format_args!("write-v7 size={size} ticks={ticks}\r\n"));
+            output::format(format_args!(
+                "write-v7 size={size} ticks={ticks} commit_ticks={commit_ticks}\r\n"
+            ));
         }
         _ => return Err(Error::Unknown),
     }
     Ok(())
+}
+
+/// The SDK's streamed tracked replacement, step by step, so the commit
+/// exchange can be timed on its own: `commit_ticks` runs from sending
+/// `REPLACE_COMMIT` until the receipt is received and verified. The service
+/// publishes the generation inside that exchange and serves no other request
+/// meanwhile, so this bounds how long the single-loop service is blocked.
+fn timed_replace(
+    s: &mut Session,
+    request: Replacement,
+    size: u32,
+    fill: impl Fn(u32, &mut [u8]) -> Result<(), rustic_sdk::files::Error> + Copy,
+) -> Result<(Operation7, u64), Error> {
+    let mut transfer = s.files.workspace_open(request, size)?;
+    while transfer.offset() < transfer.size() {
+        if let Err(error) = s.files.workspace_chunk(&mut transfer, fill) {
+            let _ = s.files.workspace_abort(transfer);
+            return Err(error.into());
+        }
+    }
+    let started = rustic_sdk::runtime::clock();
+    let operation = s.files.workspace_commit(transfer)?;
+    Ok((
+        operation,
+        rustic_sdk::runtime::clock().saturating_sub(started),
+    ))
 }
 
 /// Diagnostic cut of a V7 tracked write: send `chunks` chunks, have the owner

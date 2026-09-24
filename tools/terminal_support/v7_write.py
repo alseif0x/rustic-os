@@ -65,7 +65,10 @@ RECEIPT = re.compile(
     r"previous_version=v_([0-9a-f]{16}) version=v_([0-9a-f]{16}) size=(0|[1-9][0-9]{0,6}) "
     r"epoch=e_([0-9a-f]{16}) key=k_([0-9a-f]{16}) sha256=([0-9a-f]{64})$"
 )
-TIMING = re.compile(r"^write-v7 size=(0|[1-9][0-9]{0,6}) ticks=(0|[1-9][0-9]{0,15})$")
+# A plain write also times its commit exchange alone (`commit_ticks`); the
+# `probe` diagnostic prints the line without it.
+TIMING = re.compile(r"^write-v7 size=(0|[1-9][0-9]{0,6}) ticks=(0|[1-9][0-9]{0,15})"
+                    r"(?: commit_ticks=(0|[1-9][0-9]{0,15}))?$")
 LOOKUP_TIMING = re.compile(r"^lookup-v7 size=(0|[1-9][0-9]{0,6}) ticks=(0|[1-9][0-9]{0,15})$")
 CUT = re.compile(r"^cut-v7 chunks=([1-9][0-9]{0,6}) bytes=([1-9][0-9]{0,6}) job=([1-9][0-9]{0,15}) "
                  r"old=([A-Za-z]+) new=([A-Za-z]+) ticks=(0|[1-9][0-9]{0,15})$")
@@ -124,8 +127,20 @@ def decode(text, timing=TIMING):
         "key": int(receipt[7], 16),
         "sha256": receipt[8],
         "ticks": int(timings[0][2]),
+        **_commit_ticks(timings[0]),
         "lines": [operation_line, receipt_line],
     }
+
+
+def _commit_ticks(timing):
+    """The commit-only ticks of a `write-v7` line, when it carries them."""
+    groups = timing.groups()
+    if len(groups) < 3 or groups[2] is None:
+        return {}
+    commit = int(groups[2])
+    if commit > int(groups[1]):
+        raise ValueError("the commit took longer than the whole write")
+    return {"commit_ticks": commit}
 
 
 def decode_cut(text):
@@ -258,6 +273,8 @@ def _first_boot(uart, refs, lineage, epoch, version, seeded_records):
         receipt = _write(uart, refs, version, epoch, key, seed, size)
         if "error" in receipt:
             raise AssertionError(f"write {index} of {size} bytes failed: {receipt['error']}")
+        if "commit_ticks" not in receipt:
+            raise AssertionError(f"write {index} did not report its commit ticks")
         check_receipt(receipt, lineage, refs["workspace"], refs["resource"], version, epoch, key,
                       pattern(seed, size))
         writes.append({**receipt, "seed": seed})
@@ -403,7 +420,7 @@ def verify(image, volume_tool, output=None):
             match_records(final, first["writes"], seeded["workspace"]["id"], scratch["id"])
             check_absent(final, CUT_KEY)
 
-        timings = [{"size": item["size"], "guest_ticks": item["ticks"],
+        timings = [{"size": item["size"], "guest_ticks": item["ticks"], "commit_ticks": item["commit_ticks"],
                     "guest_seconds": item["ticks"] / 100, "host_seconds": item["host_seconds"]}
                    for item in first["writes"]]
         evidence = {
@@ -445,7 +462,7 @@ def verify(image, volume_tool, output=None):
               "match every receipt and none exists for the revoked key.", flush=True)
         for item in timings:
             print(f"V7 write: size={item['size']} guest_ticks={item['guest_ticks']} "
-                  f"host_seconds={item['host_seconds']}", flush=True)
+                  f"commit_ticks={item['commit_ticks']} host_seconds={item['host_seconds']}", flush=True)
         print(f"V7 revocation: chunks={first['cut']['chunks']} guest_ticks={first['cut']['ticks']} "
               f"host_seconds={first['cut']['host_seconds']}", flush=True)
         for item in second["lookups"]:
