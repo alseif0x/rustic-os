@@ -63,6 +63,32 @@ pub const TASKS_OWNER_FORGET: u64 = 34;
 /// one. An ordinary apply needs no cut and stays the [`ACT`] verb
 /// [`actor::TASKS_APPLY`].
 pub const TASKS_OWNER_APPLY_CUT: u64 = 35;
+/// Stage one ELF and its 128-byte manifest from the read-only V7 file service as
+/// a single owner-pinned version pair, producing a dormant child that is never
+/// started by this request. Accepted only in the V7 file profile.
+///
+/// Words: `[36, lineage_lo, lineage_hi, workspace_root, elf, manifest,
+/// elf_version, manifest_version]`, where the lineage words are the two
+/// little-endian halves of the 16-byte workspace lineage, `elf` and `manifest`
+/// are resource objects of that workspace and both versions are the exact
+/// `v_...` values the owner observed. The reply is a job; its completed result is
+/// `[0, pid, elf_version, manifest_version]` or one [`stage`] refusal status.
+pub const STAGE_V7: u64 = 36;
+/// Refusal statuses of a completed [`STAGE_V7`] job, beside the generic owner
+/// statuses `1` invalid, `2` denied, `3` busy and `4` service failure.
+pub mod stage {
+    /// The pair observations disagreed: lineage, resource, version, retry epoch,
+    /// offset, size or EOF differed from the pinned pair, or the manifest was not
+    /// exactly one 128-byte range.
+    pub const PAIR_MISMATCH: u64 = 9;
+    /// The ELF size is outside the kernel staging bounds.
+    pub const IMAGE_SIZE: u64 = 10;
+    /// A file-service refusal `e` is reported as `FILE_ERROR_BASE + e`.
+    pub const FILE_ERROR_BASE: u64 = 32;
+    /// A kernel staging refusal with runtime error index `e` is reported as
+    /// `KERNEL_ERROR_BASE + e`.
+    pub const KERNEL_ERROR_BASE: u64 = 64;
+}
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Separate native tasks application; it never receives console authority.

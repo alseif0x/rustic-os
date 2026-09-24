@@ -54,11 +54,15 @@ For a subsequent range of the same file version, replace `-` with the returned `
 The separate `mode=terminal-v7` fixture is intentionally narrower: V7 has no
 path lookup/stat, mutation or legacy-file route, so use canonical workspace and
 resource IDs returned by `rustic-volume seed7` with `read-ref`. Its
-`python3 tools/v7_read_test.py` acceptance reads the full selected 324,344-byte
-native ELF and its 128-byte manifest through the guest SDK/service in two boots,
-plus a read after service restart. It records byte/hash, version and
-unchanged-volume evidence under `artifacts/boot/terminal-v7/`; it is not an
-application launch test or a write-profile acceptance.
+`python3 tools/v7_read_test.py` acceptance reads the full selected native ELF
+(324,528 bytes in the latest run) and its 128-byte manifest through the guest
+SDK/service in two boots, plus a read after service restart. The same run has
+the supervisor stage that pair as a dormant, never-started child with
+`stage-ref` and refuses stale pinned versions; see
+[storage-sourced dormant images](NATIVE-RUNTIME.md#storage-sourced-dormant-images-modeterminal-v7).
+It records byte/hash, version, staging and unchanged-volume evidence under
+`artifacts/boot/terminal-v7/`; it is not an application start/launch test or a
+write-profile acceptance.
 
 The deterministic `act PID api-read` action also uses the full SDK path. `act PID read-open` and `read-next` expose a controlled pause between chunks for owner-edit/revocation tests. `act PID fill` replaces the granted file with the fixed 1,024-byte binary fixture and therefore requires write authority. These are native acceptance diagnostics, not additional advertised service-v1 operations.
 

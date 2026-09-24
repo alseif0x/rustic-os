@@ -61,11 +61,12 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 | `tasks forget INTENT_KEY` | Explicitly discard recovery evidence; does not cancel or undo an effect |
 | `ref WORKSPACE_PATH FILE_PATH` | Resolve authorized native objects to stable workspace/resource references |
 | `read-ref WORKSPACE RESOURCE VERSION\|- OFFSET LENGTH` | Read a bounded range through the shared SDK; print pinned version, range hash, epoch and exact bytes as hex |
+| `stage-ref WORKSPACE ELF MANIFEST ELF_VERSION MANIFEST_VERSION` | `mode=terminal-v7` only: the supervisor reads the pinned ELF/manifest pair with its own read-only authority and stages a dormant child that is never started; returns a job for `job-status`. See [storage-sourced dormant images](NATIVE-RUNTIME.md#storage-sourced-dormant-images-modeterminal-v7) |
 | `echo TEXT...`, `status` | Print arguments; show the previous command's status |
 | `run spin`, `run fault`, `run exit` | Preemptible utility, deliberate isolated invalid-instruction fault, or exit code 7 |
 | `run read FILE`, `run probe FILE OTHER` | Read selected file; probe additionally verifies denial of the other file and privileged kernel/console calls |
 | `run watch FILE [TICKS]` | Repeated reads in a separate utility; optional grant lifetime in PIT ticks (100 ticks/second) |
-| `ps`, `kill PID`, `reap PID` | Inspect processes; terminate/reap only this shell's utility children |
+| `ps`, `kill PID`, `reap PID` | Inspect processes; terminate/reap only this shell's utility children or the one staged dormant child (`ps` program `staged`) |
 | `permissions [PID]`, `revoke PID` | Inspect file scope/rights/generation/deadline/report; request a fence for the whole client/helper session; poll `revocation PID` for access and effect status |
 | `session FILE OTHER [TICKS]`, `helper PID FILE OTHER`, `act PID ACTION`, `move-check C H` | Run the [deterministic client/helper authority mission](AUTHORITY.md); explicit subsets and shared revocation |
 | `act PID api-read\|read-open\|read-next\|fill` | Run [native read diagnostics](FILES-READ.md), including a controlled pause between chunks; `fill` requires write authority |

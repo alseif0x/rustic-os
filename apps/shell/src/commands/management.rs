@@ -15,6 +15,8 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                     "job={} pending kind={} phase={} service={} pending_io={}\r\n",
                     r[1], r[2], r[3], r[4], r[5]
                 ));
+            } else if r[2] == p::STAGE_V7 {
+                super::staging::display(r)?;
             } else {
                 output::format(format_args!(
                     "job={} complete kind={} status={} value={} token={} generation={}\r\n",

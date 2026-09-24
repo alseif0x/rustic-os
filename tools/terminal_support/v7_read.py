@@ -3,6 +3,7 @@
 import base64
 import json
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import time
@@ -17,6 +18,179 @@ from .read_cases import read as read_range
 ROOT = environment.ROOT
 CHUNK_BYTES = 1024
 BOOT_TIMEOUT = 300
+STAGE_TIMEOUT = 200  # above the supervisor budget of 15,000 ticks
+# Supervisor owner statuses from crates/abi/src/supervisor.rs (`stage`).
+FILE_ERROR_BASE = 32
+FILE_VERSION = 13
+STAGE_KIND = 36
+SUPERSEDED = 6
+COPYING_PHASE = 2
+PROCESS_ROW = re.compile(r"(?m)^(\d+) (\w+) (\d+) (\d+) (\d+) (\d+) (\S+)\r?$")
+
+
+def version_text(value):
+    return f"v_{value:016x}"
+
+
+def stage_outcome(text):
+    """Decode one `job-status` answer for a stage job; anything else is local failure."""
+    text = text.replace("\r\n", "\n")
+    pending = re.search(r"(?m)^job=(\d+) pending kind=(\d+) phase=(\d+) service=\d+ pending_io=\d+$", text)
+    if pending:
+        if int(pending[2]) != STAGE_KIND:
+            raise ValueError("pending job is not a stage job")
+        return {"job": int(pending[1]), "state": "pending", "phase": int(pending[3])}
+    staged = re.search(
+        r"(?m)^job=(\d+) complete kind=(\d+) status=0 staged pid=(\d+) "
+        r"elf_version=(v_[0-9a-f]{16}) manifest_version=(v_[0-9a-f]{16}) state=dormant$",
+        text,
+    )
+    if staged:
+        if int(staged[2]) != STAGE_KIND or "\nerror:" in text:
+            raise ValueError("ambiguous stage success")
+        return {"job": int(staged[1]), "state": "staged", "pid": int(staged[3]),
+                "elf_version": staged[4], "manifest_version": staged[5]}
+    refused = re.search(r"(?m)^job=(\d+) complete kind=(\d+) status=([1-9]\d*)$", text)
+    reason = re.search(r"(?m)^error: stage refused: (.+)$", text)
+    if refused and reason and int(refused[2]) == STAGE_KIND:
+        return {"job": int(refused[1]), "state": "refused", "status": int(refused[3]),
+                "reason": reason[1].strip()}
+    raise ValueError(f"unrecognized stage job output: {text!r}")
+
+
+def _programs(rows):
+    """Process identity only: resident service states change between listings."""
+    return {pid: row["program"] for pid, row in rows.items()}
+
+
+def _processes(uart):
+    rows = {}
+    for row in PROCESS_ROW.finditer(uart.command("ps")):
+        rows[int(row[1])] = {"state": row[2], "program": row[7]}
+    return rows
+
+
+def _request_stage(uart, workspace, elf, manifest, elf_version, manifest_version):
+    requested = uart.command(
+        f"stage-ref {workspace} {elf} {manifest} {elf_version} {manifest_version}",
+        "stage requested job=",
+    )
+    return int(re.search(r"stage requested job=(\d+)", requested)[1])
+
+
+def _poll_stage(uart, job, done, delay=0.25):
+    started = time.monotonic()
+    while True:
+        uart.send(f"job-status {job}\r".encode("ascii"))
+        outcome = stage_outcome(uart.until())
+        if outcome["job"] != job:
+            raise AssertionError("job-status answered another job")
+        if done(outcome):
+            outcome["host_seconds"] = round(time.monotonic() - started, 3)
+            return outcome
+        if outcome["state"] != "pending":
+            raise AssertionError(f"stage job ended early: {outcome}")
+        if time.monotonic() - started > STAGE_TIMEOUT:
+            raise AssertionError("stage job did not reach the expected state")
+        time.sleep(delay)
+
+
+def _stage(uart, *pair):
+    return _poll_stage(uart, _request_stage(uart, *pair), lambda outcome: outcome["state"] != "pending")
+
+
+def _cancel_case(uart, references, seeded):
+    """Restart the file service while a stage has its kernel transaction open.
+
+    The job must end superseded without a process. The stage that follows the
+    restart in the caller then proves the kernel transaction was aborted: a
+    leftover transaction would refuse the next STAGE_BEGIN as busy.
+    """
+    workspace = references["elf"]["workspace"]
+    pair = (workspace, references["elf"]["resource"], references["manifest"]["resource"],
+            version_text(seeded["elf"]["version"]), version_text(seeded["manifest"]["version"]))
+    baseline = _programs(_processes(uart))
+    job = _request_stage(uart, *pair)
+    copying = _poll_stage(
+        uart, job, lambda outcome: outcome["state"] == "pending" and outcome["phase"] == COPYING_PHASE,
+        delay=0.05,
+    )
+    uart.command("restart files", "utility sessions revoked")
+    uart.send(f"job-status {job}\r".encode("ascii"))
+    outcome = stage_outcome(uart.until())
+    if outcome["state"] != "refused" or outcome["status"] != SUPERSEDED:
+        raise AssertionError(f"cancelled stage did not report superseded: {outcome}")
+    # The restart gives the file service a new PID; compare the programs only.
+    after = _programs(_processes(uart))
+    if sorted(after.values()) != sorted(baseline.values()) or "staged" in after.values():
+        raise AssertionError("cancelled stage left a process behind")
+    return {"job": job, "restarted_after_seconds": copying["host_seconds"],
+            "status": outcome["status"], "reason": outcome["reason"], "leftover_processes": 0}
+
+
+def _stage_cases(uart, references, seeded, elf_size):
+    """Refuse stale pins without a child, then stage, inspect, kill and reap one dormant child."""
+    workspace = references["elf"]["workspace"]
+    elf, manifest = references["elf"]["resource"], references["manifest"]["resource"]
+    elf_version = version_text(seeded["elf"]["version"])
+    manifest_version = version_text(seeded["manifest"]["version"])
+    baseline = _programs(_processes(uart))
+    if "staged" in baseline.values():
+        raise AssertionError("a staged child exists before staging")
+    refusals = []
+    for name, pins in (
+        ("stale_elf_version", (version_text(seeded["elf"]["version"] + 1), manifest_version)),
+        ("stale_manifest_version", (elf_version, version_text(seeded["manifest"]["version"] + 1))),
+    ):
+        outcome = _stage(uart, workspace, elf, manifest, *pins)
+        if outcome["state"] != "refused" or outcome["status"] != FILE_ERROR_BASE + FILE_VERSION:
+            raise AssertionError(f"{name} was not refused as a version conflict: {outcome}")
+        if _programs(_processes(uart)) != baseline:
+            raise AssertionError(f"{name} refusal left a process behind")
+        refusals.append({"case": name, "status": outcome["status"], "reason": outcome["reason"]})
+
+    staged = _stage(uart, workspace, elf, manifest, elf_version, manifest_version)
+    if staged["state"] != "staged":
+        raise AssertionError(f"current pair was not staged: {staged}")
+    if (staged["elf_version"], staged["manifest_version"]) != (elf_version, manifest_version):
+        raise AssertionError("stage result does not echo the pinned versions")
+    pid = staged["pid"]
+    row = _processes(uart).get(pid)
+    if row != {"state": "dormant", "program": "staged"}:
+        raise AssertionError(f"staged child is not a dormant dynamic image: {row}")
+    facts = re.search(
+        r"scope=0 rights=0 generation=(\d+) expires=0 report=(\d+) bytes=(\d+) other=(\d+)",
+        uart.command(f"permissions {pid}"),
+    )
+    ranges = (elf_size + CHUNK_BYTES - 1) // CHUNK_BYTES
+    if not facts or int(facts[3]) != elf_size or int(facts[4]) != ranges or int(facts[1]) == 0:
+        raise AssertionError("staged child facts do not match the provisioned ELF")
+    uart.command(
+        f"stage-ref {workspace} {elf} {manifest} {elf_version} {manifest_version}",
+        "error: service busy or full",
+    )
+    uart.command(f"kill {pid}", "ok exit_kind=0 code=0")
+    uart.command(f"reap {pid}", "ok exit_kind=3 code=0")
+    if _programs(_processes(uart)) != baseline:
+        raise AssertionError("reaping the staged child did not restore the process table")
+    uart.command(f"reap {pid}", "error: service denied")
+    return {
+        "refusals": refusals,
+        "staged": {
+            "pid": pid,
+            "state": row["state"],
+            "program": row["program"],
+            "elf_version": elf_version,
+            "manifest_version": manifest_version,
+            "kernel_generation": int(facts[1]),
+            "guest_ticks": int(facts[2]),
+            "bytes": int(facts[3]),
+            "ranges": int(facts[4]),
+            "host_seconds": staged["host_seconds"],
+        },
+        "second_stage_while_staged": "busy",
+        "killed_and_reaped": True,
+    }
 
 
 def _volume_json(binary, *arguments):
@@ -101,7 +275,7 @@ def verify(image, volume_tool, output=None):
     if environment.digest(manifest) != metadata["native_applications"]["file-server"][".manifest"]:
         raise RuntimeError("file-server manifest differs from the artifact recorded by the boot build")
 
-    reads, serials, logs = [], [], []
+    reads, stages, serials, logs = [], [], [], []
     started = time.monotonic()
     (output / "result.json").unlink(missing_ok=True)
     (output / "terminal-v7.json").unlink(missing_ok=True)
@@ -151,7 +325,10 @@ def verify(image, volume_tool, output=None):
                         ]
                         reads.append({"boot": phase, "full": full_reads})
                         if phase == 1:
-                            uart.command("restart files", "utility sessions revoked")
+                            stage = _stage_cases(uart, references, seeded, elf.stat().st_size)
+                            stages.append({"boot": phase, "service_restart": False, **stage})
+                            # This case performs the service restart itself.
+                            cancelled = _cancel_case(uart, references, seeded)
                             offsets = [0, elf.stat().st_size // 2, elf.stat().st_size - CHUNK_BYTES]
                             samples = _sample_file(uart, references["elf"], elf, offsets)
                             for sample, offset in zip(samples, offsets):
@@ -159,6 +336,9 @@ def verify(image, volume_tool, output=None):
                                 if sample != {"offset": offset, "length": expected_length}:
                                     raise AssertionError("post-restart range read returned the wrong extent")
                             reads.append({"after_service_restart": samples})
+                            stage = _stage_cases(uart, references, seeded, elf.stat().st_size)
+                            stages.append({"boot": phase, "service_restart": True,
+                                           "after_cancelled_stage": cancelled, **stage})
                         uart.send(b"exit\r")
                         uart.until(b"RUSTIC TERMINAL stopped=1 reclaimed=1")
                         if vm.wait(timeout=10) != 33:
@@ -184,6 +364,7 @@ def verify(image, volume_tool, output=None):
                 "manifest": _read_file_summary(manifest, metadata["native_applications"]["file-server"][".manifest"]),
             },
             "reads": reads,
+            "stages": stages,
             "volume": {
                 "bytes": volume_bytes,
                 "sha256_before": before_sha256,
@@ -203,6 +384,18 @@ def verify(image, volume_tool, output=None):
         }
         (output / "result.json").write_text(json.dumps(result, separators=(",", ":")) + "\n")
         print("V7 read acceptance: full ELF and manifest read over UART in two boots; service restart verified.", flush=True)
+        for stage in stages:
+            if "after_cancelled_stage" in stage:
+                cancelled = stage["after_cancelled_stage"]
+                print(f"V7 stage cancel: restart during copy -> status={cancelled['status']} "
+                      f"({cancelled['reason']}), no leftover process; the next stage succeeded.", flush=True)
+            staged = stage["staged"]
+            print(
+                f"V7 stage: pid={staged['pid']} dormant bytes={staged['bytes']} ranges={staged['ranges']} "
+                f"guest_ticks={staged['guest_ticks']} host_seconds={staged['host_seconds']} "
+                f"after_restart={stage['service_restart']}; stale ELF/manifest pins refused without a child.",
+                flush=True,
+            )
         return result
     finally:
         (output / "serial.log").write_bytes(b"\n".join(path.read_bytes() for path in serials if path.exists()))

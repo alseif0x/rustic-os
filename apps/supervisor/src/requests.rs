@@ -31,7 +31,7 @@ impl State {
             s::TASKS_CANDIDATE => 3,
             s::TASKS_OWNER_FORGET | s::TASKS_OWNER_APPLY_CUT => 3,
             s::TASKS_OWNER_BEGIN | s::TASKS_OWNER_CHUNK => 7,
-            s::TASKS_PREVIEW | s::TASKS_OWNER_EDIT => 8,
+            s::TASKS_PREVIEW | s::TASKS_OWNER_EDIT | s::STAGE_V7 => 8,
             s::HOLD_IO => 3,
             s::RUN => 6,
             // The seventh word carries the deliberate discard flag for a live stop.
@@ -90,16 +90,22 @@ impl State {
                 0,
             ),
             s::KILL => {
-                if !self.children.iter().flatten().any(|c| c.pid == w[1]) {
+                if !self.children.iter().flatten().any(|c| c.pid == w[1]) && !self.staged_pid(w[1])
+                {
                     return Err(2);
                 }
                 call([k::KILL, w[1], 0, 0, 0, 0, 0, 0]).map_err(|_| 3u64)?;
                 Ok([0; 8])
             }
+            s::REAP if self.staged_pid(w[1]) => self.reap_staged(w[1]),
             s::REAP => self.reap(w[1]),
+            s::STAGE_V7 => self.stage_v7(w),
             s::PERMISSIONS => {
                 if w[1] == 0 {
                     return Ok([0, 0, 15, 0, 0, 0, 0, 0]);
+                }
+                if let Some(facts) = self.staged_facts(w[1]) {
+                    return Ok(facts);
                 }
                 let c = self
                     .children

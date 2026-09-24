@@ -68,7 +68,7 @@ impl Manager {
             return Err(runtime::Error::Busy);
         }
         let length = usize::try_from(words[1]).map_err(|_| runtime::Error::Size)?;
-        if !(64..=runtime::MAX_STAGED_IMAGE_BYTES).contains(&length) {
+        if !(runtime::MIN_STAGED_IMAGE_BYTES..=runtime::MAX_STAGED_IMAGE_BYTES).contains(&length) {
             return Err(runtime::Error::Size);
         }
         let available = words[3];

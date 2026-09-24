@@ -112,6 +112,7 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                             2 => "shell",
                             3 => "utility",
                             4 => "tasks",
+                            5 => "staged",
                             _ => "?",
                         }
                     ));

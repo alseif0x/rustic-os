@@ -28,6 +28,8 @@ pub const STAGE_COPY: u64 = 17;
 pub const STAGE_COMMIT: u64 = 18;
 pub const STAGE_ABORT: u64 = 19;
 pub const DYNAMIC_IMAGE: u64 = 5;
+/// Smallest ELF byte length STAGE_BEGIN accepts.
+pub const MIN_STAGED_IMAGE_BYTES: usize = 64;
 pub const MAX_STAGED_IMAGE_BYTES: usize = 512 * 1024;
 pub const STAGE_CHUNK_BYTES: usize = 4096;
 pub const FILES: u64 = 1;
