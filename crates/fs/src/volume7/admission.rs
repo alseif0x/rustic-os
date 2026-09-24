@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Durable staged admission, explicit cancellation, and admitted replacement.
+//! Durable staged admission (borrowed or streamed), explicit cancellation, and
+//! admitted replacement.
 
 use crate::extent::Extent;
 use crate::format7::{MAX_EXTENTS, Record7, RecordState};
 use crate::{Error, Kind, PreventionReason};
 
-use super::payload::{payload_crc, plan_payload};
+use super::payload::{PayloadPlan, payload_crc, plan_payload};
 use super::poll::{Candidate7, PollDisk7, PollPublication7, validate_candidate};
+use super::stage::{Opening, Stage7, Stage7Kind, StageMode};
 use super::{Volume7, WriteIdentity7, replacement::retained_owns_run};
 
 impl Volume7 {
@@ -28,17 +30,111 @@ impl Volume7 {
             return Err(Error::Size);
         }
         self.validate_identity(identity)?;
+        if self.stage_holds_scope(identity) {
+            return Err(Error::Busy);
+        }
+        let length = bytes.len() as u32;
+        match self.open_admission(identity, expected_version, length)? {
+            Opening::Retry(record) => Ok(PollPublication7::retry(self, disk, record, bytes)),
+            Opening::Fresh(plan) => {
+                let candidate = self.admission_candidate(
+                    identity,
+                    expected_version,
+                    length,
+                    payload_crc(bytes),
+                    plan,
+                )?;
+                Ok(PollPublication7::publish(
+                    self,
+                    disk,
+                    candidate,
+                    Some(bytes),
+                ))
+            }
+        }
+    }
 
+    /// Finish a fully written admission stage as a pollable publication.
+    ///
+    /// A fresh stage's payload is already written, so the publication starts
+    /// at the payload flush and then follows the same barriers as
+    /// [`Volume7::prepare_admission`]. The file version, epoch, retry scope and
+    /// receipt slot are rechecked and the candidate validated first; a refusal
+    /// releases the stage without I/O or fencing. A verifying retry returns a
+    /// settled publication with the retained record; as in the poll retry path,
+    /// a snapshot CRC mismatch returns [`Error::Corrupt`] and fences, and a
+    /// byte difference returns [`Error::IdempotencyConflict`]. A stage of
+    /// another kind or with sectors still expected is refused with
+    /// [`Error::Invalid`] and stays open; otherwise the stage ends and the
+    /// token is stale afterwards.
+    pub fn finish_admission<'a, D: PollDisk7>(
+        &'a mut self,
+        disk: &'a mut D,
+        stage: &mut Stage7,
+    ) -> Result<PollPublication7<'a, D>, Error> {
+        self.ready()?;
+        let slot = self.take_finishable(stage, Stage7Kind::Admission)?;
+        match slot.mode {
+            StageMode::Retry { record, matches } => {
+                if slot.payload_crc() != record.payload_crc32 {
+                    self.fenced = true;
+                    return Err(Error::Corrupt);
+                }
+                if !matches {
+                    return Err(Error::IdempotencyConflict);
+                }
+                // Execution or cancellation may have advanced the retained
+                // record while the stage was open; report its current state.
+                let current = self
+                    .find_retry(slot.identity)
+                    .copied()
+                    .ok_or(Error::Corrupt)?;
+                Ok(PollPublication7::replay(self, disk, current))
+            }
+            StageMode::Fresh(plan) => {
+                if self.find_retry(slot.identity).is_some() {
+                    return Err(Error::IdempotencyConflict);
+                }
+                let candidate = self.admission_candidate(
+                    slot.identity,
+                    slot.expected_version,
+                    slot.length,
+                    slot.payload_crc(),
+                    plan,
+                )?;
+                Ok(PollPublication7::staged(self, disk, candidate))
+            }
+        }
+    }
+
+    /// Admission preflight: exact retry rules, then the fresh target and a plan
+    /// that avoids every open stage's reservation.
+    pub(super) fn open_admission(
+        &mut self,
+        identity: WriteIdentity7,
+        expected_version: u64,
+        length: u32,
+    ) -> Result<Opening, Error> {
         if let Some(record) = self.find_retry(identity).copied() {
-            if !same_request(&record, identity, expected_version, bytes.len()) {
+            if !same_request(&record, identity, expected_version, length as usize) {
                 return Err(Error::IdempotencyConflict);
             }
-            return Ok(PollPublication7::retry(self, disk, record, bytes));
+            return Ok(Opening::Retry(record));
         }
+        self.admission_target(identity, expected_version)?;
+        let plan = plan_payload(self.planning_map(), length as usize)?;
+        Ok(Opening::Fresh(plan))
+    }
+
+    /// The receipt slot and admission number a fresh admission would use.
+    fn admission_target(
+        &self,
+        identity: WriteIdentity7,
+        expected_version: u64,
+    ) -> Result<(usize, u64), Error> {
         if identity.retry_epoch != self.header.epoch {
             return Err(Error::ExpiredEpoch);
         }
-
         let node_index = self
             .nodes
             .iter()
@@ -51,11 +147,7 @@ impl Volume7 {
         if node.version != expected_version {
             return Err(Error::Version);
         }
-        let record_slot = self
-            .records
-            .iter()
-            .position(Option::is_none)
-            .ok_or(Error::Full)?;
+        let record_slot = self.free_record_slot()?;
         let admission_number = self
             .header
             .sequence
@@ -64,7 +156,19 @@ impl Volume7 {
         if identity.instance > admission_number {
             return Err(Error::Invalid);
         }
-        let plan = plan_payload(&self.map, bytes.len())?;
+        Ok((record_slot, admission_number))
+    }
+
+    /// Build and validate the admitted candidate for payload already planned.
+    fn admission_candidate(
+        &mut self,
+        identity: WriteIdentity7,
+        expected_version: u64,
+        length: u32,
+        payload_crc32: u32,
+        plan: PayloadPlan,
+    ) -> Result<Candidate7, Error> {
+        let (record_slot, admission_number) = self.admission_target(identity, expected_version)?;
         let mut candidate_record = Record7 {
             subject: identity.subject,
             workspace: identity.workspace,
@@ -76,8 +180,8 @@ impl Volume7 {
             committed: 0,
             admission_number,
             terminal: 0,
-            length: bytes.len() as u32,
-            payload_crc32: payload_crc(bytes),
+            length,
+            payload_crc32,
             state: RecordState::Admitted,
             prevention: None,
             extents_used: plan.used as u8,
@@ -90,12 +194,7 @@ impl Volume7 {
         let mut candidate = Candidate7::empty(record_slot, candidate_record);
         candidate.added = plan;
         validate_candidate(self, candidate)?;
-        Ok(PollPublication7::publish(
-            self,
-            disk,
-            candidate,
-            Some(bytes),
-        ))
+        Ok(candidate)
     }
 
     /// Prepare explicit execution of one durable admission.

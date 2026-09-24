@@ -107,38 +107,15 @@ pub(super) fn write_payload(
     Ok(())
 }
 
-/// Compare a retry with its immutable snapshot and independently verify that
-/// the bytes still match the CRC committed in the retained record.
-pub(super) fn exact_retry(
-    disk: &mut impl Disk,
-    record: &Record7,
-    bytes: &[u8],
-) -> Result<bool, Error> {
-    if bytes.len() != record.length as usize {
-        return Ok(false);
-    }
-    let mut offset = 0;
-    let mut checksum = !0u32;
-    let mut matches = true;
-    let mut block = [0u8; 512];
-    for run in record.runs() {
-        for sector in 0..run.sectors {
-            if offset == bytes.len() {
-                break;
-            }
-            disk.read(PAYLOAD_SECTOR + run.start + sector, &mut block)?;
-            let count = (bytes.len() - offset).min(block.len());
-            crc_update(&mut checksum, &block[..count]);
-            if block[..count] != bytes[offset..offset + count] {
-                matches = false;
-            }
-            offset += count;
+/// The payload-relative sector holding logical sector `index` of `runs`.
+pub(super) fn run_sector(runs: &[Extent], mut index: u64) -> Option<u64> {
+    for run in runs {
+        if index < run.sectors {
+            return Some(run.start + index);
         }
+        index -= run.sectors;
     }
-    if offset != bytes.len() || !checksum != record.payload_crc32 {
-        return Err(Error::Corrupt);
-    }
-    Ok(matches)
+    None
 }
 
 pub(super) fn release_run(map: &mut [u64], run: Extent) -> Result<(), Error> {
