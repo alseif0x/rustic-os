@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Fresh service incarnation: ready -> owner grant -> policy -> shell grant.
+//! An owner revocation of the shell's V7 binding re-runs only the last two
+//! phases, the shell channel and its grant, against the running service.
 use super::super::services::*;
 use rustic_sdk::{files::Client, ipc::Endpoint, process, rpc::Rpc, runtime::abi as k};
+use rustic_supervisor::shell_binding;
 pub(super) struct Mount {
     admin: [u64; 2],
     owner: [u64; 2],
@@ -21,13 +24,25 @@ impl Mount {
             policy: super::policy::Policy::new(),
         }
     }
+    /// Only the shell channel and grant phases, for a running V7 service whose
+    /// owner binding is already in place.
+    pub fn shell_only() -> Self {
+        Self {
+            phase: 3,
+            ..Self::new()
+        }
+    }
     pub fn phase(&self) -> u64 {
         3 + self.phase as u64
     }
+    /// Close what an unfinished mount created. Both ends of a shell channel
+    /// that was never reported are closed, so a grant that raced a failure
+    /// cannot leave a live endpoint behind.
     pub fn cleanup(&self, state: &State) {
         let me = process::id().unwrap_or(0);
         close(me, self.admin[0]);
         close(me, self.owner[0]);
+        close(state.files, self.shell[0]);
         close(state.shell, self.shell[1]);
     }
     pub fn poll(
@@ -100,12 +115,11 @@ impl Mount {
                 // V7 policy: the shell may read and make tracked replacements
                 // as subject 2, a retry scope distinct from the host
                 // provisioner's subject 1 records. The owner stays read-only.
-                let rights = if profile == FileProfile::V5 { 15 } else { 7 };
-                let subject = if profile == FileProfile::V5 { 1 } else { 2 };
-                if let Some(generation) = self.grant(
-                    state,
-                    [32, 0, state.shell, self.shell[0], 0, rights, 0, subject],
-                )? {
+                let words = match profile {
+                    FileProfile::V5 => [32, 0, state.shell, self.shell[0], 0, 15, 0, 1],
+                    FileProfile::V7 => shell_binding::grant(state.shell, self.shell[0]),
+                };
+                if let Some(generation) = self.grant(state, words)? {
                     return Ok(Some([
                         0,
                         state.files,

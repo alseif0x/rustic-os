@@ -5,9 +5,11 @@
 Decision for [#51](https://github.com/alseif0x/rustic-os/issues/51), adopted
 2026-09-22 under the owner's authorization to continue implementation and
 versioned storage/protocol decisions. On 2026-09-23 the native artifact
-measurements were refreshed: `file-server.elf` is 324,344 bytes and
-`block-probe.elf` is 283,816 bytes. V7/profile 2 therefore now supports 512 KiB
-per file; V5/V6 remain frozen. Feature bit 3 identifies this development profile
+measurements were refreshed: `file-server.elf` was 324,344 bytes and
+`block-probe.elf` 283,816 bytes. V7/profile 2 therefore now supports 512 KiB
+per file. On 2026-09-24, after the V7 tracked-write service and its receipt
+lookups, `file-server.elf` measured 364,104 bytes (it grew with the write
+service) and `block-probe.elf` 283,544 bytes; both still fit 512 KiB; V5/V6 remain frozen. Feature bit 3 identifies this development profile
 and the reader refuses earlier 256 KiB V7 images, which must be reprovisioned.
 The current host-tested owner supports
 tracked replacement, durable staged admission, explicit admitted execution,
@@ -223,9 +225,10 @@ This marker does not negotiate availability. The explicit V7 fixture's readiness
 records the 512 KiB file limit, the eight retained-record geometry and, in word
 5 bit 0, that profile-2 tracked writes are served. The service accepts stable
 references, bounded reads, and profile-2 tracked replacements with their
-receipts to write-authorized grants ([V7 tracked writes](FILES-V7-WRITES.md)).
-Profile-2 ID and retry lookups of retained records, descriptors and generic
-service-v1 capabilities are not exposed. Existing clients and schema hashes retain their original
+receipts to write-authorized grants ([V7 tracked writes](FILES-V7-WRITES.md)),
+and profile-2 ID and retry lookups of retained records to grants with the
+inspect right. Descriptors and generic service-v1 capabilities are not
+exposed. Existing clients and schema hashes retain their original
 meaning and 1 KiB limit.
 
 ## Direct tracked replacement
@@ -350,6 +353,18 @@ space is one 512-byte sector regardless of file size. A stale version returns
 error may leave the already copied prefix in the caller's output; callers must
 discard that buffer unless the method succeeds.
 
+`Volume7::read_retained_range(disk, record, offset, out)` reads the immutable
+snapshot of a retained record through the same sector walk and one-sector
+scratch space. The record must equal one the owner currently retains, field for
+field; any other value, including a record cleared by maintenance, is
+`NotFound` without payload I/O. The snapshot need not be the live content, and
+the file may have been removed. It trusts the mount-time CRC verification of
+every retained snapshot, refuses an offset beyond the record's length with
+`Size` and returns zero at EOF without I/O. The V7 file service streams it to
+compute receipt SHA-256 values for cold lookups; host tests in
+`crates/fs/tests/volume7/read.rs` cover a superseded snapshot after remount,
+a removed file, forged records, bounds and an empty snapshot.
+
 The `rustic-volume seed7` host command creates a fresh disposable V7 image
 exclusively, provisions the `workspaces/application` directory, and writes the
 measured ELF and manifest as tracked files. `report7` remounts the image
@@ -362,7 +377,8 @@ for every range. Reads therefore assume that no writer changes the medium outsid
 the mounted `Volume7` owner. An external media change while mounted is not
 detected by this API; remount validates the whole live payload CRC again. The
 explicit read-only service routes the existing SDK range API to V7; the
-`terminal-v7` QEMU harness verifies the selected 324,344-byte ELF and 128-byte
+`terminal-v7` QEMU harness verifies the selected ELF (324,344 bytes in that
+recorded run; 364,104 bytes in the 2026-09-24 build) and 128-byte
 manifest byte-for-byte in two boots, with another bounded read after service
 restart. It does not execute the file from the workspace or exercise V7 writes.
 
@@ -425,8 +441,8 @@ publication faults and repair are not exercised in the guest.
 Host codec tests cover byte offsets, independently computed CRCs, checksum-valid
 malformed records, temporal states, high monotonic identities, size boundaries
 through 512 KiB, and mutually incompatible wire profiles. The focused sparse
-host-disk suite has 101 v7 cases covering provision/mount, version-pinned bounded
-range reads, tracked commit/replay,
+host-disk suite has 105 v7 cases covering provision/mount, version-pinned bounded
+range reads, retained-snapshot range reads, tracked commit/replay,
 durable admission, pollable retry, execute/cancel, pre-write refusals, retained
 snapshots, torn headers, 105 admission publication cuts, 103 execute/cancel cuts,
 recovery after final-flush errors, and streamed staging (byte-identical media

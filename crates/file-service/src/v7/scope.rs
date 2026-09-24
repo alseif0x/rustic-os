@@ -46,6 +46,23 @@ pub(super) fn authorized_resource(
     Ok(resource_node)
 }
 
+/// Whether a retained record of `workspace`/`object` lies within `scope`, as
+/// far as the live namespace can still show it. The record's identities are
+/// storage facts, never caller claims. A removed object is visible through its
+/// still-live workspace; a record neither identity of which can be placed
+/// inside the scope is not visible, and any lookup failure hides it too.
+pub(super) fn retained_visible(volume: &Volume7, scope: u32, workspace: u32, object: u32) -> bool {
+    if scope == workspace || scope == object {
+        return true;
+    }
+    let Ok(scope_node) = node(volume, scope) else {
+        return false;
+    };
+    [workspace, object].into_iter().any(|id| {
+        node(volume, id).is_ok_and(|live| within(volume, live, scope_node).unwrap_or(false))
+    })
+}
+
 fn node(volume: &Volume7, id: u32) -> Result<Node7, Error> {
     volume.stat(id).map_err(|error| match error {
         FsError::NotFound => Error::Denied,

@@ -6,7 +6,8 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from terminal_support.v7_write import SHELL_SUBJECT, check_receipt, decode, match_records, pattern
+from terminal_support.v7_write import (LOOKUP_TIMING, SHELL_SUBJECT, check_absent, check_receipt, decode,
+                                       decode_cut, lookup_error, match_records, pattern)
 
 
 LINEAGE = "ab" * 16
@@ -55,6 +56,44 @@ class Decode(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 decode(text)
+
+
+class Lookup(unittest.TestCase):
+    def lookup(self, ticks=30):
+        text = answer().split("\r\n", 1)[1].replace("write-v7 size=513 ticks=12", f"lookup-v7 size=513 ticks={ticks}")
+        return f"operation-v7 op_{LINEAGE}_{8:016x}\r\n" + text
+
+    def test_a_lookup_prints_the_same_receipt_lines_as_the_commit(self):
+        found = decode(self.lookup(), LOOKUP_TIMING)
+        self.assertEqual(found["lines"], decode(answer())["lines"])
+        self.assertEqual(found["ticks"], 30)
+
+    def test_a_write_answer_is_not_a_lookup_and_refusals_are_single(self):
+        with self.assertRaises(ValueError):
+            decode(answer(), LOOKUP_TIMING)
+        self.assertEqual(lookup_error("operation-v7 x\r\nerror: OutcomeUnknown\r\n> "), "OutcomeUnknown")
+        for text in (self.lookup(), "error: Denied\r\nerror: Denied\r\n"):
+            with self.assertRaises(ValueError):
+                lookup_error(text)
+
+
+class Cut(unittest.TestCase):
+    def test_the_cut_line_reports_both_observations(self):
+        text = "replace-pattern-v7 a b c d e 6 524288 cut 400\r\ncut-v7 chunks=400 bytes=16000 job=3 old=Closed new=NoTransfer\r\n> "
+        self.assertEqual(decode_cut(text), {"chunks": 400, "bytes": 16000, "job": 3, "old": "Closed", "new": "NoTransfer"})
+        self.assertEqual(decode_cut("error: Version\r\n"), {"error": "Version"})
+
+    def test_a_committed_or_ambiguous_cut_is_rejected(self):
+        for text in (answer(), "cut-v7 chunks=400 bytes=16000 job=3 old=Closed new=NoTransfer\r\nerror: Full\r\n",
+                     "cut-v7 chunks=400 bytes=16000 job=3 old=Closed\r\n"):
+            with self.assertRaises(ValueError):
+                decode_cut(text)
+
+    def test_the_revoked_key_must_leave_no_shell_record(self):
+        seed_record = {"subject": 1, "key": 0x180}
+        check_absent({"records": [seed_record]}, 0x180)
+        with self.assertRaises(AssertionError):
+            check_absent({"records": [seed_record, {"subject": SHELL_SUBJECT, "key": 0x180}]}, 0x180)
 
 
 class Checks(unittest.TestCase):

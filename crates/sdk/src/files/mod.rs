@@ -22,3 +22,4 @@ pub use metadata::Metadata;
 pub use range::{RangeProgress, RangeRead, VerifiedRange};
 pub use rustic_abi::files::{Error, Packet};
 pub use rustic_abi::files::{admission, capabilities, lifecycle, operation, read, reference};
+pub use workspace::WorkspaceTransfer;

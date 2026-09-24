@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Profile-2 tracked replacement through the V7 service: streamed chunks,
-//! receipts, the retained-record budget, retry replay and authority loss.
+//! receipts, the retained-record budget, retry replay and authority loss, and
+//! lookups of retained records by operation ID or retry identity.
+#[path = "v7_write/lookup.rs"]
+mod lookup;
+
 use rustic_abi::files::{
     DATA, Error, OPERATION_PART, Packet, REPLACE_ABORT, REPLACE_CHUNK, REPLACE_COMMIT,
     operation::{self, Key, OperationId, Retry},
@@ -19,6 +23,7 @@ const SUBJECT: u64 = 2;
 #[derive(Default)]
 struct Sparse {
     sectors: BTreeMap<u64, [u8; 512]>,
+    reads: usize,
     writes: usize,
     flushes: usize,
     /// When set, every write once `writes` reaches this count fails.
@@ -27,6 +32,7 @@ struct Sparse {
 
 impl Disk for Sparse {
     fn read(&mut self, sector: u64, bytes: &mut [u8; 512]) -> Result<(), FsError> {
+        self.reads += 1;
         *bytes = self.sectors.get(&sector).copied().unwrap_or([0; 512]);
         Ok(())
     }

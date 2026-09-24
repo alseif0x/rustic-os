@@ -49,11 +49,17 @@ impl Session {
         }
     }
     pub fn wait_job(&mut self, id: u64) -> Result<[u64; 8], super::commands::Error> {
+        let r = self.wait_status(id)?;
+        self.finish_job(r)
+    }
+    /// Wait for a job's completed status words without acting on them, so a
+    /// caller can observe its old binding before adopting a new one.
+    pub fn wait_status(&mut self, id: u64) -> Result<[u64; 8], super::commands::Error> {
         use rustic_sdk::{abi::supervisor as s, rpc::Progress};
         loop {
             let r = self.request([s::JOB_STATUS, id, 0, 0, 0, 0, 0, 0])?;
             if r[0] == 0 {
-                return self.finish_job(r);
+                return Ok(r);
             }
             self.files
                 .progress()
@@ -68,7 +74,10 @@ impl Session {
         if r[3] != 0 {
             return Err(super::commands::Error::Service(r[3]));
         }
-        if r[2] == rustic_sdk::abi::supervisor::RESTART && r[1] > self.binding_job {
+        // A restart and an owner revocation of the V7 binding both report a
+        // fresh binding; only a job newer than the adopted one replaces it.
+        use rustic_sdk::abi::supervisor::{RESTART, REVOKE_SHELL_V7};
+        if matches!(r[2], RESTART | REVOKE_SHELL_V7) && r[1] > self.binding_job {
             let generation = u32::try_from(r[6]).map_err(|_| super::commands::Error::Service(4))?;
             if r[4] == 0 || r[5] == 0 || generation == 0 {
                 return Err(super::commands::Error::Service(4));

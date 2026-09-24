@@ -10,16 +10,16 @@ The native application artifacts that a workspace must eventually carry, as buil
 
 | Artifact | Bytes |
 | --- | ---: |
-| `file-server.elf` | 324,344 |
-| `block-probe.elf` | 283,816 |
-| `shell.elf` | 204,800 |
-| `utility.elf` | 126,656 |
-| `supervisor.elf` | 68,128 |
-| `tasks.elf` | 52,808 |
-| `sdk-probe.elf` | 25,944 |
+| `file-server.elf` | 364,104 |
+| `block-probe.elf` | 283,544 |
+| `shell.elf` | 238,184 |
+| `utility.elf` | 131,352 |
+| `supervisor.elf` | 100,472 |
+| `tasks.elf` | 53,192 |
+| `sdk-probe.elf` | 26,280 |
 | every `*.manifest` | 128 |
 
-The largest shipped executable is **324,344 bytes**, and the manifest that identifies it is 128 bytes. Anything that installs or launches an application from a workspace (#52) therefore needs files of that order, not of the current order. Measurements were refreshed from the current `target/native` build on 2026-09-23.
+The largest shipped executable is **364,104 bytes**, and the manifest that identifies it is 128 bytes. Anything that installs or launches an application from a workspace (#52) therefore needs files of that order, not of the current order. Measurements were refreshed on 2026-09-24 from the `target/native` build that `python3 tools/v7_write_test.py` produced for its `terminal-v7` image (the build left by `cargo xtask check` had larger shell, utility and supervisor artifacts), during the V7 revocation and receipt-lookup increment. `file-server.elf` was 324,344 bytes on 2026-09-23 and grew with the V7 tracked-write service, its lookups and the other changes since; it still fits the 512 KiB (524,288-byte) V7 file limit.
 
 ## Measured limits of the current volume
 
@@ -37,14 +37,14 @@ The largest shipped executable is **324,344 bytes**, and the manifest that ident
 Two structural consequences follow, and they are why raising `MAX_FILE` alone is not enough:
 
 1. **A file is one bank.** One bank is two sectors, exactly 1,024 bytes, so the policy limit and the placement geometry agree today. A larger file needs a bank-per-file mapping (an extent list or a chain) that the format does not have.
-2. **The length field is 16 bits.** Even with extent mapping, `Node.length: u16` caps any file at 65,535 bytes — 3.3 times below the largest artifact measured above.
+2. **The length field is 16 bits.** Even with extent mapping, `Node.length: u16` caps any file at 65,535 bytes — 5.6 times below the largest artifact measured above.
 3. **The fixed structures are small.** 174 sectors bound the whole volume's payload area; a 64 MiB workspace is not a constants change but a different allocation scheme.
 
 Whole-file buffers are the other bound: the file service holds `Transfer.data: [u8; MAX_FILE]` for two slots and the filesystem layer keeps whole-file buffers, so raising the per-file limit multiplies RAM per slot by the same factor. A 1 MiB file with two slots is 2 MiB of RAM before any copy, which must be measured against the reference profile rather than assumed.
 
 ## Selected workload and budget
 
-**Workload:** install and launch one native application artifact from a workspace, the consumer that #52 names. The current largest artifact is `file-server.elf` at 324,344 bytes plus its 128-byte manifest.
+**Workload:** install and launch one native application artifact from a workspace, the consumer that #52 names. The current largest artifact is `file-server.elf` at 364,104 bytes (measured 2026-09-24) plus its 128-byte manifest.
 
 **Budget, pinned to that consumer:**
 

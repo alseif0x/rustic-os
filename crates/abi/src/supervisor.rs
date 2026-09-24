@@ -115,6 +115,20 @@ pub mod launch {
     /// error index `e`, is reported as `KERNEL_ERROR_BASE + e`.
     pub const KERNEL_ERROR_BASE: u64 = 64;
 }
+/// Revoke the shell's own V7 file binding and issue a fresh one, as an owner
+/// job. Accepted only in the V7 file profile.
+///
+/// Words: `[38, 0, 0, 0, 0, 0, 0, 0]`. The supervisor asks the file service to
+/// revoke the shell's client slot, which aborts any open tracked-write stage
+/// without I/O and closes the old endpoint; it then connects a new channel and
+/// grants it the same V7 shell policy (tracked write, subject 2) under a fresh
+/// context. The completed result is `[0, files_pid, endpoint, generation]`,
+/// the same binding words as [`RESTART`], and the shell adopts it the same way.
+/// A failed revocation leaves the old binding in place. A failure after it
+/// (refused or unanswered grant, failed connect, deadline) leaves the shell
+/// without a file binding and the supervisor degraded; [`RESTART`] (`restart
+/// files`) is the recovery path and clears the degraded state.
+pub const REVOKE_SHELL_V7: u64 = 38;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Separate native tasks application; it never receives console authority.
