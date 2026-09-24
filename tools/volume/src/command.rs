@@ -6,9 +6,10 @@ use std::path::Path;
 
 use rustic_abi::application::Manifest;
 use rustic_abi::files::reference::{Resource, Workspace};
+use rustic_fs::format7::{Record7, RecordState};
 use rustic_fs::{
-    DATA_SECTORS, Kind, Node6, VOLUME_SECTORS, Volume, Volume7, WriteIdentity7, format7, mount6,
-    provision6, upgrade6,
+    DATA_SECTORS, Kind, Node6, PreventionReason, VOLUME_SECTORS, Volume, Volume7, WriteIdentity7,
+    format7, mount6, provision6, upgrade6,
 };
 use sha2::{Digest, Sha256};
 
@@ -325,10 +326,20 @@ pub(crate) fn report7(image: &Path) -> Result<String, String> {
     let free_sectors = volume
         .free_sectors()
         .map_err(|error| format!("v7 map unavailable: {error:?}"))?;
+    let recovered = volume
+        .recovered_from_header()
+        .map_err(|error| format!("v7 header state unavailable: {error:?}"))?;
+    let records: Vec<String> = volume
+        .retained_records()
+        .map_err(|error| format!("v7 records unavailable: {error:?}"))?
+        .iter()
+        .enumerate()
+        .filter_map(|(slot, record)| record.map(|record| record_json(slot, &record)))
+        .collect();
     Ok(format!(
         "{{\"lineage\":\"{}\",\"sequence\":{},\"epoch\":{},\"generation\":{},\
-         \"next\":{},\"objects\":{},\"free_sectors\":{},\"workspace\":{{\"id\":4,\"text\":\"{}\"}},\
-         \"nodes\":[{}]}}",
+         \"next\":{},\"objects\":{},\"free_sectors\":{},\"recovered\":{},\
+         \"workspace\":{{\"id\":4,\"text\":\"{}\"}},\"nodes\":[{}],\"records\":[{}]}}",
         hex(&header.lineage),
         header.sequence,
         header.epoch,
@@ -336,9 +347,44 @@ pub(crate) fn report7(image: &Path) -> Result<String, String> {
         header.next,
         live_nodes.len(),
         free_sectors,
+        recovered,
         workspace_text(header.lineage, 4)?,
         live_nodes.join(","),
+        records.join(","),
     ))
+}
+
+/// One verified retained record, for comparison with an independent reader.
+fn record_json(slot: usize, record: &Record7) -> String {
+    let state = match record.state {
+        RecordState::DirectCommitted => "direct_committed",
+        RecordState::Admitted => "admitted",
+        RecordState::Cancelled => "cancelled",
+        RecordState::AdmittedCommitted => "admitted_committed",
+    };
+    let cause = match record.prevention {
+        None => "null",
+        Some(PreventionReason::Unknown) => "\"unknown\"",
+        Some(PreventionReason::Requested) => "\"requested\"",
+        Some(PreventionReason::VersionConflict) => "\"version_conflict\"",
+        Some(PreventionReason::AuthorityLost) => "\"authority_lost\"",
+    };
+    format!(
+        "{{\"slot\":{slot},\"state\":\"{state}\",\"cause\":{cause},\"subject\":{},\
+         \"workspace\":{},\"object\":{},\"instance\":{},\"epoch\":{},\"key\":{},\
+         \"previous\":{},\"committed\":{},\"admission\":{},\"terminal\":{},\"size\":{}}}",
+        record.subject,
+        record.workspace,
+        record.object,
+        record.instance,
+        record.retry_epoch,
+        record.retry_key,
+        record.previous,
+        record.committed,
+        record.admission_number,
+        record.terminal,
+        record.length,
+    )
 }
 
 fn write_identity(workspace: u32, object: u32, instance: u64, retry_epoch: u64) -> WriteIdentity7 {
@@ -672,6 +718,12 @@ mod tests {
         assert!(report.contains(&format!("\"lineage\":\"{LINEAGE}\"")));
         assert!(report.contains("\"name\":\"fixture.elf\""));
         assert!(report.contains("\"name\":\"fixture.manifest\""));
+        assert!(report.contains("\"recovered\":false"));
+        assert!(
+            report.contains(
+                "\"records\":[{\"slot\":0,\"state\":\"direct_committed\",\"cause\":null,"
+            )
+        );
     }
 
     #[test]

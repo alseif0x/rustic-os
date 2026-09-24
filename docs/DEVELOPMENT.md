@@ -152,6 +152,27 @@ cargo run -p rustic-volume -- report <image>
 `migrate` is the deliberate one-way upgrade. Host agreement is not guest execution: no
 guest mounts a v6 volume yet.
 
+## v7 volume images
+
+The v7 layout has its own independent reader, `terminal_support/oracle7.py`,
+written from [WORKSPACE-FORMAT7.md](WORKSPACE-FORMAT7.md) with Python's own CRC
+and SHA-256. `cargo test -p rustic-fs --test fs7_image` builds full-size sparse
+images through the public `Volume7` owner (writing them to `RUSTIC_FS7_EXPORT`
+when set), and
+
+```sh
+python3 tools/fs7_test.py [--sweep N] [--seed S]
+```
+
+reads them plus a `seed7` fixture with the reader, compares each with
+`rustic-volume report7`, and requires the reader and the Rust mount to give the
+same accept/refuse verdict on 17 named damaged copies and on a deterministic
+sweep of resealed field perturbations (default 60 per image; the run fails if
+either verdict occurs fewer than one time in ten). It needs only the
+pinned Rust toolchain, boots no guest, writes `artifacts/fs7/` and runs in the
+`check` job of the "Workspace checks" workflow (`.github/workflows/check.yml`). The reader's parsing rules have unit tests in
+`tools/tests/test_oracle7.py`.
+
 The explicitly selected V7 read-only guest fixture uses a fresh disposable
 volume and the measured largest shipped native artifact. Run
 `python3 tools/v7_read_test.py` to build the host provisioner and UEFI image,
@@ -175,6 +196,14 @@ the child control-only with `start-staged PID exit`, reads the variant tag from
 variant digests and the unchanged volume digests in
 `artifacts/boot/terminal-v7-launch/`. `python3 tools/boot.py test` runs it after
 `tools/v7_read_test.py`.
+
+`python3 tools/v7_corrupt_test.py` builds the `terminal-v7` image and boots it
+twice on damaged temporary copies of a fresh V7 volume: one with a flipped ELF
+payload byte, which mount must refuse without a panic while owner control stays
+usable, and one with a torn newest header copy, which must mount the older
+generation and read its exact bytes. Evidence is stored in
+`artifacts/boot/terminal-v7-corrupt/`; `python3 tools/boot.py test` runs it after
+`tools/v7_launch_test.py`.
 
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer
