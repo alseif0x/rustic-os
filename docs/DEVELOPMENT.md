@@ -219,7 +219,7 @@ small and a large write by operation ID and by retry key, which must print the
 commit-time receipt lines. After each boot `oracle7` must find retained records
 that match every printed receipt and none for the revoked key, and the volume
 digest must not change across boot 2. Evidence, including guest ticks per write
-size and per lookup, is stored in
+size, per lookup and for the revocation, is stored in
 `artifacts/boot/terminal-v7-write/`; `python3 tools/boot.py test` runs it after
 `tools/v7_corrupt_test.py`. The receipt, lookup and cut parsing and the record
 matching have unit tests in `tools/tests/test_v7_write.py`. See [V7 tracked writes](FILES-V7-WRITES.md).
@@ -240,6 +240,24 @@ ticks of every maintenance, is stored in
 after `tools/v7_write_test.py`. The report parsing and the oracle comparison
 have unit tests in `tools/tests/test_v7_retention.py`. See
 [owner retention maintenance](FILES-V7-WRITES.md#owner-retention-maintenance).
+
+`python3 tools/v7_faults_test.py` builds the same image and interrupts an 8 KiB
+`replace-pattern-v7` write at twelve device events and `maintain-v7` at nine,
+each on a temporary copy of a base volume with one QEMU `blkdebug` EIO
+(`recovery_faults.rules`). Every operation must report `Uncertain`. After
+`restart files` and after a clean reboot, lookups, range reads and an exact
+retry (or a repeated maintenance) must agree with the generation that
+`oracle7` finds; only the final-flush cuts end in the new generation. A
+mount-only boot must leave the image digest unchanged. The same run records
+`mem` at every idle, fenced, restarted and post-operation point, requires all
+of them to equal the idle baseline, times owner `INFO` round trips during two
+512 KiB writes (`probe 64`) and records the revocation ticks. It takes 44
+boots, about two and a half minutes of VM time on the reference machine.
+Evidence is stored in `artifacts/boot/terminal-v7-faults/`;
+`python3 tools/boot.py test` runs it after `tools/v7_retention_test.py`. The
+event plan, the generation classification and the parsers have unit tests in
+`tools/tests/test_v7_faults.py`. See
+[interrupted publication](FILES-V7-WRITES.md#interrupted-publication).
 
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer

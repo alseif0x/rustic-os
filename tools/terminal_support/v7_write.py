@@ -68,7 +68,7 @@ RECEIPT = re.compile(
 TIMING = re.compile(r"^write-v7 size=(0|[1-9][0-9]{0,6}) ticks=(0|[1-9][0-9]{0,15})$")
 LOOKUP_TIMING = re.compile(r"^lookup-v7 size=(0|[1-9][0-9]{0,6}) ticks=(0|[1-9][0-9]{0,15})$")
 CUT = re.compile(r"^cut-v7 chunks=([1-9][0-9]{0,6}) bytes=([1-9][0-9]{0,6}) job=([1-9][0-9]{0,15}) "
-                 r"old=([A-Za-z]+) new=([A-Za-z]+)$")
+                 r"old=([A-Za-z]+) new=([A-Za-z]+) ticks=(0|[1-9][0-9]{0,15})$")
 ERROR = re.compile(r"^error: ([A-Za-z]+)$")
 
 
@@ -141,7 +141,7 @@ def decode_cut(text):
     if not match:
         raise ValueError(f"malformed cut answer: {text!r}")
     return {"chunks": int(match[1]), "bytes": int(match[2]), "job": int(match[3]),
-            "old": match[4], "new": match[5]}
+            "old": match[4], "new": match[5], "ticks": int(match[6])}
 
 
 def lookup_error(text):
@@ -446,6 +446,8 @@ def verify(image, volume_tool, output=None):
         for item in timings:
             print(f"V7 write: size={item['size']} guest_ticks={item['guest_ticks']} "
                   f"host_seconds={item['host_seconds']}", flush=True)
+        print(f"V7 revocation: chunks={first['cut']['chunks']} guest_ticks={first['cut']['ticks']} "
+              f"host_seconds={first['cut']['host_seconds']}", flush=True)
         for item in second["lookups"]:
             print(f"V7 lookup: by={item['by']} size={item['size']} guest_ticks={item['ticks']} "
                   f"host_seconds={item['host_seconds']}", flush=True)
