@@ -139,7 +139,7 @@ def build_variant(tag):
     }
 
 
-def _freeze(image, directory):
+def freeze(image, directory):
     """Copy the built image and its metadata aside so both boots use these bytes."""
     directory.mkdir()
     frozen = directory / image.name
@@ -216,7 +216,7 @@ def _refusals(uart, pid):
     return refused
 
 
-def _finish_case(uart, pair, tag):
+def finish_case(uart, pair, tag):
     """Stage, refuse, start FINISH control-only, read the tag, reap exit 7."""
     before = counters(uart.command("mem"))
     pid, staged = _stage(uart, pair)
@@ -246,6 +246,7 @@ def _finish_case(uart, pair, tag):
     return {
         "pid": pid,
         "stage_host_seconds": staged["host_seconds"],
+        "staged_versions": {"elf": staged["elf_version"], "manifest": staged["manifest_version"]},
         "dormant": dormant,
         "refusals_before_start": refusals,
         "started": started,
@@ -363,7 +364,7 @@ def _boot(image, data, pair, variant, index, temporary, output, transcript, log)
             if "status=0" not in mount:
                 raise AssertionError(f"initial V7 mount job did not succeed: {mount!r}")
             result = {"boot": index, "tag": tag, "image_sha256": image_sha256,
-                      "finish": _finish_case(uart, pair, tag)}
+                      "finish": finish_case(uart, pair, tag)}
             if index == 1:
                 result["killed_before_start"] = _killed_case(uart, pair)
             else:
@@ -389,7 +390,7 @@ def verify(image, volume_tool, output=None):
     try:
         with tempfile.TemporaryDirectory(prefix="rustic-terminal-v7-launch-") as temporary:
             temporary = Path(temporary)
-            frozen, metadata, kernel_in_image = _freeze(image, temporary / "image")
+            frozen, metadata, kernel_in_image = freeze(image, temporary / "image")
             embedded = metadata["native_applications"]["utility"]
             variants = [build_variant(tag) for tag in TAGS]
             # The kernel image embeds target/native/utility.elf; the variant

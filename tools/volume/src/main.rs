@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Host tool for v5/v6 volume images, explicit disposable v7 fixtures and the
-//! deliberate out-of-place v5 -> v7 data migration. It never touches the
-//! owner's terminal volume and never guesses a lineage.
+//! deliberate out-of-place v5 -> v7 data migration, and adding host files to an
+//! existing disposable v7 image. It never touches the owner's terminal volume
+//! and never guesses a lineage.
 use std::path::Path;
 use std::process::ExitCode;
 
+mod add7;
 mod command;
 mod disk;
 mod history5;
@@ -27,11 +29,16 @@ usage: rustic-volume <command>
                                 create a disposable v5 source with scoped history
   migrate7 <v5-image> <v7-target> <lineage>
                                 copy a v5 image into a new v7 image (data only)
+  add7 <v7-image> <workspace> <name> <file>
+                                add a new file to an existing v7 image with one
+                                tracked commit; <workspace> is a node id, ws_
+                                text or /workspaces/... path
 A lineage is 32 hex characters. Images are exactly one volume long; a shorter
 file is refused so a truncated image cannot be read as a volume. `seed7`,
 `seed5-history` and `migrate7` targets use an exclusive create and refuse an
 existing path; `migrate7` only reads its source and removes a target it created
-when the migration fails.";
+when the migration fails. `add7` refuses an existing name and a full retention
+table before it writes, and never evicts a record.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -84,6 +91,9 @@ fn run(args: &[String]) -> Result<String, String> {
         }
         [command, source, target, lineage] if command == "migrate7" => {
             migrate7::migrate7(Path::new(source), Path::new(target), lineage)
+        }
+        [command, image, workspace, name, source] if command == "add7" => {
+            add7::add7(Path::new(image), workspace, name, Path::new(source))
         }
         _ => Err(USAGE.to_owned()),
     }
