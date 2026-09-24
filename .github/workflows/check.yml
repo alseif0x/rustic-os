@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 name: Workspace checks
 on:
+  # Pull requests run through `pull_request`; `push` covers only the trunk, so a
+  # PR branch is not measured twice by concurrent duplicate runs.
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 permissions:
