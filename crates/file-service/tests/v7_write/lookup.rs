@@ -7,7 +7,7 @@ use rustic_abi::files::{OPERATION_ID, OPERATION_RETRY};
 
 impl Writer {
     /// Look up one receipt and collect its remaining parts on this slot.
-    fn lookup(
+    pub(super) fn lookup(
         &self,
         server: &mut Server7<'_>,
         disk: &mut Sparse,
@@ -36,11 +36,11 @@ impl Writer {
     }
 }
 
-fn by_id(receipt: &Operation) -> operation::Lookup {
+pub(super) fn by_id(receipt: &Operation) -> operation::Lookup {
     operation::Lookup::Id(receipt.id)
 }
 
-fn by_retry(receipt: &Operation) -> operation::Lookup {
+pub(super) fn by_retry(receipt: &Operation) -> operation::Lookup {
     operation::Lookup::Retry {
         workspace: receipt.workspace,
         retry: receipt.retry,
@@ -77,7 +77,7 @@ fn two_writes(f: &mut Fixture) -> [(Operation, [u8; RECEIPT_BYTES], Vec<u8>); 2]
     [(a, a_bytes, small), (b, b_bytes, large)]
 }
 
-fn remount(disk: &mut Sparse) -> Volume7 {
+pub(super) fn remount(disk: &mut Sparse) -> Volume7 {
     let mut volume = Volume7::EMPTY;
     volume.mount_into(disk).unwrap();
     volume

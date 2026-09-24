@@ -7,8 +7,11 @@ write is published by the V7 owner's [streamed stage](WORKSPACE-FORMAT7.md#strea
 as a `DirectCommitted` retained record, and the client gets a completed-operation
 receipt it can check against the bytes it sent. The same receipt can later be
 looked up cold by operation ID or retry key, and the owner can revoke the
-shell's binding in the middle of a transfer. The v5 service stays the default
-and is unchanged.
+shell's binding in the middle of a transfer. When the eight-record budget is
+`Full`, the owner can explicitly run
+[retention maintenance](#owner-retention-maintenance) to reclaim the records
+and advance the retry epoch, so useful writes can continue. The v5 service
+stays the default and is unchanged.
 
 ## What is verified
 
@@ -40,6 +43,24 @@ and is unchanged.
   neither the workspace nor the object (`OutcomeUnknown`, with no snapshot
   read), a read-only grant (`Denied`), the workspaces root and the object as
   valid scopes, and revocation forgetting a looked-up receipt.
+  The retention cases (`tests/v7_write/retention.rs`) check that
+  `Server7::maintain_retention` is `Busy`, with the header, the records and the
+  disk writes and flushes unchanged, while an exact retry holds a transfer at
+  `Full` (the retry then completes and replays) and while a fresh transfer is
+  open on another slot until it is aborted. After eight 1,500-byte writes it
+  drops all eight records, frees exactly the 21 sectors of the seven superseded
+  snapshots (the live file keeps its own), advances the epoch by one and
+  publishes one generation, which a cold mount selects; a second maintenance
+  with nothing to reclaim advances the epoch and frees nothing. Over three
+  fill, maintain and write cycles, an exact retry, a fresh write and a retry
+  lookup naming the old epoch are `ExpiredEpoch`, a lookup of a reclaimed
+  operation ID and a receipt part the slot had cached are `OutcomeUnknown`, and
+  the same key is a fresh operation in the new epoch. A client packet with the
+  administrative opcode changes nothing, and a write that fails during the
+  maintenance publication leaves the service `Uncertain` and fenced while a
+  cold mount still selects the previous generation.
+  `cargo test -p rustic-supervisor --lib retention` checks the job's
+  administrative words and which service replies become a job result.
   `cargo test -p rustic-sdk --test file_workspace` checks that the SDK client
   streams from its source, aborts when the source fails, reports a receipt
   that does not match as `Uncertain`, advances a stepwise transfer only on
@@ -78,6 +99,32 @@ inferred from the acknowledged bytes), and the owner
   digest does not change across boot 2, so neither the replay nor the lookups
   wrote anything. Evidence is written to
   `artifacts/boot/terminal-v7-write/result.json`.
+- Guest: `python3 tools/v7_retention_test.py` boots another fresh
+  `seed7 --scratch` volume twice and runs three fill, maintain and write
+  cycles with 4 KiB patterns, two in boot 1 and one after the reboot. Each
+  cycle fills the eight-record budget (six writes next to the two seed records
+  in the first cycle, seven later), checks that one more write is `Full`, runs
+  `maintain-v7`, writes again in the new epoch (the write names the last
+  write's version as its previous version) and then checks the old epoch: an
+  exact retry of the cycle's first write, a fresh write naming the old epoch
+  and a lookup by the old retry key are `ExpiredEpoch`, and a lookup of the
+  reclaimed operation ID is `OutcomeUnknown`. In the first cycle, before the
+  maintenance succeeds, an exact retry of the last write holds a transfer open
+  after 40 chunks (1,600 bytes) while the owner asks for maintenance: the
+  answer is `Busy`, the transfer is aborted, one more write is still `Full` and
+  the image digest is unchanged. The independent `oracle7` reader checks the
+  image before and after every maintenance while the guest is idle at the
+  prompt (the shell prints only after the service has published and flushed,
+  and QEMU writes through the host page cache the reader sees): the epoch
+  advanced by one, one generation was published, every record was dropped,
+  free space grew by exactly the sectors held only by retained snapshots (the
+  seed records and the last write alias live files and keep their sectors), and
+  the live files did not change. After each clean shutdown the image holds the
+  persisted epoch and exactly one record, which matches the last receipt, the
+  live file is the last pattern and the application pair is unchanged. After
+  the reboot the last write is looked up by ID and by retry key with the lines
+  printed at commit, and a key of the previous epoch is `ExpiredEpoch`. Evidence
+  is written to `artifacts/boot/terminal-v7-retention/result.json`.
 
 Guest timing from one run under QEMU TCG on the reference machine (build
 `4108eab5007c3569`), measured by the shell from before the open to after the
@@ -93,6 +140,12 @@ receipt, or around the whole lookup (PIT ticks, 100 per second):
 | Write 512 KiB | 558 |
 | Lookup 513 B by ID / by retry key (boot 2) | 1 / 1 |
 | Lookup 512 KiB by ID / by retry key (boot 2) | 32 / 11 |
+
+Owner retention maintenance, measured by the shell from the job request to its
+completed status in one `tools/v7_retention_test.py` run (build
+`21c764bced06ebfd`), took 2 ticks in each of the three cycles, which
+reclaimed eight records and 40, 56 and 56 sectors. It is one metadata
+publication with its flushes and no payload I/O.
 
 Payload cost grows with size, about one 40-byte IPC round trip per chunk plus
 one blocking sector write per 512 bytes. The commit's metadata publication and
@@ -113,7 +166,8 @@ other combination is refused with `Invalid`. The supervisor keeps its own
 owner binding read-only and grants the shell profile `7` with subject 2. That
 retry scope is separate from the host provisioner's subject 1 seed records, so
 the shell can neither replay nor see them. The owner can revoke and reissue
-that binding with the supervisor job `REVOKE_SHELL_V7`. See
+that binding with the supervisor job `REVOKE_SHELL_V7` and run retention
+maintenance with `MAINTAIN_V7`; the shell's grant can do neither. See
 [V7 write authority](AUTHORITY.md#v7-tracked-write-authority).
 
 Opening a transfer requires write and inspect rights, because the commit reply
@@ -234,6 +288,55 @@ It then sends the next chunk on the old endpoint, adopts the binding and sends
 the same chunk again, and prints
 `cut-v7 chunks=N bytes=B job=J old=OUTCOME new=OUTCOME`. It never commits.
 
+## Owner retention maintenance
+
+Fresh writes are `Full` once the eight retained records are used, and nothing
+ever makes room implicitly. The owner can start the supervisor job
+`MAINTAIN_V7` (owner request `[39, 0, ...]`, V7 profile only) from the shell's
+private owner channel with `maintain-v7`. Starting it is the owner's
+declaration that clients have resolved the current-epoch outcomes they need:
+storage cannot know whether a completed reply was observed. The supervisor
+sends the file service the administrative `MAINTAIN_RETENTION` request (`44`)
+on its bootstrap channel; no client packet reaches it. `Server7` refuses with
+`Busy`, changing nothing, while any client transfer is open, and
+`Volume7::maintain_retention` also refuses open stages and unresolved
+(admitted) records. Otherwise the volume drops every terminal record, rebuilds
+the allocation map from the live files, so only snapshot sectors no live file
+owns are freed, and publishes the next retry epoch through the usual
+copy-on-write barriers.
+
+The service replies `[0, previous_epoch, epoch, records, sectors]`. The
+supervisor checks that the epoch advanced by exactly one and that the counts
+are bounded, and completes the job with `[0, file_status, epoch, reclaimed]`,
+where `reclaimed` packs the records (low 32 bits) and freed sectors (high 32
+bits); a refusal completes the job with only its file status. The shell prints
+`maintain-v7 previous=e_... epoch=e_... records=N sectors=S job=J ticks=T` or
+the refusal, for example `error: Busy`.
+
+After a maintenance every slot forgets its cached receipt. An exact retry or a
+fresh write that names the old epoch is `ExpiredEpoch`, a lookup by an old
+retry key is `ExpiredEpoch`, and a lookup of a reclaimed operation ID or a
+part of a forgotten receipt is `OutcomeUnknown`. New writes must name the new
+epoch; the same key is then a fresh operation. The shell learns the epoch only
+from the job's output; the ready report does not carry it, and the harness
+passes it to `replace-pattern-v7` explicitly. A failure during the
+publication is `Uncertain` and fences the volume until `restart files`, as
+for a commit; after the restart the mount selects whichever generation became
+durable. A `MAINTAIN_V7` job that fails with status 4 (its deadline passed,
+the administrative exchange failed or the reply was malformed) also leaves the
+epoch outcome unknown. After a deadline or a failed exchange the supervisor is
+also degraded and refuses further owner jobs until `restart files`, whose
+fresh service mounts whichever generation became durable. After the restart the owner can learn the durable
+epoch from the next `maintain-v7` report's previous epoch, or from whether a
+lookup by a known retry key answers or is `ExpiredEpoch`.
+
+The diagnostic `replace-pattern-v7 ... SIZE hold CHUNKS` opens the transfer,
+sends `CHUNKS` chunks, runs the maintenance job while the transfer is open,
+aborts the transfer and prints
+`hold-v7 chunks=N bytes=B maintain=OUTCOME abort=OUTCOME`. It never commits.
+At `Full` only an exact retry of a retained write can hold a transfer, because
+a fresh one needs a record slot.
+
 ## SDK and shell
 
 `Client::workspace_replace(request, size, fill)` (`crates/sdk/src/files/workspace.rs`)
@@ -268,9 +371,16 @@ and resource. Creating it uses no retained record.
   case revokes while a chunk or commit is in flight on the service.
 - Lookups recompute the SHA-256 from the medium and trust the mount-time CRC
   check; an external change to the medium after mount is not detected.
-- Neither the service nor `rustic-volume` exposes retry-epoch maintenance
-  (`Volume7::maintain_retention`), so once the budget is exhausted fresh writes
-  stay `Full`. Exact retries still replay.
+- Maintenance relies on the owner's declaration that outcomes are resolved.
+  The service refuses only what it can see (open transfers, stages and
+  admitted records); a client that has not yet looked up a completed outcome
+  loses it. `rustic-volume` does not expose maintenance, and the guest refusal
+  for an unresolved admission is untested because the V7 service creates no
+  admissions (it is host-tested in `rustic-fs`).
+- The shell learns the new epoch only from the maintenance output. No state
+  query reports the current epoch to a client.
+- Maintenance runs inside the single-loop service like a commit. No guest case
+  injects a fault into its publication; that path is host-tested.
 - The file server serves one request at a time. A chunk that completes a
   sector issues one blocking write, and a commit runs the whole blocking
   publication while other clients wait. Stage writes are not pollable.

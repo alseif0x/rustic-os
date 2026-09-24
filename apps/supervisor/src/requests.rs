@@ -16,7 +16,8 @@ impl State {
             | s::ENABLE_OPERATIONS
             | s::ENABLE_ADMISSIONS
             | s::ENABLE_PREVENTION_REASONS
-            | s::REVOKE_SHELL_V7 => 1,
+            | s::REVOKE_SHELL_V7
+            | s::MAINTAIN_V7 => 1,
             s::PROCESS
             | s::KILL
             | s::REAP
@@ -103,6 +104,7 @@ impl State {
             s::STAGE_V7 => self.stage_v7(w),
             s::START_STAGED => self.start_staged(w[1], w[2]),
             s::REVOKE_SHELL_V7 => self.revoke_shell_v7(),
+            s::MAINTAIN_V7 => self.maintain_v7(),
             s::PERMISSIONS => {
                 if w[1] == 0 {
                     return Ok([0, 0, 15, 0, 0, 0, 0, 0]);

@@ -12,6 +12,7 @@ mod operations;
 mod processes;
 mod read;
 mod recovery;
+mod retention;
 mod staging;
 mod takeover;
 mod tasks;
@@ -162,6 +163,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         "inspect-operation" | "request-operation-cancel" => lifecycle::execute(s, a)?,
         "enable-operations" | "replace-ref" | "replace-fill-ref" | "replace-pattern-v7"
         | "operation" | "operation-v7" => operations::execute(s, a)?,
+        "maintain-v7" => retention::execute(s, a)?,
         "ref" | "read-ref" => read::execute(s, a)?,
         "stage-ref" | "start-staged" => staging::execute(s, a)?,
         "job-status" | "hold-io" | "io-status" => management::execute(s, a)?,

@@ -5,6 +5,7 @@ pub mod actor;
 pub mod grant;
 pub mod image_pair;
 pub mod jobs;
+pub mod retention;
 pub mod revocation;
 pub mod shell_binding;
 pub mod storage_launch;

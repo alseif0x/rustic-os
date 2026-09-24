@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Explicitly selected V7 native service over one exclusively borrowed mounted
-//! volume: bounded range reads, profile-2 tracked replacement and lookups of
-//! retained records.
+//! volume: bounded range reads, profile-2 tracked replacement, lookups of
+//! retained records and owner-requested retention maintenance.
 //!
 //! The composing [`Server7`] routes each request after the envelope and grant
 //! checks, and keeps the storage consequences of authority changes together:
 //! revoking, detaching, expiring or replacing a slot aborts that slot's open
-//! stage and forgets its receipt. The v5 `Server` is unaffected.
+//! stage and forgets its receipt. Maintenance is an owner operation with no
+//! client packet: the serving layer calls [`Server7::maintain_retention`] only
+//! for its administrative channel. The v5 `Server` is unaffected.
 mod grants;
 mod lookup;
 mod read;
+mod retention;
 mod scope;
 mod transfer;
 mod write;
 
 pub use grants::{CLIENTS7, Grant7, GrantRequest7, READ_ONLY7, TRACKED_WRITE7};
+pub use retention::Maintenance7;
 
 use rustic_abi::files::*;
 use rustic_fs::{Disk, Volume7};
@@ -74,6 +78,37 @@ impl<'a> Server7<'a> {
             }
         }
         expired
+    }
+
+    /// Owner-requested retention maintenance: drop every terminal retained
+    /// record, free the snapshot sectors no live file owns and publish the
+    /// next retry epoch.
+    ///
+    /// - `Ok`: published; every slot forgets its cached receipt, and retries
+    ///   and lookups that name the old epoch answer `ExpiredEpoch`.
+    /// - `Busy`: a client transfer, volume stage or unresolved admission is
+    ///   open; nothing changed.
+    /// - `Exhausted` or `Corrupt` before the publication starts (no epoch or
+    ///   sequence left, or current ownership that does not validate): nothing
+    ///   changed.
+    /// - `Uncertain`: the volume was already fenced, a disk write or flush of
+    ///   the publication failed, or the published effect could not be
+    ///   described.
+    /// - Any error from inside the publication, including `Uncertain` and a
+    ///   candidate that does not validate, leaves the volume fenced until a
+    ///   remount, which selects whichever generation became durable.
+    ///
+    /// Whenever the volume ends fenced, after any error, cached receipts are
+    /// forgotten too: they may name records the durable generation no longer
+    /// holds.
+    ///
+    /// Only the administrative channel may reach this; no client packet does.
+    pub fn maintain_retention(&mut self, disk: &mut impl Disk) -> Result<Maintenance7, Error> {
+        let result = retention::maintain(self.volume, disk, self.writes.transfers_open());
+        if result.is_ok() || self.volume.header().is_err() {
+            self.writes.forget_receipts();
+        }
+        result
     }
 
     /// Read-only snapshot for endpoint lifecycle routing.

@@ -218,7 +218,8 @@ def _write(uart, refs, version, epoch, key, seed, size):
     return result
 
 
-def _boot(image, data, output, phase, temporary, body):
+def boot_terminal(image, data, output, phase, temporary, body):
+    """Boot `mode=terminal-v7` once over `data` and run `body(uart)` until a clean exit."""
     sock = temporary / f"uart-{phase}.sock"
     transcript = output / f"serial-{phase}.log"
     log = output / f"qemu-{phase}.log"
@@ -368,8 +369,8 @@ def verify(image, volume_tool, output=None):
                 raise AssertionError(f"seed7 provisioned {seeded_records} records, the plan needs "
                                      f"{SEEDED_RECORDS} so that exactly one slot is left before the cut")
 
-            first = _boot(image, data, output, 1, temporary,
-                          lambda uart: _first_boot(uart, refs, lineage, epoch, scratch["version"], seeded_records))
+            first = boot_terminal(image, data, output, 1, temporary,
+                                  lambda uart: _first_boot(uart, refs, lineage, epoch, scratch["version"], seeded_records))
             after_first = oracle7.snapshot(data.read_bytes())
             matched = match_records(after_first, first["writes"], seeded["workspace"]["id"], scratch["id"])
             check_absent(after_first, CUT_KEY)
@@ -393,8 +394,8 @@ def verify(image, volume_tool, output=None):
 
             before_second = environment.digest(data)
             prior = first["writes"][REPLAY_INDEX]
-            second = _boot(image, data, output, 2, temporary,
-                           lambda uart: _second_boot(uart, refs, epoch, prior, first["writes"]))
+            second = boot_terminal(image, data, output, 2, temporary,
+                                   lambda uart: _second_boot(uart, refs, epoch, prior, first["writes"]))
             after_second = environment.digest(data)
             if before_second != after_second:
                 raise AssertionError("boot 2 replay or refusals changed the V7 volume")

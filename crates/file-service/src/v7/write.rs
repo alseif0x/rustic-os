@@ -64,6 +64,17 @@ impl Writes {
         }
     }
 
+    /// Whether any slot has a transfer open.
+    pub(super) fn transfers_open(&self) -> bool {
+        self.transfers.iter().any(Option::is_some)
+    }
+
+    /// Forget every slot's cached receipt, after the records they describe
+    /// were reclaimed.
+    pub(super) fn forget_receipts(&mut self) {
+        self.receipts = [None; CLIENTS7];
+    }
+
     pub(super) fn request(
         &mut self,
         volume: &mut Volume7,

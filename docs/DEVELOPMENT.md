@@ -224,6 +224,23 @@ size and per lookup, is stored in
 `tools/v7_corrupt_test.py`. The receipt, lookup and cut parsing and the record
 matching have unit tests in `tools/tests/test_v7_write.py`. See [V7 tracked writes](FILES-V7-WRITES.md).
 
+`python3 tools/v7_retention_test.py` seeds another fresh temporary volume the
+same way and boots it twice. It runs three cycles, two in boot 1 and one after
+the reboot, that fill the eight-record budget with 4 KiB `replace-pattern-v7`
+writes, check `Full`, run the owner's `maintain-v7`, write in the new epoch and
+check that an exact retry, a fresh write and a retry lookup naming the old
+epoch are `ExpiredEpoch` and a reclaimed operation ID is `OutcomeUnknown`. In
+the first cycle the owner first asks for maintenance while an exact retry holds
+a transfer (`replace-pattern-v7 ... hold 40`), which must be `Busy` with the
+image digest unchanged. `oracle7` checks the image before and after every
+maintenance while the guest is idle, and after each shutdown: epoch, records,
+freed snapshot sectors and unchanged live files. Evidence, including the guest
+ticks of every maintenance, is stored in
+`artifacts/boot/terminal-v7-retention/`; `python3 tools/boot.py test` runs it
+after `tools/v7_write_test.py`. The report parsing and the oracle comparison
+have unit tests in `tools/tests/test_v7_retention.py`. See
+[owner retention maintenance](FILES-V7-WRITES.md#owner-retention-maintenance).
+
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer
 rather than with the candidate under test.
