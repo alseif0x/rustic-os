@@ -10,21 +10,29 @@
 //! stage and forgets its receipt. Maintenance is an owner operation with no
 //! client packet: the serving layer calls [`Server7::maintain_retention`] only
 //! for its administrative channel. The v5 `Server` is unaffected.
+//!
+//! Admission publications (acceptance, execution, cancellation) are pollable.
+//! [`Server7::handle_with`] drives them over the caller's pollable disk and
+//! hands a [`Control7`] to the serving layer between polls, so the owner can
+//! revoke or detach clients while one is in flight, with the v5 consequences
+//! for the caller's publication (see the `control` module).
+//! [`Server7::handle`] settles them synchronously inside the request.
 mod admission;
+mod control;
 mod grants;
 mod lookup;
 mod read;
 mod retention;
 mod scope;
-mod settle;
 mod transfer;
 mod write;
 
+pub use control::Control7;
 pub use grants::{ADMISSION7, CLIENTS7, Grant7, GrantRequest7, READ_ONLY7, TRACKED_WRITE7};
 pub use retention::Maintenance7;
 
 use rustic_abi::files::*;
-use rustic_fs::{Disk, Volume7};
+use rustic_fs::{Disk, PollDisk7, Volume7};
 
 pub struct Server7<'a> {
     volume: &'a mut Volume7,
@@ -119,6 +127,8 @@ impl<'a> Server7<'a> {
         self.grants.grant_at(slot)
     }
 
+    /// Serve one client request, settling any admission publication inside
+    /// it with no owner control between its polls.
     pub fn handle(
         &mut self,
         disk: &mut impl Disk,
@@ -127,7 +137,35 @@ impl<'a> Server7<'a> {
         request: Packet,
         now: u64,
     ) -> Packet {
-        match self.dispatch(disk, slot, peer, request, now) {
+        let mut disk = crate::disk::Synchronous(disk);
+        self.handle_with(&mut disk, slot, peer, request, now, |_| now)
+    }
+
+    /// Serve one client request, driving an admission publication over the
+    /// pollable `disk` and calling `control` before each of its polls. The
+    /// callback returns the owner's clock and may revoke or detach slots
+    /// through its [`Control7`]; it must not block indefinitely, and it is
+    /// never called for requests without a publication.
+    ///
+    /// If the caller loses its authority before the publication's header is
+    /// submitted, nothing of it becomes durable: an execution is then
+    /// recorded cancelled with cause `AuthorityLost` by a second, unstoppable
+    /// publication, and the reply is the authority error. Later losses let
+    /// the publication settle: a new admission is then likewise cancelled
+    /// with `AuthorityLost` before the authority error is returned, while a
+    /// settled execution or cancellation stands and is reported `Uncertain`.
+    /// The caller's endpoint is normally gone by then, so the reply is only
+    /// delivered when the binding survived.
+    pub fn handle_with<D: Disk + PollDisk7>(
+        &mut self,
+        disk: &mut D,
+        slot: usize,
+        peer: u64,
+        request: Packet,
+        now: u64,
+        mut control: impl FnMut(&mut Control7<'_>) -> u64,
+    ) -> Packet {
+        match self.dispatch(disk, slot, peer, request, now, &mut control) {
             Ok(reply) => reply,
             Err(error) => {
                 let mut response = Packet::new(request.op);
@@ -138,13 +176,14 @@ impl<'a> Server7<'a> {
         }
     }
 
-    fn dispatch(
+    fn dispatch<D: Disk + PollDisk7>(
         &mut self,
-        disk: &mut impl Disk,
+        disk: &mut D,
         slot: usize,
         peer: u64,
         packet: Packet,
         now: u64,
+        control: &mut dyn FnMut(&mut Control7<'_>) -> u64,
     ) -> Result<Packet, Error> {
         crate::validation::envelope(&packet)?;
         let grant = self.grants.check(slot, peer, packet.context, now)?;
@@ -157,7 +196,30 @@ impl<'a> Server7<'a> {
                 self.writes.request(self.volume, disk, slot, grant, packet)
             }
             _ if admission::selected(&packet) => {
-                admission::request(&mut self.writes, self.volume, disk, slot, grant, packet)
+                let caller = control::Caller7 {
+                    slot,
+                    peer,
+                    context: packet.context,
+                };
+                let mut owner = control::Owner::new(&mut self.grants, caller, control);
+                let result = admission::request(
+                    &mut self.writes,
+                    self.volume,
+                    disk,
+                    slot,
+                    grant,
+                    packet,
+                    &mut owner,
+                );
+                // Slots that lost their grant during the publication drop
+                // their stages and receipts now that the volume is free.
+                let lost = owner.lost();
+                for index in 0..CLIENTS7 {
+                    if lost & (1 << index) != 0 {
+                        self.writes.reset(self.volume, index);
+                    }
+                }
+                result
             }
             _ => Err(Error::Unsupported),
         }

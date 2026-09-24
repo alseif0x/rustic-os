@@ -230,7 +230,8 @@ handling (`v7/read.rs`), the grant table (`v7/grants.rs`), scope walks
 (`v7/scope.rs`), write policy (`v7/write.rs`), retained-record lookups
 (`v7/lookup.rs`), the per-transfer accumulator (`v7/transfer.rs`), staged
 admission policy (`v7/admission.rs` with `v7/admission/records.rs`) and the
-synchronous publication driver (`v7/settle.rs`) are separate modules, and
+admission publication driver with its owner control (`v7/control.rs`) are
+separate modules, and
 `v7.rs` composes them. Tracked and admission transfers share the per-slot
 table; the stage kind fixed at open decides which requests may use it.
 
@@ -494,8 +495,12 @@ that competes with a blocking disk command in flight.
 
 ### Stalled device
 
-V7 I/O stays blocking in this increment, and there is no V7 I/O deadline.
-While a device command is stalled, the file server cannot answer anything:
+V7 tracked-write I/O stays blocking in this increment, and there is no V7 I/O
+deadline. (Admission publications are now polled with owner control between
+commands; see
+[owner control during a publication](FILES-V7-ADMISSIONS.md#owner-control-during-a-publication).)
+While a blocking device command is stalled, the file server cannot answer
+anything:
 
 - A shell write waits for its chunk or commit reply until the command
   completes, or until the operator interrupts the wait with Ctrl-C. The

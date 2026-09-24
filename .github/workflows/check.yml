@@ -117,7 +117,7 @@ jobs:
       - name: Test runner contracts
         run: python3 -m unittest discover -s tools/tests -v
       - name: Verify UEFI boot and failures
-        run: python3 tools/boot.py test --timeout 45
+        run: python3 tools/boot.py test --timeout 45 --skip-v7
       - name: Verify offline triage of native harness controls
         run: python3 -m tools.research.failure_triage.check_harness --boot-directory artifacts/boot --output artifacts/boot/triage-harness
       - name: Verify delayed device completion and recovery
@@ -142,5 +142,29 @@ jobs:
         with:
           name: boot-evidence
           path: artifacts/boot/
+          if-no-files-found: error
+          retention-days: 14
+  v7:
+    runs-on: ubuntu-24.04
+    # Disposable V7 workspace harnesses (read, launch, corrupt media, writes,
+    # retention, publication cuts, admissions, authority). They run beside the
+    # reference boot suite instead of after it so neither job outgrows its cap.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust
+        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy --target x86_64-unknown-none
+      - name: Install reference VM tools
+        run: python3 tools/environment.py install
+      - name: Verify V7 workspace harnesses
+        run: python3 tools/boot.py v7
+      - name: Preserve V7 evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: v7-evidence
+          path: artifacts/boot/terminal-v7*
           if-no-files-found: error
           retention-days: 14

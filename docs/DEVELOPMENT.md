@@ -87,7 +87,7 @@ The selected release and its pins are recorded in image and measurement metadata
 
 ## CI and negative testing
 
-.github/workflows/check.yml runs the same cargo xtask check on ubuntu-24.04 for every pull request and for pushes to `main` only, so a PR branch is not measured twice by a duplicate push run. Actions are pinned by SHA, the token has contents:read permissions, checkout does not persist credentials, and no project secrets are supplied. Toolchain versions, logs and the no_std library are retained as artifacts for 14 days. A separate job installs pinned QEMU/OVMF, tests the runner, boots all twenty-two scenarios, and runs the disposable V7 artifact-read harness, preserving images and evidence. Ubuntu 24.04 remains the pinned CI reference; the local developer baseline on this machine is Ubuntu 26.04 and is checked against its own recorded package versions.
+.github/workflows/check.yml runs the same cargo xtask check on ubuntu-24.04 for every pull request and for pushes to `main` only, so a PR branch is not measured twice by a duplicate push run. Actions are pinned by SHA, the token has contents:read permissions, checkout does not persist credentials, and no project secrets are supplied. Toolchain versions, logs and the no_std library are retained as artifacts for 14 days. A separate job installs pinned QEMU/OVMF, tests the runner, boots all twenty-two scenarios, preserving images and evidence. The disposable V7 harnesses run as their own `v7` job (`python3 tools/boot.py v7`) beside that job (`python3 tools/boot.py test --skip-v7`), so neither outgrows its time cap; locally `python3 tools/boot.py test` still runs both in sequence. Ubuntu 24.04 remains the pinned CI reference; the local developer baseline on this machine is Ubuntu 26.04 and is checked against its own recorded package versions.
 
 Next, tools/check-failure.sh introduces a deliberately failing test and requires cargo xtask check to reject it. The check identifies the expected marker so a compilation or tooling error cannot count as evidence. Run it only in a disposable checkout: it formats and temporarily adds the fixture, removing it on exit.
 
@@ -273,6 +273,20 @@ Evidence is stored in `artifacts/boot/terminal-v7-admission/`, and
 `python3 tools/boot.py test` runs it after `tools/v7_faults_test.py`. The output
 parsers and the oracle comparison have unit tests in
 `tools/tests/test_v7_admission.py`. See [V7 staged admissions](FILES-V7-ADMISSIONS.md).
+
+`python3 tools/v7_authority_test.py` builds the same image, seeds another fresh
+temporary volume and boots it twice. Boot 1 revokes the shell's binding while
+the first publication write of an EXECUTE is held by the kernel's completion
+hold (`execute-admission-v7 ID revoke 0 200`): the admission must end
+`cancelled` with cause `authority_lost`, the file unchanged and exactly one new
+generation. The same diagnostic during an ACCEPT must leave no record or
+generation, after which the same key admits and executes normally. Boot 2
+re-reads the cancelled status and cause. `oracle7` checks the image after
+every phase and after each shutdown. Evidence is stored in
+`artifacts/boot/terminal-v7-authority/`, and `python3 tools/boot.py test` runs
+it after `tools/v7_admission_test.py`. The output parser has unit tests in
+`tools/tests/test_v7_authority.py`. See
+[owner control during a publication](FILES-V7-ADMISSIONS.md#owner-control-during-a-publication).
 
 The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
 so an isolated `block-user` case provisions its workspace volume with the reference writer

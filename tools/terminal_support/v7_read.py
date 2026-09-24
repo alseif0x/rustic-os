@@ -18,6 +18,11 @@ from .read_cases import read as read_range
 ROOT = environment.ROOT
 CHUNK_BYTES = 1024
 BOOT_TIMEOUT = 300
+# One boot prints the whole selected ELF in hex, 1 KiB range by range, plus the
+# manifest and the staging cases. A 512 KiB V7 file alone is 1 MiB of hex before
+# per-range command framing, so the default 1 MiB transcript cap is too small
+# once file-server.elf approaches the profile limit.
+UART_BUDGET = 4 * 1024 * 1024
 STAGE_TIMEOUT = 200  # above the supervisor budget of 15,000 ticks
 # Supervisor owner statuses from crates/abi/src/supervisor.rs (`stage`).
 FILE_ERROR_BASE = 32
@@ -321,7 +326,7 @@ def verify(image, volume_tool, output=None):
                     f"unix:{sock},server=on,wait=off",
                     log,
                 ) as vm:
-                    uart = Connection(sock, vm, transcript, BOOT_TIMEOUT, output / f"commands-{phase}.jsonl")
+                    uart = Connection(sock, vm, transcript, BOOT_TIMEOUT, output / f"commands-{phase}.jsonl", budget=UART_BUDGET)
                     try:
                         uart.until()
                         if phase == 1:

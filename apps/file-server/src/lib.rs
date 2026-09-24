@@ -5,4 +5,5 @@
 extern crate std;
 
 mod poller;
+pub mod publication;
 pub use poller::{Poller, Requests};

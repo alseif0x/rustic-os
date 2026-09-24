@@ -2,10 +2,13 @@
 //! Explicit V7 dispatch: bounded reads, profile-2 tracked replacement and
 //! profile-2 staged admission only. No V5 mutation or admission path is
 //! reachable. Requests are served one at a time; a chunk that fills a sector,
-//! a commit, an admission acceptance, execution or cancellation and the
-//! owner's retention maintenance perform blocking disk I/O (an admission
-//! publication is polled to settlement inside its request). Maintenance is
-//! reachable only from the administrative channel.
+//! a commit and the owner's retention maintenance perform blocking disk I/O.
+//! An admission acceptance, execution or cancellation polls its publication
+//! over the pollable disk and holds the client's reply until it settles; the
+//! owner may revoke or detach clients between polls ([`control`]).
+//! Maintenance is reachable only from the administrative channel.
+mod control;
+
 use rustic_file_service::{CLIENTS7, GrantRequest7, Server7};
 use rustic_sdk::{
     abi::{files, runtime as wire},
@@ -23,11 +26,10 @@ const ADMISSIONS: u64 = 1 << 1;
 /// feature bits.
 const READY: [u64; 8] = [0, 2, 256, 524288, 8, TRACKED_WRITES | ADMISSIONS, 0, 0];
 
-fn close_slot(
-    server: &mut Server7<'_>,
-    replies: &mut [Option<Message>; CLIENTS7 + 1],
-    slot: usize,
-) {
+/// Queued replies: one per client slot, then the administrative channel's.
+type Replies = [Option<Message>; CLIENTS7 + 1];
+
+fn close_slot(server: &mut Server7<'_>, replies: &mut Replies, slot: usize) {
     if let Some(grant) = server.grant_at(slot) {
         let _ = Endpoint::from_bootstrap(grant.endpoint).close();
     }
@@ -46,7 +48,7 @@ pub(crate) fn run(
     }
 
     let mut administrator = 0;
-    let mut replies: [Option<Message>; CLIENTS7 + 1] = [const { None }; CLIENTS7 + 1];
+    let mut replies: Replies = [const { None }; CLIENTS7 + 1];
     loop {
         for slot in 0..=ADMIN_SLOT {
             if slot < CLIENTS7 && replies[slot].is_some() {
@@ -112,7 +114,20 @@ pub(crate) fn run(
                 Ok(message) => {
                     let response = match files::Packet::decode(message.payload()) {
                         Ok(request) => {
-                            server.handle(disk, slot, message.sender(), request, runtime::clock())
+                            let mut owner =
+                                control::Owner::new(&admin, &mut administrator, &mut replies, slot);
+                            let response = server.handle_with(
+                                disk,
+                                slot,
+                                message.sender(),
+                                request,
+                                runtime::clock(),
+                                |control| owner.poll(control),
+                            );
+                            if let Some(code) = owner.finish() {
+                                return code;
+                            }
+                            response
                         }
                         Err(_) => {
                             let mut response = files::Packet::new(1);
@@ -151,7 +166,7 @@ pub(crate) fn run(
 fn admin_request(
     server: &mut Server7<'_>,
     disk: &mut super::super::disk::Disk,
-    replies: &mut [Option<Message>; CLIENTS7 + 1],
+    replies: &mut Replies,
     words: [u64; 8],
 ) -> [u64; 8] {
     let mut result = [0; 8];
