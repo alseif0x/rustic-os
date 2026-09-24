@@ -8,15 +8,29 @@ from boot_support.image import DEFAULT_MEMORY_MIB, MAX_MEMORY_MIB, MEMORY_PROFIL
 from boot_support.runner import run, suite
 from boot_support.scenarios import MODES
 
+# Disposable V7 workspace harnesses. `test` runs them after the reference suite;
+# CI runs them as their own job (`v7`) so neither job outgrows its time budget.
+V7_HARNESSES = ("v7_read_test.py", "v7_launch_test.py", "v7_corrupt_test.py", "v7_write_test.py",
+                "v7_retention_test.py", "v7_faults_test.py", "v7_admission_test.py",
+                "v7_authority_test.py")
+
+
+def run_v7_harnesses():
+    root = Path(__file__).resolve().parent.parent
+    for harness in V7_HARNESSES:
+        subprocess.run([sys.executable, str(root / "tools" / harness)], cwd=root, check=True)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["image", "run", "test"])
+    parser.add_argument("action", choices=["image", "run", "test", "v7"])
     parser.add_argument("--mode", choices=MODES, default="ok")
     parser.add_argument("--memory", type=int, default=DEFAULT_MEMORY_MIB,
                         help=f"guest RAM in MiB, 256..{MAX_MEMORY_MIB} in 256 MiB steps (#48); the "
                              "reference `test` suite and the terminal/recovery harnesses remain "
                              f"{DEFAULT_MEMORY_MIB} MiB")
     parser.add_argument("--timeout", type=float, default=30)
+    parser.add_argument("--skip-v7", action="store_true",
+                        help="with `test`, run only the reference suite; `v7` runs the V7 harnesses alone")
     args = parser.parse_args()
     if not 1 <= args.timeout <= 120:
         parser.error("timeout must be between 1 and 120 seconds")
@@ -34,14 +48,9 @@ if __name__ == "__main__":
         result = run(build(args.mode, args.memory), args.timeout, memory=args.memory)
         print(result)
         raise SystemExit({"success": 0, "panic": 1, "fatal": 1, "exception": 1, "timeout": 124}.get(result["outcome"], 2))
+    elif args.action == "v7":
+        run_v7_harnesses()
     else:
         suite(args.timeout)
-        root = Path(__file__).resolve().parent.parent
-        for harness in ("v7_read_test.py", "v7_launch_test.py", "v7_corrupt_test.py", "v7_write_test.py",
-                        "v7_retention_test.py", "v7_faults_test.py", "v7_admission_test.py",
-                        "v7_authority_test.py"):
-            subprocess.run(
-                [sys.executable, str(root / "tools" / harness)],
-                cwd=root,
-                check=True,
-            )
+        if not args.skip_v7:
+            run_v7_harnesses()
