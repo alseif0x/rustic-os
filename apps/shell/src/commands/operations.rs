@@ -170,10 +170,11 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 Ok(())
             };
             if a.len() == 10 {
-                if argument(a, 8)? != "cut" {
-                    return Err(Error::Usage);
-                }
-                return cut(s, request, size, number(a, 9)?, fill);
+                return match argument(a, 8)? {
+                    "cut" => cut(s, request, size, number(a, 9)?, fill),
+                    "hold" => hold(s, request, size, number(a, 9)?, fill),
+                    _ => Err(Error::Usage),
+                };
             }
             let started = rustic_sdk::runtime::clock();
             let operation = s.files.workspace_replace(request, size, fill)?;
@@ -234,6 +235,45 @@ fn cut(
         "cut-v7 chunks={chunks} bytes={sent} job={job} old={} new={}\r\n",
         Outcome(old),
         Outcome(new)
+    ));
+    Ok(())
+}
+
+/// Diagnostic hold of a V7 transfer: send `chunks` chunks, have the owner ask
+/// for retention maintenance while the transfer is open, then abort it. The
+/// service must refuse the maintenance with `Busy` and change nothing; the
+/// harness checks the image. It never commits.
+fn hold(
+    s: &mut Session,
+    request: Replacement,
+    size: u32,
+    chunks: u64,
+    fill: impl Fn(u32, &mut [u8]) -> Result<(), rustic_sdk::files::Error> + Copy,
+) -> Result<(), Error> {
+    use rustic_sdk::abi::files::DATA;
+    // The hold must leave at least one chunk unsent.
+    if chunks == 0 || chunks >= u64::from(size.div_ceil(DATA as u32)) {
+        return Err(Error::Usage);
+    }
+    let mut transfer = s.files.workspace_open(request, size)?;
+    for _ in 0..chunks {
+        if let Err(error) = s.files.workspace_chunk(&mut transfer, fill) {
+            let _ = s.files.workspace_abort(transfer);
+            return Err(error.into());
+        }
+    }
+    let sent = transfer.offset();
+    let maintained = super::retention::maintain(s);
+    let aborted = s.files.workspace_abort(transfer);
+    let maintain = match maintained {
+        Ok(_) => Ok(()),
+        Err(Error::File(error)) => Err(error),
+        Err(other) => return Err(other),
+    };
+    output::format(format_args!(
+        "hold-v7 chunks={chunks} bytes={sent} maintain={} abort={}\r\n",
+        Outcome(maintain),
+        Outcome(aborted)
     ));
     Ok(())
 }

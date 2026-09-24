@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Explicit V7 dispatch: bounded reads and profile-2 tracked replacement only.
 //! No V5 mutation or admission path is reachable. Requests are served one at a
-//! time; a chunk that fills a sector and a commit perform blocking disk I/O.
+//! time; a chunk that fills a sector, a commit and the owner's retention
+//! maintenance perform blocking disk I/O. Maintenance is reachable only from
+//! the administrative channel.
 use rustic_file_service::{CLIENTS7, GrantRequest7, Server7};
 use rustic_sdk::{
     abi::{files, runtime as wire},
@@ -76,7 +78,7 @@ pub(crate) fn run(
                         return 3;
                     }
                     let output = match wire::decode(message.payload()) {
-                        Ok(words) => admin_request(server, &mut replies, words),
+                        Ok(words) => admin_request(server, disk, &mut replies, words),
                         Err(_) => [files::Error::Invalid as u64, 0, 0, 0, 0, 0, 0, 0],
                     };
                     replies[ADMIN_SLOT] =
@@ -144,6 +146,7 @@ pub(crate) fn run(
 
 fn admin_request(
     server: &mut Server7<'_>,
+    disk: &mut super::super::disk::Disk,
     replies: &mut [Option<Message>; CLIENTS7 + 1],
     words: [u64; 8],
 ) -> [u64; 8] {
@@ -187,6 +190,18 @@ fn admin_request(
                 close_slot(server, replies, slot);
             }
             34 if words[1..].iter().all(|word| *word == 0) => {}
+            // Owner retention maintenance: the service refuses it with `Busy`
+            // while any transfer, stage or unresolved admission is open.
+            command
+                if command == u64::from(files::MAINTAIN_RETENTION)
+                    && words[1..].iter().all(|word| *word == 0) =>
+            {
+                let done = server.maintain_retention(disk)?;
+                result[1] = done.previous_epoch;
+                result[2] = done.epoch;
+                result[3] = u64::from(done.records);
+                result[4] = u64::from(done.sectors);
+            }
             35 if slot < CLIENTS7 && words[2..].iter().all(|word| *word == 0) => {
                 close_slot(server, replies, slot);
             }

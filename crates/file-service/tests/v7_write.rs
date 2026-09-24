@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Profile-2 tracked replacement through the V7 service: streamed chunks,
 //! receipts, the retained-record budget, retry replay and authority loss, and
-//! lookups of retained records by operation ID or retry identity.
+//! lookups of retained records by operation ID or retry identity, and the
+//! owner's retention maintenance.
 #[path = "v7_write/lookup.rs"]
 mod lookup;
+#[path = "v7_write/retention.rs"]
+mod retention;
 
 use rustic_abi::files::{
     DATA, Error, OPERATION_PART, Packet, REPLACE_ABORT, REPLACE_CHUNK, REPLACE_COMMIT,

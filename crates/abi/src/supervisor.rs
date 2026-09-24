@@ -129,6 +129,37 @@ pub mod launch {
 /// without a file binding and the supervisor degraded; [`RESTART`] (`restart
 /// files`) is the recovery path and clears the degraded state.
 pub const REVOKE_SHELL_V7: u64 = 38;
+/// Explicit V7 retention maintenance, as an owner job. Accepted only in the V7
+/// file profile; never started implicitly, and no file grant can request it.
+///
+/// Words: `[39, 0, 0, 0, 0, 0, 0, 0]`. The supervisor sends the file service
+/// the administrative [`MAINTAIN_RETENTION`](crate::files::MAINTAIN_RETENTION)
+/// request. Starting the job is the owner's declaration that clients have
+/// resolved every current-epoch outcome they need; the service still refuses
+/// with `Busy`, changing nothing, while any transfer, stage or unresolved
+/// admission is open. The completed result is `[0, file_status, epoch,
+/// reclaimed]`: `file_status` is the service's file error code (0 on
+/// success, e.g. `Busy`, `Uncertain`, `Exhausted`), `epoch` the newly published
+/// retry epoch (the previous one plus one) and `reclaimed` the
+/// [`maintenance::reclaimed`] word. When `file_status` is nonzero both are
+/// zero; `Busy` means nothing changed. A job that fails with status 4 (the
+/// deadline passed, the exchange failed or the reply was malformed) leaves
+/// the epoch outcome unknown. A deadline or failed exchange also leaves the
+/// supervisor degraded until [`RESTART`] (`restart files`), whose fresh
+/// service mounts whichever generation became durable.
+pub const MAINTAIN_V7: u64 = 39;
+/// Result word of a completed [`MAINTAIN_V7`] job.
+pub mod maintenance {
+    /// Retained records dropped in the low 32 bits and payload sectors
+    /// returned to the free map in the high 32 bits.
+    pub const fn reclaimed(records: u32, sectors: u32) -> u64 {
+        (records as u64) | ((sectors as u64) << 32)
+    }
+    /// `(records, sectors)` of a [`reclaimed`] word.
+    pub const fn split(word: u64) -> (u32, u32) {
+        (word as u32, (word >> 32) as u32)
+    }
+}
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Separate native tasks application; it never receives console authority.

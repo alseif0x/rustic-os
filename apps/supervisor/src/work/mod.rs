@@ -2,6 +2,7 @@
 //! One owner operation at a time; bounded polling leaves independent control available.
 mod dispatch;
 pub(super) mod launch;
+mod maintenance;
 mod mount;
 mod policy;
 mod rebind;

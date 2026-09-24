@@ -9,7 +9,9 @@ measurements were refreshed: `file-server.elf` was 324,344 bytes and
 `block-probe.elf` 283,816 bytes. V7/profile 2 therefore now supports 512 KiB
 per file. On 2026-09-24, after the V7 tracked-write service and its receipt
 lookups, `file-server.elf` measured 364,104 bytes (it grew with the write
-service) and `block-probe.elf` 283,544 bytes; both still fit 512 KiB; V5/V6 remain frozen. Feature bit 3 identifies this development profile
+service) and `block-probe.elf` 283,544 bytes; after owner retention
+maintenance the same day it measured 368,872 bytes and `block-probe.elf`
+283,520 bytes; both still fit 512 KiB; V5/V6 remain frozen. Feature bit 3 identifies this development profile
 and the reader refuses earlier 256 KiB V7 images, which must be reprovisioned.
 The current host-tested owner supports
 tracked replacement, durable staged admission, explicit admitted execution,
@@ -378,7 +380,7 @@ the mounted `Volume7` owner. An external media change while mounted is not
 detected by this API; remount validates the whole live payload CRC again. The
 explicit read-only service routes the existing SDK range API to V7; the
 `terminal-v7` QEMU harness verifies the selected ELF (324,344 bytes in that
-recorded run; 364,104 bytes in the 2026-09-24 build) and 128-byte
+recorded run; 364,104 bytes and then 368,872 bytes in 2026-09-24 builds) and 128-byte
 manifest byte-for-byte in two boots, with another bounded read after service
 restart. It does not execute the file from the workspace or exercise V7 writes.
 

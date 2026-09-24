@@ -50,6 +50,15 @@ pub const GRANT: u8 = 32;
 pub const GRANT_SECOND_SCOPE: u8 = 38;
 pub const REVOKE: u8 = 33;
 pub const STATUS: u8 = 34;
+/// Private administrative V7 request, accepted only on the bootstrap
+/// (administrative) channel: drop every terminal retained record, free the
+/// snapshot sectors no live file owns and publish the next retry epoch.
+/// Words: `[44, 0, 0, 0, 0, 0, 0, 0]`. Reply: `[0, previous_epoch, epoch,
+/// records, sectors, 0, 0, 0]`, or `[error, 0, ...]`: `Busy`, with nothing
+/// changed, while a transfer, stage or unresolved admission is open;
+/// `Uncertain` when publication failed and the volume is fenced until restart.
+/// Client packets never reach it.
+pub const MAINTAIN_RETENTION: u8 = 44;
 pub const READ_RIGHT: u8 = 1;
 pub const WRITE_RIGHT: u8 = 2;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
