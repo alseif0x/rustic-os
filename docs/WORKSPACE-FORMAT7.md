@@ -283,6 +283,59 @@ partial after I/O failure, so it must be disposable and backed up; this is not
 rollback atomicity or production service integration. Never experiment on the
 owner's `artifacts/terminal/data.raw`.
 
+## Streamed staging
+
+The owner can also receive a file one 512-byte sector at a time, so a caller
+never lends the whole candidate. `open_stage(identity, expected_version, length,
+kind)` applies the same preflight as `replace_tracked` (`Stage7Kind::Tracked`) or
+`prepare_admission` (`Stage7Kind::Admission`) without I/O and returns a `Stage7`
+token. The token is neither `Clone` nor `Copy` and borrows nothing, so the owner
+stays usable between sectors. It carries a distinct owner identity, taken from a
+monotonic program-wide counter when a `Volume7` value opens its first stage,
+plus a per-owner nonce, so a token from another owner value is refused with
+`Invalid`. At most two stages are open at once; a third, or a second stage for
+the same retry scope, is `Busy`.
+
+A fresh stage plans its runs around the selected map and every other open
+stage and reserves one free receipt slot. The reservation is an in-memory
+overlay only: it is never written into the allocation map, which keeps
+describing exact durable ownership, so `free_sectors` does not change while a
+stage is open. `replace_tracked` and `prepare_admission` plan around the overlay
+and count reserved slots, and they return `Busy` for a scope a stage holds.
+`maintain_retention` returns `Busy` while any stage is open. `abort_stage`,
+`release_stages` (every open stage, including those whose token was dropped;
+`open_stages` counts them), a remount and any fence release reservations without
+I/O and without fencing; sectors a stage already wrote stay free because no
+metadata names them. The nonce survives the fence or remount, so an earlier
+token is refused with `Invalid` rather than naming a later stage.
+
+`stage_write` takes exactly `min(512, remaining)` bytes, zero-pads the final
+sector and keeps a running CRC over the logical bytes. A fresh stage issues
+exactly one payload write per call; a failed write is `Uncertain` and fences the
+owner. A stage that matches a retained retry record reserves nothing: each call
+reads one snapshot sector, updates the CRC over the stored bytes and records any
+difference without stopping; a read error releases the stage with the disk error
+and does not fence. `finish_tracked(&mut Stage7)` and `finish_admission` refuse a
+stage of the other kind or one with sectors still expected with `Invalid` and
+leave it open; any other outcome ends the stage. A retry returns the
+retained record with no writes or flushes, reporting `Corrupt` for a snapshot CRC
+mismatch ahead of `IdempotencyConflict` for different bytes. A fresh stage
+rechecks the version, epoch, scope and receipt slot and validates the candidate
+before any metadata write. A refusal such as `Version` or `NotFound` after a
+concurrent commit or removal releases the stage without fencing. Otherwise it
+publishes through the same barriers as `replace_tracked`, which is now itself
+implemented as open/write/finish on a stage that uses no slot, so the two paths
+issue identical disk command sequences. `finish_admission` returns a
+`PollPublication7` that starts at the payload flush and then follows the
+borrowed admission's barriers and cut points. As in the poll retry path, a
+corrupt admission retry fences. Stage writes use the blocking `Disk` interface,
+while the admission publication polls.
+
+Limits: this is a host-tested owner API only. Stage writes are not yet pollable,
+no service or protocol uses streamed staging, and a dropped token keeps its
+reservation until `release_stages`, a fence or a remount. Owner identity is
+distinct only within one program; tokens are not meant to cross processes.
+
 ## Bounded range reads
 
 `Volume7::read_range` resolves a live object ID, optionally pins its current
@@ -369,11 +422,15 @@ publication faults and repair are not exercised in the guest.
 Host codec tests cover byte offsets, independently computed CRCs, checksum-valid
 malformed records, temporal states, high monotonic identities, size boundaries
 through 512 KiB, and mutually incompatible wire profiles. The focused sparse
-host-disk suite has 80 v7 cases covering provision/mount, version-pinned bounded
+host-disk suite has 101 v7 cases covering provision/mount, version-pinned bounded
 range reads, tracked commit/replay,
 durable admission, pollable retry, execute/cancel, pre-write refusals, retained
 snapshots, torn headers, 105 admission publication cuts, 103 execute/cancel cuts,
-and recovery after final-flush errors. The separate `upgrade7` suite exercises
+recovery after final-flush errors, and streamed staging (byte-identical media
+against borrowed replacement and admission from 0 bytes to 512 KiB, a three-run
+fragmented payload, 106 streamed tracked and 105 streamed admission cuts,
+reservation, abort, release, stale and foreign-token, two interleaved stages,
+retry and refusal cases). The separate `upgrade7` suite exercises
 conversion/remount, 18 success/refusal cases, and each publication write/flush
 failure on sparse host disks. These host tests do not demonstrate real
 device/DMA behavior. Guest evidence is recorded in

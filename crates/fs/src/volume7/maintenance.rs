@@ -15,9 +15,16 @@ impl Volume7 {
     /// from the current epoch. Storage cannot know whether a completed response
     /// was observed. Once published, retries from the old epoch return
     /// [`Error::ExpiredEpoch`]. This operation never runs implicitly to make
-    /// room in a full receipt table.
+    /// room in a full receipt table. It returns [`Error::Busy`] while any
+    /// streamed stage is open.
     pub fn maintain_retention(&mut self, disk: &mut impl Disk) -> Result<u64, Error> {
         self.ready()?;
+
+        // An open stage depends on the current epoch, its retained retry
+        // record or a reserved receipt slot.
+        if self.stages_open() {
+            return Err(Error::Busy);
+        }
 
         // An unresolved admission may still complete or be cancelled, so it
         // must remain addressable until its outcome is terminal.

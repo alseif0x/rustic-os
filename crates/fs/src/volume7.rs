@@ -4,10 +4,10 @@
 //! Mount verifies both header copies, raw aggregate checksums, the decoded
 //! generation, and every live or retained payload CRC. Mutation paths support
 //! namespace queries/create/removal, existing-file direct commits, durable
-//! staged admission, explicit execution/cancellation and terminal-record
-//! retention maintenance. The out-of-place v5 converter is explicit and
-//! storage-only; service integration and capability advertisement remain
-//! separate work.
+//! staged admission, explicit execution/cancellation, terminal-record
+//! retention maintenance and owner-side streamed staging with bounded memory.
+//! The out-of-place v5 converter is explicit and storage-only; service
+//! integration and capability advertisement remain separate work.
 
 use crate::extent::MAP_WORDS;
 use crate::format7::{Header7, MAP_WORDS as FORMAT_MAP_WORDS, NODES, Node7, RETAINED, Record7};
@@ -23,9 +23,11 @@ mod provision;
 mod publication;
 mod read;
 mod replacement;
+mod stage;
 mod upgrade;
 
 pub use poll::{PollDisk7, PollPublication7, Publication7Cancel, Publication7Phase};
+pub use stage::{Stage7, Stage7Kind};
 pub use upgrade::upgrade_v5_to_v7;
 
 /// Scoped retry identity for one direct v7 file replacement.
@@ -54,6 +56,15 @@ pub struct Volume7 {
     pub(super) validation: [u64; MAP_WORDS],
     pub(super) recovered_from_header: bool,
     pub(super) fenced: bool,
+    /// Open streamed stages. Their reservations are an in-memory overlay that
+    /// is never written into `map`; clearing the owner releases them.
+    stages: [Option<stage::StageSlot>; stage::STAGES],
+    /// Monotonic stage token counter. It survives `clear()` and remount so a
+    /// token issued before a fence or remount can never name a later stage.
+    stage_nonce: u64,
+    /// Distinct owner identity carried by stage tokens, assigned when this
+    /// value opens its first stage; zero means unassigned. Survives `clear()`.
+    stage_owner: u64,
 }
 
 impl Volume7 {
@@ -66,6 +77,9 @@ impl Volume7 {
         validation: [0; MAP_WORDS],
         recovered_from_header: false,
         fenced: true,
+        stages: [None; stage::STAGES],
+        stage_nonce: 0,
+        stage_owner: 0,
     };
 
     fn ready(&self) -> Result<(), Error> {
@@ -84,6 +98,7 @@ impl Volume7 {
         self.map.fill(0);
         self.validation.fill(0);
         self.recovered_from_header = false;
+        self.stages = [None; stage::STAGES];
     }
 
     /// The verified selected header.

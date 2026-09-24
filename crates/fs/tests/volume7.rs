@@ -8,6 +8,8 @@ mod failures;
 mod namespace;
 #[path = "volume7/read.rs"]
 mod read;
+#[path = "volume7/stage.rs"]
+mod stage;
 mod support;
 #[path = "volume7/tracked.rs"]
 mod tracked;

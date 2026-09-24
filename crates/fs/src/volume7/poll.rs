@@ -158,6 +158,15 @@ impl<'a, D> PollPublication7<'a, D> {
         }
     }
 
+    /// Publish a candidate whose payload an owner-side stage already wrote.
+    /// The first command is the payload flush, so the barrier sequence and
+    /// cut points after the payload writes match [`Self::publish`].
+    pub(super) fn staged(volume: &'a mut Volume7, disk: &'a mut D, candidate: Candidate7) -> Self {
+        let mut publication = Self::publish(volume, disk, candidate, None);
+        publication.step = Step::PayloadFlush;
+        publication
+    }
+
     pub(super) fn retry(
         volume: &'a mut Volume7,
         disk: &'a mut D,
