@@ -107,6 +107,11 @@ data migration is one-way and needs a caller-owned copy of its source.
 
 ## Accounting and limitations
 
+#### Adopting a staged file service
+
+`adopt-files PID` turns a staged `rustic.file-server` child into the running V7 file service ([authority](AUTHORITY.md#storage-sourced-file-service)). The job reuses the restart retirement path (`apps/supervisor/src/work/retire.rs`) and the ordinary mount sequence with the adopted PID in place of the embedded image (`apps/supervisor/src/work/adopt.rs`), under the measured V7 6,000-tick budget. `python3 tools/v7_adopt_test.py` (in `boot.py v7`) seeds a fresh V7 volume with the built file-server pair and a utility pair, stages the file-server, checks that `start-staged` still refuses it, adopts it (42 ticks locally), confirms `services` reports the adopted PID from storage and that the process is a dynamic image, reads the full ELF and manifest byte-identically through it, refuses a non-staged PID and a staged utility (which stays dormant), then `restart files` returns to the embedded service and the reads repeat; the volume digest and `report7` are unchanged. Not exercised in the guest: adoption startup failure, deadline expiry and supersede cleanup, which are reasoned in review only.
+
+
 The normal topology is three resident processes and four channels: supervisor–files admin, supervisor–files owner data, supervisor–shell control and shell–files data. Two scoped utilities raise it to five processes and eight channels. In `mode=terminal-v7` a started staged child adds one process and one channel. Each program has at most 256 data/code/stack pages, including 16 stack pages; page tables are separately accounted. Pending wait sets copy at most eight tokens. Block capacity remains two request records/four grants, with one active device operation and three DMA frames.
 
 Runtime errors use `u64::MAX - 64 - index`: Denied, Address, Size, Invalid, Busy, NotFound, Full, WouldBlock, Closed, Protocol. Counts/tokens remain in their documented non-error ranges. PROCESS state values are empty=0, dormant=1, ready=2, running=3, blocked=4 and exited=5; exit kinds are normal=1, fault=2, killed=3. A normal exit reports its code; a fault reports its vector.

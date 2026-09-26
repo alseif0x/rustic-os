@@ -31,7 +31,7 @@ STAGE_KIND = 36
 SUPERSEDED = 6
 COPYING_PHASE = 2
 # Shell rendering of the supervisor's `launch::IDENTITY` refusal.
-IDENTITY_REFUSAL = "manifest identity is not started from storage"
+IDENTITY_REFUSAL = "manifest identity is not accepted for this storage launch"
 PROCESS_ROW = re.compile(r"(?m)^(\d+) (\w+) (\d+) (\d+) (\d+) (\d+) (\S+)\r?$")
 
 

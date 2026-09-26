@@ -15,11 +15,18 @@ impl State {
         self.work.start(s::RUN, Task::Launch(d))
     }
     pub(in super::super) fn start_restart(&mut self, initialize: bool) -> Result<[u64; 8], u64> {
+        self.start_file_transition(
+            s::RESTART,
+            Task::Restart(Restart::new(initialize, self.profile)),
+        )
+    }
+    pub(super) fn start_file_transition(&mut self, kind: u64, task: Task) -> Result<[u64; 8], u64> {
         if let Some(active) = self.work.active.take() {
             match active.task {
                 Task::Launch(d) => d.cancel(self),
                 Task::TasksList(task) => task.cancel(self),
                 Task::Restart(r) => r.cancel(self),
+                Task::Adopt(mut adopt) => adopt.cancel(self),
                 Task::Rebind(r) => r.cancel(self),
                 Task::StageV7(mut stage) => stage.cancel(self),
                 Task::Admin { .. } => {}
@@ -47,12 +54,11 @@ impl State {
                 let _ = c.control.endpoint.close();
             }
         }
-        let task = Task::Restart(Restart::new(initialize, self.profile));
         if self.profile == super::super::services::FileProfile::V7 {
             self.work
-                .start_budget(s::RESTART, task, super::restart::V7_BUDGET_TICKS)
+                .start_budget(kind, task, super::restart::V7_BUDGET_TICKS)
         } else {
-            self.work.start(s::RESTART, task)
+            self.work.start(kind, task)
         }
     }
     pub(in super::super) fn start_admin(
@@ -84,6 +90,12 @@ impl State {
             self.work.active = Some(active);
             return;
         }
+        let mut expired = expired;
+        if expired && let Task::Adopt(adopt) = &mut active.task {
+            adopt.timeout(self);
+            active.deadline = u64::MAX;
+            expired = false;
+        }
         let result = if expired {
             Err(4)
         } else {
@@ -91,6 +103,7 @@ impl State {
                 Task::Launch(d) => d.poll(self),
                 Task::TasksList(task) => task.poll(self),
                 Task::Restart(r) => r.poll(self),
+                Task::Adopt(adopt) => adopt.poll(self),
                 Task::Rebind(r) => r.poll(self),
                 Task::StageV7(stage) => stage.poll(self),
                 Task::Admin { words, sent } => poll_admin(self, words, sent),
@@ -122,7 +135,9 @@ impl State {
                     self.work.io = 0;
                     return;
                 }
-                if active.ticket.kind == s::RESTART {
+                // A failed adoption finishes with a nonzero status after its own
+                // cleanup; only a successful incarnation leaves the degraded state.
+                if matches!(active.ticket.kind, s::RESTART | s::ADOPT_FILES_V7) && words[0] == 0 {
                     self.degraded = false;
                     self.stopping = false;
                 }
@@ -143,6 +158,7 @@ impl State {
                     Task::Launch(d) => d.cancel(self),
                     Task::TasksList(task) => task.cancel(self),
                     Task::Restart(r) => r.cancel(self),
+                    Task::Adopt(mut adopt) => adopt.cancel(self),
                     Task::Rebind(r) => r.cancel(self),
                     Task::StageV7(mut stage) => stage.cancel(self),
                     Task::Admin { .. } => {}

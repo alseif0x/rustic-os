@@ -76,8 +76,8 @@ impl Session {
         }
         // A restart and an owner revocation of the V7 binding both report a
         // fresh binding; only a job newer than the adopted one replaces it.
-        use rustic_sdk::abi::supervisor::{RESTART, REVOKE_SHELL_V7};
-        if matches!(r[2], RESTART | REVOKE_SHELL_V7) && r[1] > self.binding_job {
+        use rustic_sdk::abi::supervisor::{ADOPT_FILES_V7, RESTART, REVOKE_SHELL_V7};
+        if matches!(r[2], RESTART | REVOKE_SHELL_V7 | ADOPT_FILES_V7) && r[1] > self.binding_job {
             let generation = u32::try_from(r[6]).map_err(|_| super::commands::Error::Service(4))?;
             if r[4] == 0 || r[5] == 0 || generation == 0 {
                 return Err(super::commands::Error::Service(4));

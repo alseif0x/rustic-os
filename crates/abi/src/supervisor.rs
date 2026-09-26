@@ -107,7 +107,7 @@ pub mod launch {
     pub const IDENTITY: u64 = 11;
     /// The role needs authority the control-only topology does not issue.
     pub const ROLE: u64 = 12;
-    /// The manifest does not request the features the issued channel implies.
+    /// The manifest does not request the features required by the issued topology.
     pub const FEATURES: u64 = 13;
     /// The staged child was already started once.
     pub const STARTED: u64 = 14;
@@ -160,6 +160,22 @@ pub mod maintenance {
         (word as u32, (word >> 32) as u32)
     }
 }
+/// Adopt the owner-staged `rustic.file-server` image as the running V7 file
+/// service. The service is mounted with the same block grant, administrative
+/// and owner channels, startup word, ready check, and shell grant as an
+/// embedded file-server. Plain [`RESTART`] always returns to the embedded
+/// image.
+///
+/// Words: `[40, pid, 0, 0, 0, 0, 0, 0]`, where `pid` is the dormant child from
+/// [`STAGE_V7`]. This request is accepted only in the V7 profile, with no
+/// other owner job active, while the supervisor is not stopping, and only for
+/// a staged file-server whose manifest requests both IPC and block. The
+/// completed result is `[0, files_pid, endpoint, generation, 0, 0, 0, 0]`,
+/// the same fresh shell binding reported by [`RESTART`]. Identity, feature and
+/// already-started refusals reuse [`launch`] statuses. Any accepted job that
+/// fails, times out or is superseded kills and reaps the adopted child; the
+/// supervisor stays degraded until [`RESTART`] succeeds.
+pub const ADOPT_FILES_V7: u64 = 40;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Separate native tasks application; it never receives console authority.

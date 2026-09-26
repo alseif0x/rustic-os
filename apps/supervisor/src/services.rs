@@ -12,9 +12,18 @@ pub enum FileProfile {
     V5,
     V7,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileSource {
+    Embedded,
+    Storage,
+}
 pub struct State {
     pub profile: FileProfile,
     pub files: u64,
+    pub(super) files_source: FileSource,
+    /// A staged image cancelled before it became `files`, awaiting restart's
+    /// normal pending-I/O drain and reap path.
+    pub(super) deferred_adopted: u64,
     pub shell: u64,
     pub admin: Rpc,
     pub owner: Client,

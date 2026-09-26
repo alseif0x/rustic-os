@@ -20,6 +20,9 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
     if argument(a, 0)? == "start-staged" {
         return start(s, a);
     }
+    if argument(a, 0)? == "adopt-files" {
+        return adopt(s, a);
+    }
     exact(a, 6)?;
     let workspace = argument(a, 1)?.parse::<Workspace>()?;
     let elf = argument(a, 2)?.parse::<Resource>()?;
@@ -50,6 +53,25 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+fn adopt(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
+    exact(a, 2)?;
+    let pid = number(a, 1)?;
+    let started = rustic_sdk::runtime::clock();
+    let result = s
+        .service([p::ADOPT_FILES_V7, pid, 0, 0, 0, 0, 0, 0])
+        .map_err(map_adopt_refusal)?;
+    let ticks = rustic_sdk::runtime::clock().saturating_sub(started);
+    if result[0] != 0 || result[1] != pid || result[2] == 0 || result[3] == 0 {
+        return Err(Error::Service(4));
+    }
+    output::format(format_args!(
+        "files adopted pid={} source=storage; utility sessions revoked\r\n",
+        result[1]
+    ));
+    output::format(format_args!("adopt-files ticks={ticks}\r\n"));
+    Ok(())
+}
+
 /// Role names the shell can send. It forwards roles the supervisor refuses too,
 /// so the storage launch policy is decided in one place.
 fn role(name: &str) -> Result<u64, Error> {
@@ -69,17 +91,7 @@ fn start(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
     let name = argument(a, 2)?;
     let r = s
         .request([p::START_STAGED, pid, role(name)?, 0, 0, 0, 0, 0])
-        .map_err(|error| match error {
-            Error::Service(code)
-                if matches!(
-                    code,
-                    launch::IDENTITY | launch::ROLE | launch::FEATURES | launch::STARTED
-                ) || code >= launch::KERNEL_ERROR_BASE =>
-            {
-                Error::StartRefused(code)
-            }
-            error => error,
-        })?;
+        .map_err(map_launch_refusal)?;
     if r[0] != 0 || r[1] != pid {
         return Err(Error::Service(4));
     }
@@ -89,14 +101,42 @@ fn start(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+fn map_launch_refusal(error: Error) -> Error {
+    match error {
+        Error::Service(code)
+            if matches!(
+                code,
+                launch::IDENTITY | launch::ROLE | launch::FEATURES | launch::STARTED
+            ) || code >= launch::KERNEL_ERROR_BASE =>
+        {
+            Error::StartRefused(code)
+        }
+        error => error,
+    }
+}
+
+fn map_adopt_refusal(error: Error) -> Error {
+    match error {
+        Error::Service(code)
+            if matches!(code, launch::IDENTITY | launch::FEATURES | launch::STARTED)
+                || code >= launch::KERNEL_ERROR_BASE =>
+        {
+            Error::AdoptRefused(code)
+        }
+        error => error,
+    }
+}
+
 /// Readable class of a start refusal status.
 pub(super) fn start_refusal(f: &mut core::fmt::Formatter<'_>, code: u64) -> core::fmt::Result {
     match code {
-        launch::IDENTITY => f.write_str("manifest identity is not started from storage"),
+        launch::IDENTITY => {
+            f.write_str("manifest identity is not accepted for this storage launch")
+        }
         launch::ROLE => {
             f.write_str("role needs authority the control-only topology does not issue")
         }
-        launch::FEATURES => f.write_str("manifest does not request the ipc feature"),
+        launch::FEATURES => f.write_str("manifest does not request the required features"),
         launch::STARTED => f.write_str("already started"),
         code => kernel(f, code - launch::KERNEL_ERROR_BASE),
     }
