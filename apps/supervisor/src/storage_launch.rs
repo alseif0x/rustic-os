@@ -20,8 +20,11 @@ use rustic_sdk::abi::{
     supervisor::{self as s, launch},
 };
 
-/// The only manifest identity the supervisor starts from storage.
+/// The only manifest identity the supervisor starts under the control-only
+/// utility topology.
 pub const IDENTITY: &str = "rustic.utility";
+/// The manifest identity accepted by the V7 file-service adoption topology.
+pub const FILE_SERVER_IDENTITY: &str = "rustic.file-server";
 
 /// Owner status for a kernel refusal of the control channel or of the start.
 pub fn kernel_refusal(error: RuntimeError) -> u64 {
@@ -33,6 +36,7 @@ pub fn kernel_refusal(error: RuntimeError) -> u64 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Facts {
     admitted_identity: bool,
+    file_server_identity: bool,
     requests: u64,
     version: [u16; 3],
 }
@@ -44,6 +48,7 @@ impl Facts {
         let manifest = Manifest::parse(manifest).ok()?;
         Some(Self {
             admitted_identity: manifest.identity == IDENTITY,
+            file_server_identity: manifest.identity == FILE_SERVER_IDENTITY,
             requests: manifest.requests,
             version: manifest.version,
         })
@@ -104,6 +109,20 @@ pub fn plan(facts: &Facts, role: u64) -> Result<Topology, u64> {
         return Err(launch::FEATURES);
     }
     Ok(Topology { role })
+}
+
+/// Decide whether the staged manifest may become the V7 file service. Its
+/// requested features are admission facts, not grants: the supervisor issues
+/// the block grant and client channels only after this identity check succeeds.
+pub fn plan_file_service_adoption(facts: &Facts) -> Result<(), u64> {
+    if !facts.file_server_identity {
+        return Err(launch::IDENTITY);
+    }
+    let required = application::IPC | application::BLOCK;
+    if facts.requests & required != required {
+        return Err(launch::FEATURES);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -179,6 +198,39 @@ mod tests {
             assert_eq!(
                 plan(&facts(identity, application::IPC), s::FINISH),
                 Err(launch::IDENTITY)
+            );
+        }
+    }
+
+    #[test]
+    fn only_the_file_server_with_ipc_and_block_may_be_adopted() {
+        let file_server = facts(FILE_SERVER_IDENTITY, application::IPC | application::BLOCK);
+        assert_eq!(plan_file_service_adoption(&file_server), Ok(()));
+        // Additional requested capabilities are not implicitly issued by the
+        // topology; the block grant and endpoints are supervisor-owned policy.
+        assert_eq!(
+            plan_file_service_adoption(&facts(
+                FILE_SERVER_IDENTITY,
+                application::IPC | application::BLOCK | application::CONTROL,
+            )),
+            Ok(())
+        );
+        assert_eq!(
+            plan_file_service_adoption(&facts(IDENTITY, application::IPC | application::BLOCK)),
+            Err(launch::IDENTITY)
+        );
+        assert_eq!(
+            plan_file_service_adoption(&facts(
+                "rustic.utilityx",
+                application::IPC | application::BLOCK
+            )),
+            Err(launch::IDENTITY)
+        );
+        for requests in [0, application::IPC, application::BLOCK] {
+            assert_eq!(
+                plan_file_service_adoption(&facts(FILE_SERVER_IDENTITY, requests)),
+                Err(launch::FEATURES),
+                "requests {requests:#x}"
             );
         }
     }

@@ -35,6 +35,8 @@ pub enum Error {
     StageRefused(u64),
     /// The supervisor refused to start the staged child with this owner status.
     StartRefused(u64),
+    /// The supervisor refused to adopt the staged file service with this status.
+    AdoptRefused(u64),
 }
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -57,6 +59,10 @@ impl core::fmt::Display for Error {
             }
             Self::StartRefused(code) => {
                 f.write_str("start refused: ")?;
+                staging::start_refusal(f, *code)
+            }
+            Self::AdoptRefused(code) => {
+                f.write_str("adoption refused: ")?;
                 staging::start_refusal(f, *code)
             }
             Self::Pending(id) => write!(
@@ -169,7 +175,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         | "operation" | "operation-v7" => operations::execute(s, a)?,
         "maintain-v7" => retention::execute(s, a)?,
         "ref" | "read-ref" => read::execute(s, a)?,
-        "stage-ref" | "start-staged" => staging::execute(s, a)?,
+        "stage-ref" | "start-staged" | "adopt-files" => staging::execute(s, a)?,
         "job-status" | "hold-io" | "io-status" => management::execute(s, a)?,
         "run" | "ps" | "kill" | "reap" | "permissions" | "revoke" | "services" | "mem"
         | "restart" => processes::execute(s, a)?,

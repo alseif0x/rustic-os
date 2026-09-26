@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! One owner operation at a time; bounded polling leaves independent control available.
+mod adopt;
 mod dispatch;
 pub(super) mod launch;
 mod maintenance;
@@ -7,6 +8,7 @@ mod mount;
 mod policy;
 mod rebind;
 mod restart;
+mod retire;
 pub(super) mod stage;
 mod start;
 pub(super) mod tasks;
@@ -24,6 +26,7 @@ enum Task {
     Launch(launch::Draft),
     TasksList(tasks::TaskList),
     Restart(restart::Restart),
+    Adopt(adopt::Adopt),
     Rebind(rebind::Rebind),
     StageV7(stage::Stage),
     Admin { words: [u64; 8], sent: bool },

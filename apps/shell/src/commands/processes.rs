@@ -156,7 +156,7 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             exact(a, 1)?;
             let r = s.service([p::SERVICES, 0, 0, 0, 0, 0, 0, 0])?;
             output::format(format_args!(
-                "files pid={} {}; shell pid={}; owner-policy id={} (0 means invalid; helper grants disabled)\r\n",
+                "files pid={} {}; files_source={}; shell pid={}; owner-policy id={} (0 means invalid; helper grants disabled)\r\n",
                 r[1],
                 if r[1] == 0 {
                     "unavailable"
@@ -165,6 +165,7 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 } else {
                     "mounted"
                 },
+                if r[5] == 1 { "storage" } else { "embedded" },
                 r[2],
                 r[3]
             ));

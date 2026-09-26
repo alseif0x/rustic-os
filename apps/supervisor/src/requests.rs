@@ -28,7 +28,8 @@ impl State {
             | s::STALL_FILES
             | s::JOB_STATUS
             | s::TASKS_LIST
-            | s::TASKS_ABORT => 2,
+            | s::TASKS_ABORT
+            | s::ADOPT_FILES_V7 => 2,
             s::TASKS_ROW | s::START_STAGED => 3,
             s::TASKS_CANDIDATE => 3,
             s::TASKS_OWNER_FORGET | s::TASKS_OWNER_APPLY_CUT => 3,
@@ -79,7 +80,7 @@ impl State {
                 self.shell,
                 self.policy as u64,
                 u64::from(self.administrative_ready()),
-                0,
+                u64::from(self.files != 0 && self.files_source == FileSource::Storage),
                 0,
                 0,
             ]),
@@ -103,6 +104,7 @@ impl State {
             s::REAP => self.reap(w[1]),
             s::STAGE_V7 => self.stage_v7(w),
             s::START_STAGED => self.start_staged(w[1], w[2]),
+            s::ADOPT_FILES_V7 => self.adopt_files_v7(w[1]),
             s::REVOKE_SHELL_V7 => self.revoke_shell_v7(),
             s::MAINTAIN_V7 => self.maintain_v7(),
             s::PERMISSIONS => {

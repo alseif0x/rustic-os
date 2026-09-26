@@ -15,6 +15,8 @@ pub fn start(startup: u64) -> Result<State, ()> {
     let mut state = State {
         profile,
         files: 0,
+        files_source: FileSource::Embedded,
+        deferred_adopted: 0,
         shell,
         admin: Rpc::new(0, 0),
         owner: Client::new(0, 0, 0),

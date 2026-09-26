@@ -5,6 +5,12 @@
 use super::super::services::*;
 use rustic_sdk::{files::Client, ipc::Endpoint, process, rpc::Rpc, runtime::abi as k};
 use rustic_supervisor::shell_binding;
+#[derive(Clone, Copy)]
+enum Image {
+    Embedded,
+    Adopted(u64),
+    Existing,
+}
 pub(super) struct Mount {
     admin: [u64; 2],
     owner: [u64; 2],
@@ -12,6 +18,7 @@ pub(super) struct Mount {
     phase: u8,
     sent: bool,
     policy: super::policy::Policy,
+    image: Image,
 }
 impl Mount {
     pub fn new() -> Self {
@@ -22,6 +29,13 @@ impl Mount {
             phase: 0,
             sent: false,
             policy: super::policy::Policy::new(),
+            image: Image::Embedded,
+        }
+    }
+    pub fn adopted(pid: u64) -> Self {
+        Self {
+            image: Image::Adopted(pid),
+            ..Self::new()
         }
     }
     /// Only the shell channel and grant phases, for a running V7 service whose
@@ -29,6 +43,7 @@ impl Mount {
     pub fn shell_only() -> Self {
         Self {
             phase: 3,
+            image: Image::Existing,
             ..Self::new()
         }
     }
@@ -54,7 +69,17 @@ impl Mount {
         let me = process::id().map_err(|_| 4u64)?;
         match self.phase {
             0 => {
-                state.files = spawn(k::FILES).map_err(|_| 3u64)?;
+                match self.image {
+                    Image::Embedded => {
+                        state.files = spawn(k::FILES).map_err(|_| 3u64)?;
+                        state.files_source = FileSource::Embedded;
+                    }
+                    Image::Adopted(pid) => {
+                        state.files = pid;
+                        state.files_source = FileSource::Storage;
+                    }
+                    Image::Existing => return Err(4),
+                }
                 self.admin = connect(me, state.files).map_err(|_| 3u64)?;
                 self.owner = connect(me, state.files).map_err(|_| 3u64)?;
                 let sectors = call([k::DEVICE, 0, 0, 0, 0, 0, 0, 0]).map_err(|_| 4u64)?[0];
