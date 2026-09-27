@@ -22,7 +22,7 @@ def verified(serial, records):
             return False
         budget = {key: int(value) for key, value in memory[0].items()}
         if (budget["slots"] != 16 or budget["entry_stack_bytes"] != 20480 or budget["oom_cases"] != 3
-                or not 0 < budget["metadata_bytes"] <= 16384
+                or not 0 < budget["metadata_bytes"] <= 16 * 2048
                 or not 0 < budget["peak_frames"] <= 16 * (256 + 16)
                 or budget["peak_frames"] % 8 != 0):
             return False

@@ -2,7 +2,7 @@
 """Fixed native owner workload. Timing wraps verified UART effects, not sleeps."""
 import re
 import time
-from terminal_support.cases import counters, exited, pid
+from terminal_support.cases import counters, pid
 from terminal_support.authority_cases import actor, cleanup, fence
 from terminal_support.management_cases import start_restart, wait_job
 
@@ -33,24 +33,21 @@ def exercise(uart, metrics, injected_ticks):
         result = actor(uart, child, "read")
         assert result["other"] == 17 and result["control_denied"] == 1
     actor(uart, c, "stage")
-    spins = [pid(uart, "run spin") for _ in range(4)]
     for child in (c, h):
         fill = actor(uart, child, "flood")
         assert fill["value"] >= 4 and fill["other"] > 0
     occupied = counters(uart)
-    assert occupied["processes"] == 9 and occupied["channels"] == 12 and occupied["pending_io"] == 0
-    uart.command("run spin", "child slot capacity exhausted")
+    assert occupied["processes"] == 5 and occupied["channels"] == 8 and occupied["pending_io"] == 0
+    # Both file-access children hold the two unreserved file-service clients.
+    uart.command("run read a", "file-service client capacity exhausted")
+    assert counters(uart)["processes"] == 5
     metrics["sampled_pressure_extra_frames"] = resident["free_frames"] - occupied["free_frames"]
-    timed(metrics, "pressure_control_seconds", lambda: uart.command("mem", "processes=9 channels=12"))
+    timed(metrics, "pressure_control_seconds", lambda: uart.command("mem", "processes=5 channels=8"))
     timed(metrics, "pressure_write_seconds", lambda: uart.command("write a owner", "written 5 bytes"))
     timed(metrics, "revoke_seconds", lambda: fence(uart, h, "access=fenced members=2 discarded_staging=1 effects=settled"))
     for child in (c, h):
         assert actor(uart, child, "drain")["other"] >= 1
         actor(uart, child, "read", 18)
-    for child in spins:
-        uart.command(f"kill {child}", "ok")
-        exited(uart, child, 3, 0)
-        uart.command(f"reap {child}", "exit_kind=3 code=0")
     cleanup(uart, c, h)
     assert counters(uart) == resident
 
