@@ -139,6 +139,7 @@ impl State {
             return Err(s::launch::STARTED);
         }
         plan_file_service_adoption(&staged.facts)?;
+        super::super::admission::admit(self, rustic_supervisor::topology::Admission::AdoptFiles)?;
         let reply = self.start_file_transition(s::ADOPT_FILES_V7, Task::Adopt(Adopt::new(pid)))?;
         self.staged = None;
         Ok(reply)

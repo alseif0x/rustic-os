@@ -58,10 +58,14 @@ impl State {
         if self.stopping {
             return Err(3);
         }
+        if !self.work.can_start() {
+            return Err(3);
+        }
         if staged.started.is_some() {
             return Err(launch::STARTED);
         }
         let topology = plan(&staged.facts, role)?;
+        super::super::admission::admit(self, rustic_supervisor::topology::Admission::StartStaged)?;
         let me = process::id().map_err(|_| 4u64)?;
         // The kernel reports `Full` for any refused channel, including one to a
         // child that is no longer live (for example, killed while dormant).

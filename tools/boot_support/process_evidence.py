@@ -21,9 +21,9 @@ def verified(serial, records):
         if len(memory) != 1:
             return False
         budget = {key: int(value) for key, value in memory[0].items()}
-        if (budget["slots"] != 8 or budget["entry_stack_bytes"] != 20480 or budget["oom_cases"] != 3
+        if (budget["slots"] != 16 or budget["entry_stack_bytes"] != 20480 or budget["oom_cases"] != 3
                 or not 0 < budget["metadata_bytes"] <= 16384
-                or not 0 < budget["peak_frames"] <= 8 * (256 + 16)
+                or not 0 < budget["peak_frames"] <= 16 * (256 + 16)
                 or budget["peak_frames"] % 8 != 0):
             return False
         expected = {"verified": 1, "ring": 3, "elf": 1, "isolated_faults": len(FAULTS),

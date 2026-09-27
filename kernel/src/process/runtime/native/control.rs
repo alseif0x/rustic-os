@@ -78,6 +78,19 @@ impl Manager {
                         .sum(),
                 ]
             }
+            IPC_INFO => {
+                let (channels, handles) = self.broker.counts();
+                r = [
+                    rustic_kernel::ipc::CHANNELS as u64,
+                    channels as u64,
+                    rustic_kernel::ipc::ENDPOINT_HANDLES as u64,
+                    handles as u64,
+                    rustic_kernel::ipc::HANDLES_PER_OWNER as u64,
+                    self.broker.max_owner_handles() as u64,
+                    0,
+                    0,
+                ];
+            }
             SPAWN => {
                 if !matches!(w[1], FILES | SHELL | UTILITY | TASKS) {
                     return Err(Error::Invalid);

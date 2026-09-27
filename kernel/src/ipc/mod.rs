@@ -18,4 +18,6 @@ impl From<crate::handles::Error> for Error {
     }
 }
 
-pub const CHANNELS: usize = 8;
+pub const CHANNELS: usize = 24;
+pub const ENDPOINT_HANDLES: usize = 64;
+pub const HANDLES_PER_OWNER: usize = 24;

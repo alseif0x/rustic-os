@@ -2,7 +2,7 @@
 """Native C/H authority mission through owner UART; independent persistent bytes."""
 import re
 import time
-from .cases import pid, counters, exited
+from .cases import pid, counters, exited, cleanup_children
 from .oracle import snapshot
 
 def actor_result(uart, child, status=0):
@@ -35,10 +35,7 @@ def fence(uart, child, expected="access=fenced members=2", request=True):
         time.sleep(.02)
 
 def cleanup(uart, *children):
-    for child in children:
-        uart.command(f"kill {child}", "ok")
-        exited(uart, child, 3, 0)
-        uart.command(f"reap {child}", "code=0")
+    cleanup_children(uart, *children)
 
 def exercise(uart, data):
     baseline = counters(uart)

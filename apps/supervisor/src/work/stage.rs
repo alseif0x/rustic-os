@@ -27,6 +27,7 @@ use rustic_sdk::{
 use rustic_supervisor::{
     image_pair::{Pin, STORAGE_FEATURES, Transfer, file_refusal, kernel_refusal},
     storage_launch::Facts,
+    topology::Admission,
 };
 
 /// Job budget in 100 Hz PIT ticks, sized from measurement rather than the
@@ -328,6 +329,7 @@ impl State {
         {
             return Err(3);
         }
+        super::super::admission::admit(self, Admission::Stage)?;
         self.work
             .start_budget(s::STAGE_V7, Task::StageV7(Stage::new(pin)), BUDGET_TICKS)
     }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Fixed-capacity round robin; PID allocation is monotonic and fails on overflow.
-pub const CAPACITY: usize = 8;
+pub const CAPACITY: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pid(pub u64);

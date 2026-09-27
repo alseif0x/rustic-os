@@ -46,18 +46,24 @@ impl State {
         }
         let mut members = [0; 2];
         let mut mask = 0;
-        for (slot, c) in self.children.iter_mut().enumerate() {
-            if let Some(c) = c
-                && c.root == root
-            {
+        for c in self.children.iter_mut().flatten() {
+            if c.root == root {
                 c.rights = 0;
-                members[slot] = c.pid;
-                mask |= 1 << (slot + 2);
+                if c.client_slot != 0 {
+                    let member = usize::from(members[0] != 0);
+                    if member < members.len() {
+                        members[member] = c.pid;
+                        mask |= 1 << c.client_slot;
+                    }
+                }
             }
         }
-        if let Some((slot, helper)) = self.work.pending_helper(root) {
-            members[slot] = helper;
-            mask |= 1 << (slot + 2);
+        if let Some((client_slot, helper)) = self.work.pending_helper(root) {
+            let member = usize::from(members[0] != 0);
+            if member < members.len() {
+                members[member] = helper;
+                mask |= 1 << client_slot;
+            }
         }
         if !self
             .takeover

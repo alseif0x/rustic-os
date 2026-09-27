@@ -264,8 +264,8 @@ def _killed_case(uart, pair):
 
     Killing the staged child while dormant makes the kernel refuse its control
     channel (CONNECT reports `Full` for any refused channel). It stands in for
-    channel-table exhaustion, which `_occupy_utility_slots` shows is unreachable
-    in this profile.
+    channel-table exhaustion, which the declared pool and admission reserve keep
+    below the kernel's 24-channel limit.
     """
     before = counters(uart.command("mem"))
     pid, _ = _stage(uart, pair)
@@ -288,29 +288,31 @@ def _killed_case(uart, pair):
 
 
 def _occupy_utility_slots(uart, before):
-    """Fill both utility slots with the only utilities V7 can run: control-only ones.
+    """Fill all six child slots with control-only utilities in the V7 profile.
 
     A file-access utility cannot be launched in this profile: the shell cannot
     name a file (V7 path resolution is `Unsupported`), and the supervisor refuses
     file-access roles outside the V5 profile anyway. So the channel peak here is
-    four resident channels, two utility control channels and one staged-child
-    control channel: seven of eight, and real exhaustion is unreachable.
+    four resident channels, six utility control channels and one staged-child
+    control channel. Real channel exhaustion remains unreachable because the
+    supervisor child pool fills first and keeps three recovery channels free.
     """
     spins = []
-    for _ in range(2):
+    for _ in range(6):
         spins.append(int(re.search(r"started pid=(\d+)", uart.command("run spin", "started pid="))[1]))
-    uart.command("run spin", "error: service busy or full")
+    uart.command("run spin", "child slot capacity exhausted")
     unsupported = uart.command(f"run read {LAUNCH_PROBE_FILE}", "error: Unsupported")
     occupied = counters(uart.command("mem"))
-    if occupied != {"processes": before["processes"] + 2, "channels": before["channels"] + 2}:
-        raise AssertionError(f"two control-only utilities did not add two channels: {before} -> {occupied}")
+    if occupied != {"processes": before["processes"] + 6, "channels": before["channels"] + 6}:
+        raise AssertionError(f"six control-only utilities did not add six channels: {before} -> {occupied}")
     return spins, occupied, "run read" in unsupported
 
 
 def _fault_case(uart, pair):
-    """With both utility slots full, a started child that faults is isolated and reaped.
+    """With all child slots full, a staged child that faults is isolated and reaped.
 
-    The start does not need a utility slot; its channel is the seventh of eight.
+    The staged start does not need a utility slot; its channel stays within the
+    declared recovery headroom.
     """
     before = counters(uart.command("mem"))
     pid, _ = _stage(uart, pair)
@@ -454,10 +456,9 @@ def verify(image, volume_tool, output=None):
                          for variant in variants],
             "volumes": volumes,
             "boots": boots,
-            "unexercised": ["channel-table exhaustion: unreachable in the V7 profile; V7 path resolution is "
-                            "Unsupported and the supervisor admits file-access utilities only in V5, so the "
-                            "peak is 4 resident + 2 control-only utility + 1 staged control = 7 of 8 channels "
-                            "(recorded in boots[1].fault)",
+            "unexercised": ["kernel channel-table exhaustion: the six-child pool and three-channel recovery reserve "
+                            "stop V7 launches before the 24-channel kernel limit; the fault case records the "
+                            "11-channel peak with six control-only utilities and one staged control channel",
                             "features refusal 13 (no shipped utility manifest omits ipc; host-tested in "
                             "rustic_supervisor::storage_launch)"],
             "identity_refusal_exercised_by": "tools/v7_read_test.py (staged file-server)",

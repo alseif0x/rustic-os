@@ -67,6 +67,14 @@ impl TaskList {
         self.slot
     }
 
+    pub(super) fn pending_child_role(&self) -> Option<rustic_supervisor::topology::ChildRole> {
+        self.draft.as_ref().map(Draft::child_role)
+    }
+
+    pub(super) fn pending_file_client_slot(&self) -> Option<u8> {
+        self.draft.as_ref().and_then(Draft::client_slot)
+    }
+
     pub(super) fn new(draft: Draft) -> Self {
         let empty = wire::Row {
             id: 0,

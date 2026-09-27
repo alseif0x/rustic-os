@@ -176,6 +176,15 @@ pub mod maintenance {
 /// fails, times out or is superseded kills and reaps the adopted child; the
 /// supervisor stays degraded until [`RESTART`] succeeds.
 pub const ADOPT_FILES_V7: u64 = 40;
+/// Return declared kernel/service limits and their current usage.
+///
+/// Words: `[41, 0, 0, 0, 0, 0, 0, 0]`. The reply is `[0, ...]`; words 1..6
+/// pack `(used, limit)` as a little-endian pair of 16-bit values in the low
+/// and high 32-bit halves, respectively: processes, channels, endpoint handles,
+/// maximum handles owned by one process, file clients and child slots. Word 7
+/// packs reserved process/channel/total-handle/per-owner-handle budgets in four
+/// 16-bit fields, from least to most significant.
+pub const LIMITS: u64 = 41;
 pub const SESSION: u64 = 8;
 pub const HELPER: u64 = 9;
 /// Separate native tasks application; it never receives console authority.
@@ -299,3 +308,12 @@ pub const ADMISSION_SESSION: u64 = 12;
 /// Owner-issued diagnostic actor whose durable-operation subject is its own PID.
 /// The caller cannot select or impersonate an existing subject.
 pub const PRIVATE_ADMISSION_SESSION: u64 = 13;
+/// Named capacity refusal statuses, additive to the generic owner statuses.
+pub mod capacity {
+    pub const PROCESSES: u64 = 80;
+    pub const CHANNELS: u64 = 81;
+    pub const HANDLES: u64 = 82;
+    pub const OWNER_HANDLES: u64 = 83;
+    pub const FILE_CLIENTS: u64 = 84;
+    pub const CHILD_SLOTS: u64 = 85;
+}

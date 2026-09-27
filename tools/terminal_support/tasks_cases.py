@@ -45,9 +45,9 @@ def exercise(uart, data):
                            ("tasks list missing-tasks", "NotFound"),
                            ("tasks list /workspaces", "IsDirectory")):
         results.append(observe(uart, data, command, "error: " + error))
-    first, second = pid(uart, "run spin"), pid(uart, "run spin")
-    results.append(observe(uart, data, "tasks list tasks-fixture", "error: service busy or full"))
-    cleanup(uart, first, second)
+    spins = [pid(uart, "run spin") for _ in range(6)]
+    results.append(observe(uart, data, "tasks list tasks-fixture", "error: child slot capacity exhausted"))
+    cleanup(uart, *spins)
     results.append(observe(uart, data, "tasks list tasks-fixture", "2 tasks", rows))
     write_document(uart, "rustic-tasks-v1\n")
     results.append(observe(uart, data, "tasks list tasks-fixture", "0 tasks"))

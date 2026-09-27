@@ -106,8 +106,17 @@ fn map_launch_refusal(error: Error) -> Error {
         Error::Service(code)
             if matches!(
                 code,
-                launch::IDENTITY | launch::ROLE | launch::FEATURES | launch::STARTED
-            ) || code >= launch::KERNEL_ERROR_BASE =>
+                launch::IDENTITY
+                    | launch::ROLE
+                    | launch::FEATURES
+                    | launch::STARTED
+                    | rustic_sdk::abi::supervisor::capacity::PROCESSES
+                    | rustic_sdk::abi::supervisor::capacity::CHANNELS
+                    | rustic_sdk::abi::supervisor::capacity::HANDLES
+                    | rustic_sdk::abi::supervisor::capacity::OWNER_HANDLES
+                    | rustic_sdk::abi::supervisor::capacity::FILE_CLIENTS
+                    | rustic_sdk::abi::supervisor::capacity::CHILD_SLOTS
+            ) || code == 64 + RuntimeError::Full as u64 =>
         {
             Error::StartRefused(code)
         }
@@ -118,8 +127,20 @@ fn map_launch_refusal(error: Error) -> Error {
 fn map_adopt_refusal(error: Error) -> Error {
     match error {
         Error::Service(code)
-            if matches!(code, launch::IDENTITY | launch::FEATURES | launch::STARTED)
-                || code >= launch::KERNEL_ERROR_BASE =>
+            if matches!(
+                code,
+                launch::IDENTITY
+                    | launch::FEATURES
+                    | launch::STARTED
+                    | rustic_sdk::abi::supervisor::capacity::PROCESSES
+                    | rustic_sdk::abi::supervisor::capacity::CHANNELS
+                    | rustic_sdk::abi::supervisor::capacity::HANDLES
+                    | rustic_sdk::abi::supervisor::capacity::OWNER_HANDLES
+                    | rustic_sdk::abi::supervisor::capacity::FILE_CLIENTS
+                    | rustic_sdk::abi::supervisor::capacity::CHILD_SLOTS
+            ) || (launch::KERNEL_ERROR_BASE
+                ..rustic_sdk::abi::supervisor::capacity::PROCESSES)
+                .contains(&code) =>
         {
             Error::AdoptRefused(code)
         }
@@ -138,6 +159,24 @@ pub(super) fn start_refusal(f: &mut core::fmt::Formatter<'_>, code: u64) -> core
         }
         launch::FEATURES => f.write_str("manifest does not request the required features"),
         launch::STARTED => f.write_str("already started"),
+        rustic_sdk::abi::supervisor::capacity::PROCESSES => {
+            f.write_str("process capacity exhausted")
+        }
+        rustic_sdk::abi::supervisor::capacity::CHANNELS => {
+            f.write_str("channel capacity exhausted")
+        }
+        rustic_sdk::abi::supervisor::capacity::HANDLES => {
+            f.write_str("endpoint handle capacity exhausted")
+        }
+        rustic_sdk::abi::supervisor::capacity::OWNER_HANDLES => {
+            f.write_str("per-process endpoint handle capacity exhausted")
+        }
+        rustic_sdk::abi::supervisor::capacity::FILE_CLIENTS => {
+            f.write_str("file-service client capacity exhausted")
+        }
+        rustic_sdk::abi::supervisor::capacity::CHILD_SLOTS => {
+            f.write_str("child slot capacity exhausted")
+        }
         code => kernel(f, code - launch::KERNEL_ERROR_BASE),
     }
 }

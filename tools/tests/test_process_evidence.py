@@ -14,7 +14,7 @@ def evidence():
         if address is None:
             address = 0xffffffff80012000
         lines.append(f"RUSTIC PROCESS_FAULT case={name} ring=3 vector={vector} error={error:#x} address={address:#x} survivor=1 reclaimed=1")
-    lines.append("RUSTIC PROCESS_MEMORY slots=8 peak_frames=200 metadata_bytes=1200 entry_stack_bytes=20480 oom_cases=3")
+    lines.append("RUSTIC PROCESS_MEMORY slots=16 peak_frames=200 metadata_bytes=1200 entry_stack_bytes=20480 oom_cases=3")
     return "\n".join(lines)
 
 
