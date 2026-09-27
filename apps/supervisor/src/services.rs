@@ -28,7 +28,7 @@ pub struct State {
     pub admin: Rpc,
     pub owner: Client,
     pub control: Endpoint,
-    pub children: [Option<Child>; 2],
+    pub children: [Option<Child>; rustic_supervisor::topology::CHILD_POOL_SIZE],
     pub(super) task_result: Option<Cached>,
     pub(super) admin_drain: bool,
     pub policy: u32,
@@ -115,7 +115,13 @@ impl State {
                     }
                 }
                 Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {
-                    let mut tokens = [0; 6];
+                    // Shell control, each declared child, the staged child, the
+                    // administrative channel and the owner client always fit.
+                    const _: () = assert!(
+                        4 + rustic_supervisor::topology::CHILD_POOL_SIZE
+                            <= runtime::abi::MAX_WAIT_HANDLES
+                    );
+                    let mut tokens = [0; runtime::abi::MAX_WAIT_HANDLES];
                     tokens[0] = self.control.token();
                     let mut n = 1;
                     for c in self.children.iter().flatten() {

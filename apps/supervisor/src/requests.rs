@@ -17,7 +17,8 @@ impl State {
             | s::ENABLE_ADMISSIONS
             | s::ENABLE_PREVENTION_REASONS
             | s::REVOKE_SHELL_V7
-            | s::MAINTAIN_V7 => 1,
+            | s::MAINTAIN_V7
+            | s::LIMITS => 1,
             s::PROCESS
             | s::KILL
             | s::REAP
@@ -59,6 +60,7 @@ impl State {
                 // reported, since the shell reply has no word left to shift.
                 Ok([0, r[1], r[2], r[3], r[4], r[5], r[6], r[7]])
             }
+            s::LIMITS => super::admission::report(self),
             s::PROCESS => {
                 let r = call([k::PROCESS, w[1], 0, 0, 0, 0, 0, 0]).map_err(|_| 1u64)?;
                 Ok([0, r[0], r[1], r[2], r[3], r[4], r[5], r[6]])

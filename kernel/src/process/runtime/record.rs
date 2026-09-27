@@ -8,7 +8,7 @@ pub(super) enum Pending {
     Console,
     #[cfg(feature = "sdk-test")]
     Any {
-        handles: [u64; 8],
+        handles: [u64; rustic_abi::runtime::MAX_WAIT_HANDLES],
         count: usize,
         deadline: u64,
     },

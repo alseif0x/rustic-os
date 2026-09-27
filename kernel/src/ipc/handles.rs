@@ -4,4 +4,5 @@ pub(super) struct Endpoint {
     pub(super) channel: u64,
     pub(super) side: usize,
 }
-pub(super) type Table = crate::handles::Table<Endpoint, 32, 16>;
+pub(super) type Table =
+    crate::handles::Table<Endpoint, { super::ENDPOINT_HANDLES }, { super::HANDLES_PER_OWNER }>;

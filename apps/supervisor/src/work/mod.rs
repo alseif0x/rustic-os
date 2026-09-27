@@ -58,9 +58,11 @@ impl Work {
     pub fn can_start(&self) -> bool {
         self.active.is_none() && self.history.can_start()
     }
-    pub fn pending_helper(&self, root: u32) -> Option<(usize, u64)> {
+    pub fn pending_helper(&self, root: u32) -> Option<(u8, u64)> {
         match self.active.as_ref().map(|a| &a.task) {
-            Some(Task::Launch(d)) if d.parent == root && root != 0 => Some((d.slot, d.pid)),
+            Some(Task::Launch(d)) if d.parent == root && root != 0 => {
+                Some((d.client_slot()?, d.pid))
+            }
             _ => None,
         }
     }
@@ -70,6 +72,26 @@ impl Work {
             Some(Task::TasksList(task)) => Some(task.slot()),
             _ => None,
         }
+    }
+    pub fn pending_child_role(&self) -> Option<rustic_supervisor::topology::ChildRole> {
+        match self.active.as_ref().map(|a| &a.task) {
+            Some(Task::Launch(d)) => Some(d.child_role()),
+            Some(Task::TasksList(task)) => task.pending_child_role(),
+            _ => None,
+        }
+    }
+    pub fn pending_file_client_slot(&self) -> Option<u8> {
+        match self.active.as_ref().map(|a| &a.task) {
+            Some(Task::Launch(d)) => d.client_slot(),
+            Some(Task::TasksList(task)) => task.pending_file_client_slot(),
+            _ => None,
+        }
+    }
+    pub fn staging_pending(&self) -> bool {
+        matches!(
+            self.active.as_ref().map(|a| &a.task),
+            Some(Task::StageV7(_))
+        )
     }
     /// Whether the active job may be waiting for a reply on the owner client.
     pub fn reads_owner(&self) -> bool {

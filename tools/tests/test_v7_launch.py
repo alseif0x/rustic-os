@@ -71,7 +71,7 @@ class Observations(unittest.TestCase):
         self.assertEqual(rows[1]["program"], "supervisor")
 
     def test_counters_need_processes_and_channels(self):
-        text = "ticks=9 free_frames=1 process_slots=8 processes=3 channels=4 pending_io=0 heap_pages=2"
+        text = "ticks=9 free_frames=1 process_slots=16 processes=3 channels=4 pending_io=0 heap_pages=2"
         self.assertEqual(counters(text), {"processes": 3, "channels": 4})
         with self.assertRaises(ValueError):
             counters("ticks=9 processes=3")

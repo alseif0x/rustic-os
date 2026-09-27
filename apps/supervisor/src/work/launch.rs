@@ -8,6 +8,7 @@ use rustic_sdk::{
     runtime::{self, abi as k},
 };
 use rustic_supervisor::grant::{Phase, Request, Sequence, Step};
+use rustic_supervisor::topology::{self, Admission, ChildRole};
 
 /// Bounded extension an expired job is given to withdraw an installed root, in
 /// PIT ticks. It is granted once; a channel that does not answer within it leaves
@@ -16,6 +17,7 @@ const WITHDRAWAL_TICKS: u64 = 200;
 
 pub(in super::super) struct Draft {
     pub slot: usize,
+    client_slot: Option<u8>,
     pub pid: u64,
     role: u64,
     scope: u32,
@@ -38,6 +40,12 @@ impl Draft {
     pub(super) fn slot(&self) -> usize {
         self.slot
     }
+    pub(super) fn client_slot(&self) -> Option<u8> {
+        self.client_slot
+    }
+    pub(super) fn child_role(&self) -> ChildRole {
+        topology::child_role(self.role).unwrap()
+    }
     pub(super) fn pid(&self) -> u64 {
         self.pid
     }
@@ -59,7 +67,7 @@ impl Draft {
     /// facts; the sequence only orders and formats them.
     fn request(&self) -> Request {
         Request {
-            slot: self.slot,
+            slot: self.client_slot.map_or(0, |slot| usize::from(slot) - 2),
             role: self.role,
             peer: self.pid,
             endpoint: self.data[0],
@@ -256,6 +264,7 @@ impl Draft {
                 self.parent
             },
             role: self.role,
+            client_slot: self.client_slot.unwrap_or(0),
             file_token: self.data[1],
             report: [0; 7],
             closed: false,
@@ -309,6 +318,9 @@ impl State {
                 | s::TASKS
                 | s::TASKS_OWNER
         );
+        if self.stopping || file_access && !self.work.can_start() {
+            return Err(3);
+        }
         if file_access {
             if !self.administrative_ready() {
                 return Err(3);
@@ -342,9 +354,11 @@ impl State {
         } else if scope != 0 || other != 0 || rights != 0 || lease != 0 {
             return Err(1);
         }
+        let child_role = topology::child_role(role).ok_or(1u64)?;
         if (role == s::HELPER) != (parent != 0) {
             return Err(2);
         }
+        super::super::admission::admit(self, Admission::Child(child_role))?;
         let expires = if parent != 0 {
             self.children
                 .iter()
@@ -368,7 +382,15 @@ impl State {
             .iter()
             .enumerate()
             .position(|(i, c)| c.is_none() && Some(i) != reserved)
-            .ok_or(3u64)?;
+            .ok_or(s::capacity::CHILD_SLOTS)?;
+        let client_slot = if file_access {
+            Some(
+                self.free_file_client_slot()
+                    .ok_or(s::capacity::FILE_CLIENTS)?,
+            )
+        } else {
+            None
+        };
         let me = process::id().map_err(|_| 4u64)?;
         let program = if role == s::TASKS {
             k::TASKS
@@ -378,6 +400,7 @@ impl State {
         let pid = spawn(program).map_err(|_| 3u64)?;
         let mut d = Draft {
             slot,
+            client_slot,
             pid,
             role,
             scope,
@@ -418,5 +441,16 @@ impl State {
                 }
             }
         }
+    }
+
+    fn free_file_client_slot(&self) -> Option<u8> {
+        (2u8..4).find(|slot| {
+            !self
+                .children
+                .iter()
+                .flatten()
+                .any(|child| child.client_slot == *slot)
+                && self.work.pending_file_client_slot() != Some(*slot)
+        })
     }
 }

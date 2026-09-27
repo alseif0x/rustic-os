@@ -38,7 +38,9 @@ def exercise(uart, metrics, injected_ticks):
         assert fill["value"] >= 4 and fill["other"] > 0
     occupied = counters(uart)
     assert occupied["processes"] == 5 and occupied["channels"] == 8 and occupied["pending_io"] == 0
-    uart.command("run spin", "busy or full")
+    # Both file-access children hold the two unreserved file-service clients.
+    uart.command("run read a", "file-service client capacity exhausted")
+    assert counters(uart)["processes"] == 5
     metrics["sampled_pressure_extra_frames"] = resident["free_frames"] - occupied["free_frames"]
     timed(metrics, "pressure_control_seconds", lambda: uart.command("mem", "processes=5 channels=8"))
     timed(metrics, "pressure_write_seconds", lambda: uart.command("write a owner", "written 5 bytes"))

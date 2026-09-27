@@ -4,6 +4,7 @@ use rustic_abi::runtime::*;
 fn control_shapes_reject_unknown_operations_and_reserved_words() {
     for (op, end) in [
         (INFO, 1),
+        (IPC_INFO, 1),
         (SPAWN, 2),
         (START, 5),
         (CONNECT, 3),
@@ -32,7 +33,7 @@ fn control_shapes_reject_unknown_operations_and_reserved_words() {
         assert_eq!(decode(&encode(w)), Ok(w));
     }
     assert_eq!(
-        validate_control([10, 0, 0, 0, 0, 0, 0, 0]),
+        validate_control([20, 0, 0, 0, 0, 0, 0, 0]),
         Err(Error::Invalid)
     );
     assert_eq!(

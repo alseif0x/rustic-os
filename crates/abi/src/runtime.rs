@@ -6,6 +6,11 @@ pub const CONSOLE_WRITE: u64 = 16;
 pub const CONSOLE_READ: u64 = 17;
 pub const CONSOLE_WAIT: u64 = 18;
 pub const WAIT_SET: u64 = 19;
+/// Most endpoint tokens one [`WAIT_SET`] call accepts. It covers the
+/// supervisor's widest wait: its shell control end, every declared child
+/// control end, the staged child, the administrative channel and the owner
+/// file client.
+pub const MAX_WAIT_HANDLES: usize = 16;
 pub const CONTROL: u64 = 20;
 pub const INFO: u64 = 0;
 pub const SPAWN: u64 = 1;
@@ -17,6 +22,8 @@ pub const PROCESS: u64 = 6;
 pub const KILL: u64 = 7;
 pub const REAP: u64 = 8;
 pub const SHUTDOWN: u64 = 9;
+/// Native supervisor resource snapshot: channel/endpoint limits and live use.
+pub const IPC_INFO: u64 = 10;
 pub const DEVICE: u64 = 11;
 pub const CLOSE_ENDPOINT: u64 = 12;
 pub const MOVE_ENDPOINT: u64 = 13;
@@ -81,7 +88,7 @@ impl Error {
 /// Strict shape validation is shared with host contract tests.
 pub fn validate_control(w: [u64; 8]) -> Result<(), Error> {
     let end = match w[0] {
-        INFO | SHUTDOWN | DEVICE | OBSERVATION_STATUS => 1,
+        INFO | IPC_INFO | SHUTDOWN | DEVICE | OBSERVATION_STATUS => 1,
         HOLD_COMPLETION => 4,
         SPAWN | CONSOLE_GRANT | PROCESS | KILL | REAP | STAGE_COMMIT | STAGE_ABORT => 2,
         CONNECT | CLOSE_ENDPOINT => 3,

@@ -21,7 +21,7 @@ pub fn start(startup: u64) -> Result<State, ()> {
         admin: Rpc::new(0, 0),
         owner: Client::new(0, 0, 0),
         control: Endpoint::from_bootstrap(control[0]),
-        children: [None, None],
+        children: [const { None }; rustic_supervisor::topology::CHILD_POOL_SIZE],
         task_result: None,
         admin_drain: false,
         policy: 0,

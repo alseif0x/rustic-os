@@ -13,6 +13,7 @@ from boot_support.scenarios import MODES
 V7_HARNESSES = ("v7_read_test.py", "v7_launch_test.py", "v7_adopt_test.py", "v7_corrupt_test.py", "v7_write_test.py",
                 "v7_retention_test.py", "v7_faults_test.py", "v7_admission_test.py",
                 "v7_authority_test.py", "v7_migration_test.py", "v7_capacity_test.py")
+CAPACITY_HARNESSES = ("capacity_topology_test.py",)
 
 
 def run_v7_harnesses():
@@ -52,5 +53,8 @@ if __name__ == "__main__":
         run_v7_harnesses()
     else:
         suite(args.timeout)
+        for harness in CAPACITY_HARNESSES:
+            root = Path(__file__).resolve().parent.parent
+            subprocess.run([sys.executable, str(root / "tools" / harness)], cwd=root, check=True)
         if not args.skip_v7:
             run_v7_harnesses()

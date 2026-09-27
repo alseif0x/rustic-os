@@ -3,6 +3,7 @@
 #![no_main]
 #[cfg(feature = "tasks-acceptance")]
 mod acceptance;
+mod admission;
 mod bootstrap;
 mod children;
 

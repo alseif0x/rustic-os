@@ -120,4 +120,41 @@ impl<T: Copy, const CAPACITY: usize, const PER_OWNER: usize> Table<T, CAPACITY, 
     pub(crate) fn count(&self) -> usize {
         self.entries.iter().flatten().count()
     }
+
+    pub(crate) fn max_owner_count(&self) -> usize {
+        self.entries
+            .iter()
+            .flatten()
+            .map(|entry| {
+                self.entries
+                    .iter()
+                    .flatten()
+                    .filter(|other| other.owner == entry.owner)
+                    .count()
+            })
+            .max()
+            .unwrap_or(0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Table;
+
+    #[test]
+    fn enforces_total_and_per_owner_quotas() {
+        let mut table = Table::<u8, 64, 24>::new(0, 1, 0);
+        for _ in 0..24 {
+            table.grant(1, 0, 1).unwrap();
+        }
+        assert_eq!(table.grant(1, 0, 1), Err(crate::handles::Error::Quota));
+        for owner in 2..=3 {
+            for _ in 0..20 {
+                table.grant(owner, 0, 1).unwrap();
+            }
+        }
+        assert_eq!(table.count(), 64);
+        assert_eq!(table.max_owner_count(), 24);
+        assert_eq!(table.grant(4, 0, 1), Err(crate::handles::Error::Quota));
+    }
 }

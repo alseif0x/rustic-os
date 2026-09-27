@@ -4,7 +4,7 @@ use super::super::{
     syscall::Action,
 };
 use crate::arch::{interrupts, memory::Memory};
-use rustic_abi::runtime::Error;
+use rustic_abi::runtime::{Error, MAX_WAIT_HANDLES};
 use rustic_kernel::ipc::Broker;
 pub(in super::super) fn readiness(
     broker: &Broker,
@@ -26,17 +26,17 @@ pub(in super::super) fn readiness(
 }
 pub(super) fn dispatch(p: &Process, broker: &Broker, owner: u64, memory: &Memory) -> Action {
     let [address, count, timeout] = p.frame.arguments();
-    if count == 0 || count > 8 || timeout > 1000 {
+    if count == 0 || count > MAX_WAIT_HANDLES as u64 || timeout > 1000 {
         return Action::Return(Error::Size.code());
     }
-    let mut bytes = [0; 64];
+    let mut bytes = [0; MAX_WAIT_HANDLES * 8];
     if memory
         .copy_from_user(&p.space, address, &mut bytes[..count as usize * 8])
         .is_err()
     {
         return Action::Return(Error::Address.code());
     }
-    let mut handles = [0; 8];
+    let mut handles = [0; MAX_WAIT_HANDLES];
     for (h, b) in handles.iter_mut().zip(bytes.as_chunks::<8>().0) {
         *h = u64::from_le_bytes(*b);
     }

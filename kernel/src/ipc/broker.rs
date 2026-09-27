@@ -119,4 +119,8 @@ impl Broker {
     pub fn counts(&self) -> (usize, usize) {
         (self.channels.iter().flatten().count(), self.handles.count())
     }
+
+    pub fn max_owner_handles(&self) -> usize {
+        self.handles.max_owner_count()
+    }
 }

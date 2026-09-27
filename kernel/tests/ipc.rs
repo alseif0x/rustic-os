@@ -110,9 +110,9 @@ fn foreign_stale_and_transferred_handles_cannot_gain_rights() {
 #[test]
 fn bounded_channels_recover_without_reusing_tokens() {
     let mut broker = Broker::new();
-    let (old, _) = broker.connect(1, 1).unwrap();
+    let (old, _) = broker.connect(1, 2).unwrap();
     for _ in 1..rustic_kernel::ipc::CHANNELS {
-        broker.connect(1, 1).unwrap();
+        broker.connect(1, 2).unwrap();
     }
     assert_eq!(broker.connect(2, 3), Err(Error::Quota));
     assert_eq!(
@@ -124,13 +124,32 @@ fn bounded_channels_recover_without_reusing_tokens() {
     );
     broker.close_owner(1);
     for _ in 0..1000 {
+        broker.close_owner(2);
         let (new, _) = broker.connect(1, 2).unwrap();
         assert!(new > old);
         assert_eq!(broker.check(1, old, READ), Err(Error::Handle));
         broker.close_owner(1);
-        broker.close_owner(2);
-        assert_eq!(broker.counts(), (0, 0));
     }
+    broker.close_owner(2);
+    assert_eq!(broker.counts(), (0, 0));
+}
+
+#[test]
+fn endpoint_handle_budget_enforces_total_and_per_owner_limits() {
+    let mut broker = Broker::new();
+    for _ in 0..rustic_kernel::ipc::CHANNELS {
+        broker.connect(1, 2).unwrap();
+    }
+    assert_eq!(broker.counts().1, 2 * rustic_kernel::ipc::CHANNELS);
+    assert_eq!(
+        broker.max_owner_handles(),
+        rustic_kernel::ipc::HANDLES_PER_OWNER
+    );
+    assert_eq!(rustic_kernel::ipc::ENDPOINT_HANDLES, 64);
+    broker.close_owner(1);
+    broker.close_owner(2);
+    assert_eq!(broker.counts(), (0, 0));
+    assert_eq!(broker.max_owner_handles(), 0);
 }
 
 #[test]

@@ -96,7 +96,8 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
         "ps" => {
             exact(a, 1)?;
             output::text("PID STATE EXIT CODE PREEMPTIONS PARENT PROGRAM\r\n");
-            for slot in 0..8 {
+            let slots = s.service([p::INFO, 0, 0, 0, 0, 0, 0, 0])?[3];
+            for slot in 0..slots {
                 let r = s.service([p::PROCESS, slot, 0, 0, 0, 0, 0, 0])?;
                 if r[1] != 0 {
                     output::format(format_args!(
@@ -178,7 +179,60 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 r[1], r[2], r[3], r[4], r[5], r[6], r[7]
             ));
         }
+        "limits" => {
+            exact(a, 1)?;
+            let r = s.service([p::LIMITS, 0, 0, 0, 0, 0, 0, 0])?;
+            let (processes, process_limit) = used_limit(r[1]);
+            let (channels, channel_limit) = used_limit(r[2]);
+            let (handles, handle_limit) = used_limit(r[3]);
+            let (owner_handles, owner_handle_limit) = used_limit(r[4]);
+            let (file_clients, file_client_limit) = used_limit(r[5]);
+            let (child_slots, child_limit) = used_limit(r[6]);
+            let process_reserve = r[7] as u16;
+            let channel_reserve = (r[7] >> 16) as u16;
+            let handle_reserve = (r[7] >> 32) as u16;
+            let owner_reserve = (r[7] >> 48) as u16;
+            output::format(format_args!(
+                "processes used={processes}/{process_limit} available={} reserve={process_reserve}\r\n",
+                process_limit
+                    .saturating_sub(processes)
+                    .saturating_sub(process_reserve)
+            ));
+            output::format(format_args!(
+                "channels used={channels}/{channel_limit} available={} reserve={channel_reserve}\r\n",
+                channel_limit
+                    .saturating_sub(channels)
+                    .saturating_sub(channel_reserve)
+            ));
+            output::format(format_args!(
+                "endpoint_handles used={handles}/{handle_limit} available={} reserve={handle_reserve}\r\n",
+                handle_limit
+                    .saturating_sub(handles)
+                    .saturating_sub(handle_reserve)
+            ));
+            output::format(format_args!(
+                "owner_handles max={owner_handles}/{owner_handle_limit} available={} reserve={owner_reserve}\r\n",
+                owner_handle_limit
+                    .saturating_sub(owner_handles)
+                    .saturating_sub(owner_reserve)
+            ));
+            let file_app_used = file_clients.saturating_sub(2);
+            output::format(format_args!(
+                "file_clients used={file_clients}/{file_client_limit} available={} reserved=2\r\n",
+                file_client_limit
+                    .saturating_sub(2)
+                    .saturating_sub(file_app_used)
+            ));
+            output::format(format_args!(
+                "child_slots used={child_slots}/{child_limit} available={}\r\n",
+                child_limit.saturating_sub(child_slots)
+            ));
+        }
         _ => return Err(Error::Unknown),
     }
     Ok(())
+}
+
+fn used_limit(word: u64) -> (u16, u16) {
+    (word as u16, (word >> 32) as u16)
 }

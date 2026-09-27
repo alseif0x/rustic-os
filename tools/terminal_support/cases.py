@@ -17,13 +17,29 @@ def exited(uart, child, kind, code):
             raise AssertionError(f"process {child} failed to exit: {output}")
         time.sleep(.05)
 
+def cleanup_children(uart, *children, kind=3, code=0):
+    for child in children:
+        uart.command(f"kill {child}", "ok")
+    deadline = time.monotonic() + 10
+    pattern = {child: re.compile(rf"(?m)^{child} exited {kind} {code} ") for child in children}
+    while True:
+        output = uart.command("ps")
+        missing = [child for child, match in pattern.items() if not match.search(output)]
+        if not missing:
+            break
+        if time.monotonic() > deadline:
+            raise AssertionError(f"processes failed to exit: {missing}\n{output}")
+        time.sleep(.05)
+    for child in children:
+        uart.command(f"reap {child}", f"exit_kind={kind} code={code}")
+
 def counters(uart):
     return {k:int(v) for k,v in re.findall(r"(free_frames|processes|channels|pending_io)=(\d+)",uart.command("mem"))}
 
 def help_checks(uart):
     default = uart.command("help")
     assert "help advanced" in default, default
-    for marker in ("pwd", "ls [PATH]", "write PATH TEXT", "cat PATH", "ps | kill PID", "tasks list PATH", "exit"):
+    for marker in ("pwd", "ls [PATH]", "write PATH TEXT", "cat PATH", "ps | kill PID", "limits", "tasks list PATH", "exit"):
         assert marker in default, default
     assert "run spin|fault|exit" not in default, default
     uart.command("status", "0")
@@ -83,7 +99,7 @@ def exercise(uart):
     uart.command('write hello "Hello from native Rust"', "written 22 bytes")
     uart.command("cat hello", "Hello from native Rust")
     uart.command("services", "mounted")
-    uart.command("mem", "process_slots=8")
+    uart.command("mem", "process_slots=16")
     uart.command("mkdir project")
     uart.command("cd project")
     uart.command("pwd", "/workspaces/project")
@@ -119,16 +135,12 @@ def exercise(uart):
         exited(uart, child, 1, 0)
         uart.command(f"permissions {child}", "report=0 bytes=22 other=17")
         uart.command(f"reap {child}", "exit_kind=1 code=0")
-    first = pid(uart, "run spin")
-    second = pid(uart, "run spin")
-    uart.command("run spin", "busy or full")
+    spins = [pid(uart, "run spin") for _ in range(6)]
+    uart.command("run spin", "child slot capacity exhausted")
     uart.command("kill 2", "denied")
-    uart.command(f"reap {first}", "busy or full")
+    uart.command(f"reap {spins[0]}", "busy or full")
     uart.command("cat hello", "Hello from native Rust")
-    for child in (first, second):
-        uart.command(f"kill {child}", "ok")
-        exited(uart, child, 3, 0)
-        uart.command(f"reap {child}", "exit_kind=3 code=0")
+    cleanup_children(uart, *spins)
     assert counters(uart) == baseline, (baseline, counters(uart))
     child = pid(uart, "run watch hello")
     uart.command(f"revoke {child}", "ok")

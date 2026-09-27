@@ -16,7 +16,7 @@ pub fn control(words: [u64; 8]) -> Result<[u64; 8], Error> {
     abi::decode(&bytes)
 }
 pub fn wait_set(handles: &[u64], timeout: u64) -> Result<(), Error> {
-    if handles.is_empty() || handles.len() > 8 {
+    if handles.is_empty() || handles.len() > abi::MAX_WAIT_HANDLES {
         return Err(Error::Size);
     }
     // SAFETY: The kernel copies this bounded initialized array before blocking.

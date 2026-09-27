@@ -71,13 +71,24 @@ impl core::fmt::Display for Error {
             ),
             Self::Service(code) => write!(
                 f,
-                "service {}",
-                match code {
-                    1 => "invalid request",
-                    2 => "denied",
-                    3 => "busy or full",
-                    6 => "superseded; earlier submitted effects may still exist",
-                    _ => "unavailable",
+                "{}",
+                match *code {
+                    rustic_sdk::abi::supervisor::capacity::PROCESSES =>
+                        "process capacity exhausted",
+                    rustic_sdk::abi::supervisor::capacity::CHANNELS => "channel capacity exhausted",
+                    rustic_sdk::abi::supervisor::capacity::HANDLES =>
+                        "endpoint handle capacity exhausted",
+                    rustic_sdk::abi::supervisor::capacity::OWNER_HANDLES =>
+                        "per-process endpoint handle capacity exhausted",
+                    rustic_sdk::abi::supervisor::capacity::FILE_CLIENTS =>
+                        "file-service client capacity exhausted",
+                    rustic_sdk::abi::supervisor::capacity::CHILD_SLOTS =>
+                        "child slot capacity exhausted",
+                    1 => "service invalid request",
+                    2 => "service denied",
+                    3 => "service busy or full",
+                    6 => "service superseded; earlier submitted effects may still exist",
+                    _ => "service unavailable",
                 }
             ),
         }
@@ -178,7 +189,7 @@ pub fn execute(s: &mut Session, a: &Args<'_>) -> Result<bool, Error> {
         "stage-ref" | "start-staged" | "adopt-files" => staging::execute(s, a)?,
         "job-status" | "hold-io" | "io-status" => management::execute(s, a)?,
         "run" | "ps" | "kill" | "reap" | "permissions" | "revoke" | "services" | "mem"
-        | "restart" => processes::execute(s, a)?,
+        | "limits" | "restart" => processes::execute(s, a)?,
         _ => return Err(Error::Unknown),
     }
     Ok(false)

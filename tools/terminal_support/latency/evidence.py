@@ -87,7 +87,7 @@ def validate(case, evidence, state, backend, serial):
     for memory in memories:
         require(memory["pending_io"] == 0 and memory["free_frames"] > 0
                 and memory["processes"] == 3 and memory["channels"] == 4
-                and memory["process_slots"] == 8, "pending request or unexpected native resource state")
+                and memory["process_slots"] == 16, "pending request or unexpected native resource state")
         require(all(memory[key] == memories[0][key] for key in memory if key != "ticks"),
                 "native resources were not reclaimed")
     require(memories[0]["ticks"] <= memories[1]["ticks"] <= memories[2]["ticks"], "guest clock reversed")

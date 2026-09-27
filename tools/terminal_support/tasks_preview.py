@@ -41,9 +41,9 @@ def exercise(uart, data):
         ('tasks preview add missing "Missing"', 'NotFound'),
     ):
         cases.append(observe(uart, data, command, 'error: ' + error))
-    first, second = pid(uart, 'run spin'), pid(uart, 'run spin')
-    cases.append(observe(uart, data, 'tasks preview done tasks-fixture 7', 'error: service busy or full'))
-    cleanup(uart, first, second)
+    spins = [pid(uart, 'run spin') for _ in range(6)]
+    cases.append(observe(uart, data, 'tasks preview done tasks-fixture 7', 'error: child slot capacity exhausted'))
+    cleanup(uart, *spins)
     write_document(uart, 'rustic-tasks-v1\n')
     cases.append(candidate(uart, data, 'tasks preview add tasks-fixture "First"', 1, True,
                            ('1 [open] First',), 'rustic-tasks-v1\n'))

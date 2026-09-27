@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Two utility slots, explicit scopes and fresh generations, no inherited shell authority.
+//! Six bounded child slots, explicit scopes and fresh generations, no inherited shell authority.
 use super::services::*;
 use rustic_sdk::{abi::supervisor as s, runtime::abi as k};
 /// Roles whose control endpoint carries owner-stepped actor replies. Those
@@ -26,6 +26,8 @@ pub struct Child {
     pub generation: u32,
     pub root: u32,
     pub role: u64,
+    /// File-service client slot 2 or 3; zero for control-only children.
+    pub client_slot: u8,
     pub file_token: u64,
     pub report: [u64; 7],
     pub closed: bool,

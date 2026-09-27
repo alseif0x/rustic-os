@@ -14,7 +14,7 @@ mod staged;
 use super::{Error, manager::Manager};
 use crate::arch::{Serial, memory::Memory};
 use core::fmt::Write;
-use rustic_kernel::process::lifecycle::{Exit, Pid, State};
+use rustic_kernel::process::lifecycle::{CAPACITY, Exit, Pid, State};
 
 core::arch::global_asm!(include_str!("../fixture.S"));
 unsafe extern "C" {
@@ -59,7 +59,7 @@ pub(crate) fn verify(memory: &mut Memory) {
     sdk::verify(&mut manager, memory);
     assert_eq!(memory.free_frames(), before);
     let mut serial = Serial::take().expect("process diagnostic owner");
-    writeln!(serial, "RUSTIC PROCESS_MEMORY slots=8 peak_frames={peak_frames} metadata_bytes={} entry_stack_bytes=20480 oom_cases=3", core::mem::size_of::<Manager>()).unwrap();
+    writeln!(serial, "RUSTIC PROCESS_MEMORY slots={} peak_frames={peak_frames} metadata_bytes={} entry_stack_bytes=20480 oom_cases=3", CAPACITY, core::mem::size_of::<Manager>()).unwrap();
     writeln!(serial, "RUSTIC PROCESS verified=1 ring=3 elf=1 preemptions={preemptions} isolated_faults={faults} repeats=16 reclaimed=1 abi=65536 free_before={before} free_after={}", memory.free_frames()).unwrap();
     serial.flush();
 }

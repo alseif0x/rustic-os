@@ -174,8 +174,8 @@ PROBE = ("probe-v7 every=64 probes=206 max=2 p50=0 total=9 free_min=51000 free_m
 
 class Decoding(unittest.TestCase):
     def test_mem_decodes_every_field(self):
-        text = "mem\r\nticks=12 free_frames=51000 process_slots=8 processes=3 channels=4 pending_io=0 heap_pages=0\r\n> "
-        self.assertEqual(decode_mem(text), {"ticks": 12, "free_frames": 51000, "process_slots": 8, "processes": 3,
+        text = "mem\r\nticks=12 free_frames=51000 process_slots=16 processes=3 channels=4 pending_io=0 heap_pages=0\r\n> "
+        self.assertEqual(decode_mem(text), {"ticks": 12, "free_frames": 51000, "process_slots": 16, "processes": 3,
                                             "channels": 4, "pending_io": 0, "heap_pages": 0})
         with self.assertRaises(ValueError):
             decode_mem("mem\r\nerror: Busy\r\n> ")
