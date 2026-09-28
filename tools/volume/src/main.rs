@@ -1,35 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Host tool for v5/v6 volume images, explicit disposable v7 fixtures and the
-//! deliberate out-of-place v5 -> v7 data migration, and adding host files to an
-//! existing disposable v7 image. It never touches the owner's terminal volume
-//! and never guesses a lineage.
+//! Host tool for explicit disposable v7 fixtures: creating, reporting, adding
+//! host files to and maintaining an existing disposable v7 image. It never
+//! touches the owner's terminal volume and never guesses a lineage.
 use std::path::Path;
 use std::process::ExitCode;
 
 mod add7;
 mod command;
 mod disk;
-mod history5;
 mod maintain7;
-mod migrate7;
 #[cfg(test)]
 mod testing;
 
 const USAGE: &str = "\
 usage: rustic-volume <command>
-  provision <image> <lineage>   write a fresh v6 volume image
-  seed <image>                  write a small v5 experiment volume image
-  write <image> <parent> <name> <source>   place a host file in a v6 image
-  migrate <image> <lineage>     migrate a v5 image to v6 in place
-  report <image>                print a v6 image as JSON
   seed7 <image> <lineage> <elf> <manifest> [--scratch]
                                 create a fresh v7 application fixture; --scratch
                                 also creates an empty writable scratch.bin
   report7 <image>               verify a v7 image and print its metadata as JSON
-  seed5-history <image> <lineage> <receipts|admissions|completed>
-                                create a disposable v5 source with scoped history
-  migrate7 <v5-image> <v7-target> <lineage>
-                                copy a v5 image into a new v7 image (data only)
   add7 <v7-image> <workspace> <name> <file>
                                 add a new file to an existing v7 image with one
                                 tracked commit; <workspace> is a node id, ws_
@@ -38,12 +26,10 @@ usage: rustic-volume <command>
                                 dropping its terminal retained records (the host
                                 form of the owner's retention maintenance)
 A lineage is 32 hex characters. Images are exactly one volume long; a shorter
-file is refused so a truncated image cannot be read as a volume. `seed7`,
-`seed5-history` and `migrate7` targets use an exclusive create and refuse an
-existing path; `migrate7` only reads its source and removes a target it created
-when the migration fails. `add7` refuses an existing name and a full retention
-table before it writes, and never evicts a record; `maintain7` refuses with
-`Busy` while an admission is unresolved.";
+file is refused so a truncated image cannot be read as a volume. `seed7`
+uses an exclusive create and refuses an existing path. `add7` refuses an
+existing name and a full retention table before it writes, and never evicts a
+record; `maintain7` refuses with `Busy` while an admission is unresolved.";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -61,17 +47,6 @@ fn main() -> ExitCode {
 
 fn run(args: &[String]) -> Result<String, String> {
     match args {
-        [command, image, lineage] if command == "provision" => {
-            command::provision(Path::new(image), lineage)
-        }
-        [command, image, lineage] if command == "migrate" => {
-            command::migrate(Path::new(image), lineage)
-        }
-        [command, image, parent, name, source] if command == "write" => {
-            command::write(Path::new(image), parent, name, Path::new(source))
-        }
-        [command, image] if command == "seed" => command::seed(Path::new(image)),
-        [command, image] if command == "report" => command::report(Path::new(image)),
         [command, image, lineage, elf, manifest] if command == "seed7" => command::seed7(
             Path::new(image),
             lineage,
@@ -91,12 +66,6 @@ fn run(args: &[String]) -> Result<String, String> {
             )
         }
         [command, image] if command == "report7" => command::report7(Path::new(image)),
-        [command, image, lineage, set] if command == "seed5-history" => {
-            history5::seed5_history(Path::new(image), lineage, set)
-        }
-        [command, source, target, lineage] if command == "migrate7" => {
-            migrate7::migrate7(Path::new(source), Path::new(target), lineage)
-        }
         [command, image, workspace, name, source] if command == "add7" => {
             add7::add7(Path::new(image), workspace, name, Path::new(source))
         }

@@ -5,8 +5,8 @@ use rustic_fs::Error;
 use rustic_sdk::block::{Device, Operation};
 
 /// A sector-bounded view of the fixture's disk: `base` is the first sector of
-/// the volume and `sectors` how long that volume is, so the v5 volumes and the
-/// v6 workspace cannot address each other.
+/// the volume and `sectors` how long that volume is, so the disjoint v5 volumes
+/// cannot address each other.
 pub(super) struct Disk<'a> {
     pub(super) device: &'a Device,
     pub(super) writes: usize,

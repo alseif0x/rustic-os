@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Host tests for the v6 payload extents and free-space accounting (#51).
+//! Host tests for the payload extents and free-space accounting (#51).
 use rustic_fs::{
-    DATA_BYTES_V6, DATA_SECTORS, EXTENTS_PER_FILE, Error, Extent, Extents, FILE_SECTORS_MAX,
-    FreeSpace, MAP_WORDS, MAX_FILE_V6,
+    DATA_SECTORS, EXTENT_DATA_BYTES, EXTENT_MAX_FILE, EXTENTS_PER_FILE, Error, Extent, Extents,
+    FILE_SECTORS_MAX, FreeSpace, MAP_WORDS,
 };
 
 fn map() -> Vec<u64> {
@@ -12,11 +12,11 @@ fn map() -> Vec<u64> {
 #[test]
 fn the_region_and_its_metadata_cost_are_the_selected_budget() {
     // 64 MiB at 512-byte sectors, one bitmap bit per sector: 16 KiB of metadata.
-    assert_eq!(DATA_BYTES_V6, 64 * 1024 * 1024);
+    assert_eq!(EXTENT_DATA_BYTES, 64 * 1024 * 1024);
     assert_eq!(DATA_SECTORS, 131_072);
     assert_eq!(MAP_WORDS, 2048);
     assert_eq!(MAP_WORDS * 8, 16 * 1024);
-    assert_eq!(MAX_FILE_V6, 256 * 1024);
+    assert_eq!(EXTENT_MAX_FILE, 256 * 1024);
     assert_eq!(FILE_SECTORS_MAX, 512);
     assert_eq!(EXTENTS_PER_FILE, 8);
 }
@@ -43,7 +43,7 @@ fn allocation_is_first_fit_and_release_returns_exactly_what_it_took() {
         space.release(run).unwrap();
     }
     assert_eq!(space.free_sectors(), initial);
-    assert_eq!(space.free_bytes(), DATA_BYTES_V6);
+    assert_eq!(space.free_bytes(), EXTENT_DATA_BYTES);
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn a_file_may_hold_a_bounded_number_of_runs_and_a_bounded_length() {
     }
     assert_eq!(extents.len(), EXTENTS_PER_FILE);
     assert_eq!(extents.sectors(), FILE_SECTORS_MAX);
-    assert_eq!(extents.bytes(), MAX_FILE_V6 as u64);
+    assert_eq!(extents.bytes(), EXTENT_MAX_FILE as u64);
     // A ninth run needs a control-record field that does not exist.
     assert_eq!(
         extents.push(Extent::new(0, 1)),

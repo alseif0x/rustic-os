@@ -1,31 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Payload extents and free-space accounting for the v6 layout (#51).
+//! Payload extents and free-space accounting for the extent layout (#51).
 //!
 //! The v5 volume addresses payload as `(slot, bank)` with one fixed kilobyte per
 //! bank, so a file is one bank and 174 sectors bound the whole payload area. The
-//! selected v6 shape keeps the copy-on-write control records and moves file bytes
-//! into a dedicated region addressed by an extent list, with a free-space map
-//! that is itself checksummed by the caller. This module is the pure half of that
+//! extent layout keeps copy-on-write control records and moves file bytes into
+//! a dedicated region addressed by an extent list, with a free-space map that
+//! is itself checksummed by the caller. This module is the pure half of that
 //! decision: no disk, no kernel, no allocation.
 
 use crate::Error;
 
-/// Objects the v6 control records describe.
-pub const OBJECTS_V6: usize = 256;
-/// Largest single file in the v6 payload region.
-pub const MAX_FILE_V6: usize = 256 * 1024;
+/// Objects the extent-layout control records describe.
+pub const EXTENT_OBJECTS: usize = 256;
+/// Largest single file an [`Extents`] list or one allocation may cover.
+pub const EXTENT_MAX_FILE: usize = 256 * 1024;
 /// Total payload region, the cap that makes exhaustion decidable.
-pub const DATA_BYTES_V6: u64 = 64 * 1024 * 1024;
+pub const EXTENT_DATA_BYTES: u64 = 64 * 1024 * 1024;
 /// Allocation granularity: the volume's sector.
 pub const SECTOR_BYTES: u64 = 512;
 /// Sectors the whole payload region spans.
-pub const DATA_SECTORS: u64 = DATA_BYTES_V6 / SECTOR_BYTES;
+pub const DATA_SECTORS: u64 = EXTENT_DATA_BYTES / SECTOR_BYTES;
 /// Words in the free-space bitmap for that region (one bit per sector).
 pub const MAP_WORDS: usize = (DATA_SECTORS as usize).div_ceil(64);
 /// Extents one file may reference. Bounding this bounds the control record.
 pub const EXTENTS_PER_FILE: usize = 8;
 /// Sectors one file may occupy, derived from its byte limit.
-pub const FILE_SECTORS_MAX: u64 = (MAX_FILE_V6 as u64).div_ceil(SECTOR_BYTES);
+pub const FILE_SECTORS_MAX: u64 = (EXTENT_MAX_FILE as u64).div_ceil(SECTOR_BYTES);
 
 /// One contiguous run of payload sectors. `start` is relative to the payload
 /// region, not to the disk, so the region can move without rewriting extents.

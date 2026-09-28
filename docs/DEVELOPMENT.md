@@ -124,34 +124,6 @@ python3 tools/terminal_test.py
 
 #44 adds [bounded user-mode disk access](BLOCK-ACCESS.md). The host builder/linter selects both `sdk-probe` and `block-probe`; both manifests and ELFs have separate hashes. Shared block codecs and pure ownership/queue tests run on the host, while two additional VM scenarios exercise actual copied sector calls, cancellation, process death and persistence. The regression inventory is 46 Rust and 30 runner tests, 20 direct VM scenarios and 24 isolated scenarios.
 
-## v6 volume images
-
-The v6 layout (#51) has an independent reader. `cargo test -p rustic-fs --test fs6_image`
-provisions and migrates real volume images and exports the prefix each one uses, and
-
-```sh
-python3 tools/fs6_test.py
-```
-
-reads those images with `terminal_support/oracle6.py`, written from the format description
-with Python's own CRC rather than from the Rust code, compares the migration output with
-the v5 reader's view of the source image, and records the damaged images the reader
-refuses. It needs only the pinned Rust toolchain, writes `artifacts/fs6/` and boots no
-guest, so it runs in the workspace-check job. The same suite drives the host tool that
-owns those images:
-
-```sh
-cargo run -p rustic-volume -- provision <image> <32-hex-lineage>
-cargo run -p rustic-volume -- seed <image>
-cargo run -p rustic-volume -- write <image> <parent-id> <name> <source-file>
-cargo run -p rustic-volume -- migrate <image> <32-hex-lineage>
-cargo run -p rustic-volume -- report <image>
-```
-
-`seed` writes a small v5 experiment volume, never the owner's terminal volume, and
-`migrate` is the deliberate one-way upgrade. Host agreement is not guest execution: no
-guest mounts a v6 volume yet.
-
 ## v7 volume images
 
 The v7 layout has its own independent reader, `terminal_support/oracle7.py`,
@@ -165,9 +137,9 @@ python3 tools/fs7_test.py [--sweep N] [--seed S]
 ```
 
 reads them plus a `seed7` fixture with the reader, compares each with
-`rustic-volume report7`, migrates the three `seed5-history` v5 sources with
-`migrate7` and compares each result with the independent v5 reader's view of
-its unchanged source, and requires the reader and the Rust mount to give the
+`rustic-volume report7`, checks that `add7` places two files beside a second
+`seed7` fixture without changing its records and refuses an existing name with
+the image unchanged, and requires the reader and the Rust mount to give the
 same accept/refuse verdict on 17 named damaged copies and on a deterministic
 sweep of resealed field perturbations (default 60 per image; the run fails if
 either verdict occurs fewer than one time in ten). It needs only the
@@ -198,15 +170,8 @@ V7 volume, and in each boot stages the pair, checks the start refusals, starts
 the child control-only with `start-staged PID exit`, reads the variant tag from
 `permissions PID` and reaps exit code 7. It records the image, kernel and
 variant digests and the unchanged volume digests in
-`artifacts/boot/terminal-v7-launch/`. The same run then boots the same image
-bytes a third time for executable rollback (`tools/terminal_support/v7_rollback.py`):
-it migrates a `seed5-history receipts` source with `migrate7`, publishes the
-tag-1 and then the tag-2 pair into `/workspaces/migrated` with `rustic-volume
-add7`, and in one boot starts the tag-2 pair and then the older tag-1 pair,
-requiring an unchanged volume digest, `report7` and `oracle7` view and an
-unchanged v5 source digest; evidence is in `artifacts/boot/terminal-v7-rollback/`
-and the decision helpers have unit tests in `tools/tests/test_v7_rollback.py`.
-`python3 tools/boot.py test` runs it after `tools/v7_read_test.py`.
+`artifacts/boot/terminal-v7-launch/`. `python3 tools/boot.py test` runs it
+after `tools/v7_read_test.py`.
 
 `python3 tools/v7_corrupt_test.py` builds the `terminal-v7` image and boots it
 twice on damaged temporary copies of a fresh V7 volume: one with a flipped ELF
@@ -297,39 +262,20 @@ it after `tools/v7_admission_test.py`. The output parser has unit tests in
 `tools/tests/test_v7_authority.py`. See
 [owner control during a publication](FILES-V7-ADMISSIONS.md#owner-control-during-a-publication).
 
-The deliberate v5 -> v7 data migration has its own host commands:
+Two host commands extend a disposable V7 fixture after `seed7`:
 
 ```sh
-cargo run -p rustic-volume -- seed5-history <v5-image> <32-hex-lineage> <receipts|admissions|completed>
-cargo run -p rustic-volume -- migrate7 <v5-image> <v7-target> <32-hex-lineage>
 cargo run -p rustic-volume -- add7 <v7-image> <node-id|ws_text|/workspaces/path> <name> <file>
 cargo run -p rustic-volume -- maintain7 <v7-image>
 ```
 
-`seed5-history` exclusively creates a disposable v5 source with two-record
-scoped history, and `migrate7` reads an exact legacy-size v5 image, creates the
-target exclusively, removes it on any failure and prints `report7` with the
-source SHA-256 before and after; see
-[deliberate data migration](WORKSPACE-FORMAT7.md#deliberate-data-migration-of-a-disposable-image).
 Neither accepts or touches `artifacts/terminal/data.raw`. `add7` adds one new
 file to an existing exact-size V7 image with one tracked commit; see
 [adding a file](WORKSPACE-FORMAT7.md#adding-a-file-to-a-disposable-image).
 `maintain7` runs retention maintenance on such an image (epoch plus one, terminal
 records dropped, `Busy` while an admission is unresolved) so a fixture can add
-more files than the eight record slots allow.
-`python3 tools/v7_migration_test.py` seeds and migrates all three sets in a
-temporary directory and boots the `terminal-v7` image four times on the
-migrated images: receipts (lookup, exact replay, mismatched retry, hidden
-subject-1 record), admissions (Busy lookup and maintenance, requested cause,
-execution, then a reboot with identical output) and an executed admission
-(identical replays). `oracle7` checks every image before, during and after the
-boots, and the v5 source digests must not change. Evidence is stored in
-`artifacts/boot/terminal-v7-migration/`, and `python3 tools/boot.py test` runs
-it after `tools/v7_authority_test.py`. The host-side comparison has unit tests
-in `tools/tests/test_v7_migration.py`. It does not exercise executable
-rollback, which the launch harness evidences on a separate migrated volume
-(see above). See
-[migrated history in the guest](FILES-V7-ADMISSIONS.md#migrated-history-in-the-guest).
+more files than the eight record slots allow. No command migrates, upgrades or
+rolls back a volume; see the [storage policy](STORAGE-POLICY.md).
 
 `python3 tools/v7_capacity_test.py` builds an optimized `rustic-volume`
 (`cargo build --release -p rustic-volume`; the fill mounts the growing 64 MiB
@@ -343,18 +289,12 @@ unchanged. Boot 2 commits two 8 KiB writes, is refused a 76-sector write, runs
 that write. A host copy fills the 256-entry object table and checks that `add7`
 is refused. The run takes about two minutes, records mount, commit and
 maintenance ticks in `artifacts/boot/terminal-v7-capacity/result.json`, and
-`python3 tools/boot.py test` runs it after `tools/v7_migration_test.py`. The
+`python3 tools/boot.py test` runs it after `tools/v7_authority_test.py`. The
 fill plan and parsers have unit tests in `tools/tests/test_v7_capacity.py`. See
 [storage exhaustion on a nearly full volume](FILES-V7-WRITES.md#storage-exhaustion-on-a-nearly-full-volume).
 
-The reviewed sandbox image builds the reference `rustic-volume` (`cargo build -p rustic-volume`)
-so an isolated `block-user` case provisions its workspace volume with the reference writer
-rather than with the candidate under test.
-
-The `block-user` mode mounts a host-provisioned v6 workspace volume and reads a
-16 KiB artifact through the real block device in 4 KiB ranges; its documented
-floor is 90 s (`MODE_FLOOR` in `tools/boot_support/runner.py`), while every other
-mode keeps the caller's timeout.
+The `block-user` mode keeps a documented floor of 90 s (`MODE_FLOOR` in
+`tools/boot_support/runner.py`), while every other mode keeps the caller's timeout.
 
 ## Delayed-device regression
 

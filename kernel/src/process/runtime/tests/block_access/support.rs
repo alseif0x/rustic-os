@@ -49,8 +49,8 @@ pub(super) fn launch(
     (pid, handle)
 }
 pub(super) fn drive(manager: &mut Manager, memory: &mut Memory, pids: &[Pid]) {
-    // A v6 commit rewrites a whole generation, about 100 real block requests,
-    // so the event budget is large enough for the workspace role's write.
+    // A bounded event budget: a role that never exits fails the fixture
+    // instead of hanging the boot.
     for _ in 0..16384 {
         if pids
             .iter()

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! The v7 control record: one object's identity, name and payload runs.
 //!
-//! Geometry is the v6 node, with the payload checksum moved to a fixed field:
+//! Each node is 128 bytes, with the payload checksum in a fixed field:
 //!
 //! | offset | size | field |
 //! |---|---|---|

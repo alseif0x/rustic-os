@@ -16,23 +16,6 @@ pub(crate) struct FileDisk {
 }
 
 impl FileDisk {
-    pub(crate) fn create(path: &Path, sectors: u64) -> Result<Self, String> {
-        let file = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(path)
-            .map_err(|error| format!("cannot create {}: {error}", path.display()))?;
-        file.set_len(sectors * 512)
-            .map_err(|error| format!("cannot size {}: {error}", path.display()))?;
-        Ok(Self {
-            file,
-            sectors,
-            writable: true,
-        })
-    }
-
     /// Exclusively create a new image. Existing files and symlinks are refused.
     pub(crate) fn create_new(path: &Path, sectors: u64) -> Result<Self, String> {
         let bytes = sectors
@@ -104,40 +87,6 @@ impl FileDisk {
 
     pub(crate) fn sectors(&self) -> u64 {
         self.sectors
-    }
-
-    /// Rewind this handle and pass every byte of the file to `sink`, in order,
-    /// returning the count. Reading through the open handle keeps the bytes
-    /// hashed tied to the file that is being migrated, not to a path.
-    pub(crate) fn stream(&mut self, mut sink: impl FnMut(&[u8])) -> Result<u64, String> {
-        self.file
-            .seek(SeekFrom::Start(0))
-            .map_err(|error| format!("cannot rewind image: {error}"))?;
-        let mut buffer = vec![0u8; 1 << 20];
-        let mut total = 0u64;
-        loop {
-            let read = self
-                .file
-                .read(&mut buffer)
-                .map_err(|error| format!("cannot read image: {error}"))?;
-            if read == 0 {
-                return Ok(total);
-            }
-            sink(&buffer[..read]);
-            total += read as u64;
-        }
-    }
-
-    /// The device and inode of the open file, so a caller can later tell
-    /// whether a path still names this file.
-    #[cfg(unix)]
-    pub(crate) fn identity(&self) -> Result<(u64, u64), String> {
-        use std::os::unix::fs::MetadataExt;
-        let metadata = self
-            .file
-            .metadata()
-            .map_err(|error| format!("cannot identify image: {error}"))?;
-        Ok((metadata.dev(), metadata.ino()))
     }
 
     pub(crate) fn bytes(&self) -> Result<u64, String> {

@@ -55,10 +55,9 @@ pub(crate) fn maintain7(image: &Path) -> Result<String, String> {
 mod tests {
     use super::*;
     use crate::add7::add7;
+    use crate::command::sha256_hex;
     use crate::disk::FileDisk;
-    use crate::history5::seed5_history;
-    use crate::migrate7::{migrate7, sha256_hex};
-    use crate::testing::TempDir;
+    use crate::testing::{History, TempDir, history7};
     use rustic_fs::WriteIdentity7;
     use std::path::PathBuf;
 
@@ -74,14 +73,10 @@ mod tests {
         path
     }
 
-    /// A v7 image migrated from the `receipts` history: workspace 5 with two
-    /// retained direct commits, the same fixture the `add7` tests use.
+    /// A v7 image with workspace 5 and two retained direct commits, the same
+    /// fixture the `add7` tests use.
     fn seeded(dir: &TempDir) -> PathBuf {
-        let source = dir.path().join("receipts.v5");
-        let image = dir.path().join("receipts.v7");
-        seed5_history(&source, LINEAGE, "receipts").unwrap();
-        migrate7(&source, &image, LINEAGE).unwrap();
-        image
+        history7(dir, "receipts.v7", LINEAGE, History::Receipts)
     }
 
     /// The unsigned integer after `"field":` in a one-line JSON answer.
@@ -147,7 +142,7 @@ mod tests {
     fn snapshot_only_sectors_are_freed() {
         let dir = TempDir::new();
         let image = seeded(&dir);
-        // Retire the migrated records first so only this test's two remain.
+        // Retire the fixture records first so only this test's two remain.
         maintain7(&image).unwrap();
         let source = input(&dir, "four.bin", &[3; 4 * 512]);
         add7(&image, "5", "four.bin", &source).unwrap();
@@ -179,10 +174,7 @@ mod tests {
     #[test]
     fn an_unresolved_admission_is_busy_and_the_image_unchanged() {
         let dir = TempDir::new();
-        let source = dir.path().join("admissions.v5");
-        let image = dir.path().join("admissions.v7");
-        seed5_history(&source, LINEAGE, "admissions").unwrap();
-        migrate7(&source, &image, LINEAGE).unwrap();
+        let image = history7(&dir, "admissions.v7", LINEAGE, History::Admission);
         let before = digest(&image);
         let error = maintain7(&image).unwrap_err();
         assert!(error.contains("Busy"), "{error}");

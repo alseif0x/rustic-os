@@ -6,8 +6,7 @@
 //! namespace queries/create/removal, existing-file direct commits, durable
 //! staged admission, explicit execution/cancellation, terminal-record
 //! retention maintenance and owner-side streamed staging with bounded memory.
-//! The out-of-place v5 converter is explicit and storage-only. The file
-//! service owns authority and wire integration over this owner.
+//! The file service owns authority and wire integration over this owner.
 
 use crate::extent::MAP_WORDS;
 use crate::format7::{Header7, MAP_WORDS as FORMAT_MAP_WORDS, NODES, Node7, RETAINED, Record7};
@@ -24,11 +23,9 @@ mod publication;
 mod read;
 mod replacement;
 mod stage;
-mod upgrade;
 
 pub use poll::{PollDisk7, PollPublication7, Publication7Cancel, Publication7Phase};
 pub use stage::{Stage7, Stage7Kind};
-pub use upgrade::upgrade_v5_to_v7;
 
 /// Scoped retry identity for one direct v7 file replacement.
 ///

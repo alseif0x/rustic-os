@@ -32,6 +32,7 @@ Start with the [project overview](../README.md) for current capabilities and the
 | --- | --- |
 | [Session runtime](NATIVE-RUNTIME.md) | Owned process/control calls, console, wait sets and bounded capacity |
 | [File service](FILES.md) | Original volume format, native protocol, scopes, persistence and explicit limits |
+| [Storage format policy](STORAGE-POLICY.md) | One supported workspace format (V7) plus the legacy terminal volume; no migration, upgrade or rollback path; format changes by re-provisioning |
 | [Stable references and reads](FILES-READ.md) | Shared shell/client SDK, version-pinned ranges, SHA-256 and native contract evidence |
 | [V7 tracked writes](FILES-V7-WRITES.md) | Streamed profile-2 replacements up to 512 KiB in `mode=terminal-v7`, receipts, retry replay and the retained-record budget |
 | [Native authority](AUTHORITY.md) | Explicit client/helper subsets, shared revocation, moved handles and owner control under pressure |

@@ -5,9 +5,8 @@
 //! generation's namespace and allocation ownership. It stays pure: the separate
 //! `Volume7` owner provisions and verifies mounts, publishes direct tracked
 //! replacements for existing files, stages/cancels admissions and explicitly
-//! advances retry epochs while reclaiming terminal snapshots. A separate owner
-//! module converts v5 into a distinct disposable v7 target. This codec module
-//! stays pure; v5 and v6 remain frozen, and no service integration is claimed.
+//! advances retry epochs while reclaiming terminal snapshots. This codec module
+//! stays pure; v5 remains frozen, and no service integration is claimed.
 //!
 //! Sectors are 512 bytes, numbered from the volume start:
 //!
@@ -36,8 +35,7 @@
 
 use crate::Error;
 use crate::checksum::crc;
-use crate::extent::{DATA_BYTES_V6, DATA_SECTORS, EXTENTS_PER_FILE, Extent, OBJECTS_V6};
-use crate::receipt6::RETAINED_V6;
+use crate::extent::{DATA_SECTORS, EXTENT_DATA_BYTES, EXTENT_OBJECTS, EXTENTS_PER_FILE, Extent};
 
 mod header;
 mod node;
@@ -49,8 +47,8 @@ pub use node::{NAME_BYTES, Node7};
 pub use record::{Record7, RecordState, receipt_slots};
 pub use validation::validate_generation;
 
-/// Distinct from v5's `RUSTFS1` and v6's `RUSTFS2`, so no older volume is
-/// misread as v7.
+/// Distinct from v5's `RUSTFS1` and the retired `RUSTFS2`, so no older volume
+/// is misread as v7.
 pub const MAGIC: [u8; 8] = *b"RUSTFS3\0";
 pub const VERSION: u8 = 7;
 pub const LAYOUT: u8 = 1;
@@ -61,7 +59,7 @@ pub const SECTOR_BYTES: u64 = 512;
 pub const NODE_BYTES: usize = 128;
 /// Live objects the control records describe. Reused from the selected #51
 /// extent budget; it is a capacity, not the identity watermark.
-pub const NODES: usize = OBJECTS_V6;
+pub const NODES: usize = EXTENT_OBJECTS;
 pub const NODES_SECTORS: u64 = (NODES * NODE_BYTES) as u64 / SECTOR_BYTES;
 
 /// One bit per payload sector, owned and persisted by a later stage.
@@ -69,9 +67,9 @@ pub const MAP_WORDS: usize = crate::extent::MAP_WORDS;
 pub const MAP_BYTES: u64 = MAP_WORDS as u64 * 8;
 pub const MAP_SECTORS: u64 = MAP_BYTES / SECTOR_BYTES;
 
-/// Retained durable records. Reused from the selected #51 budget: a full table
-/// reports `Full` instead of dropping an unresolved outcome.
-pub const RETAINED: usize = RETAINED_V6;
+/// Retained durable records, the selected #51 budget: a full table reports
+/// `Full` instead of dropping an unresolved outcome.
+pub const RETAINED: usize = 8;
 /// On-disk size of one durable record, fixed by its field map.
 pub const RECORD_BYTES: usize = 192;
 /// Bytes of retained records one generation's receipt block carries. The block is
@@ -92,11 +90,11 @@ pub const HEADER_SECTOR: u64 = 8;
 pub const FIRST_GENERATION_SECTOR: u64 = HEADER_SECTOR + GENERATIONS as u64;
 /// First payload sector; extents are relative to it.
 pub const PAYLOAD_SECTOR: u64 = FIRST_GENERATION_SECTOR + GENERATIONS as u64 * GENERATION_SECTORS;
-pub const PAYLOAD_BYTES: u64 = DATA_BYTES_V6;
+pub const PAYLOAD_BYTES: u64 = EXTENT_DATA_BYTES;
 pub const VOLUME_SECTORS: u64 = PAYLOAD_SECTOR + DATA_SECTORS;
 
 /// Largest file in the measured native-application profile. This exceeds the
-/// frozen v6 limit and is identified by `FEATURE_FILE_512K` on disk.
+/// default extent limit and is identified by `FEATURE_FILE_512K` on disk.
 pub const MAX_FILE_BYTES: u32 = 512 * 1024;
 /// Runs one file, node or retained record may reference.
 pub const MAX_EXTENTS: usize = EXTENTS_PER_FILE;

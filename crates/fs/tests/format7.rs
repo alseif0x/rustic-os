@@ -10,7 +10,7 @@ use rustic_fs::format7::{
     VOLUME_SECTORS, aggregate, header_sector, map_sector, nodes_sector, receipt_slots,
     receipts_sector,
 };
-use rustic_fs::{DATA_BYTES_V6, DATA_SECTORS, Error, Extent, Header6, Kind, PreventionReason};
+use rustic_fs::{DATA_SECTORS, EXTENT_DATA_BYTES, Error, Extent, Kind, PreventionReason};
 
 const LINEAGE: [u8; 16] = [0x5a; 16];
 
@@ -169,7 +169,7 @@ fn the_v7_geometry_is_the_selected_budget_and_fits_the_disk() {
     // the payload.
     assert_eq!(nodes_sector(1), nodes_sector(0) + GENERATION_SECTORS);
     assert_eq!(receipts_sector(1) + RECEIPTS_SECTORS, PAYLOAD_SECTOR);
-    assert_eq!(DATA_BYTES_V6, PAYLOAD_BYTES);
+    assert_eq!(EXTENT_DATA_BYTES, PAYLOAD_BYTES);
     const { assert!(VOLUME_SECTORS * SECTOR_BYTES <= 4 * 1024 * 1024 * 1024) };
 }
 
@@ -233,10 +233,21 @@ fn the_header_offsets_and_checksum_are_fixed() {
 
 #[test]
 fn the_header_refuses_legacy_volumes_by_inspection() {
-    // The frozen v6 header still has a valid checksum of its own format, and is
-    // refused because the format marker and layout are not v7.
-    let v6 = Header6::initial().encode();
-    assert_eq!(Header7::decode(&v6), Err(Error::Corrupt));
+    // A foreign `RUSTFS2` header, written by hand in the shape of the retired
+    // v6 layout (its own CRC-32 at bytes 48..52), is refused by the format
+    // marker alone; the re-sealed `forged` headers below reach the layout and
+    // checksum checks.
+    let mut legacy = [0u8; SECTOR_BYTES as usize];
+    legacy[..8].copy_from_slice(b"RUSTFS2\0");
+    legacy[8] = 6;
+    legacy[9..12].copy_from_slice(&[0, 0, 2]);
+    legacy[12..20].copy_from_slice(&1u64.to_le_bytes());
+    legacy[20..24].copy_from_slice(&(NODES as u32).to_le_bytes());
+    legacy[24..28].copy_from_slice(&(NODE_BYTES as u32).to_le_bytes());
+    legacy[28..32].copy_from_slice(&(DATA_SECTORS as u32).to_le_bytes());
+    let checksum = reference_crc(&legacy);
+    legacy[48..52].copy_from_slice(&checksum.to_le_bytes());
+    assert_eq!(Header7::decode(&legacy), Err(Error::Corrupt));
     let mut forged = Header7::initial(LINEAGE).encode().unwrap();
     forged[..8].copy_from_slice(b"RUSTFS2\0");
     seal_header(&mut forged);

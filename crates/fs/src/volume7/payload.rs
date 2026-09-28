@@ -84,29 +84,6 @@ pub(super) fn payload_crc(bytes: &[u8]) -> u32 {
     crc(bytes)
 }
 
-/// Stream borrowed bytes into the planned extents with one sector of scratch.
-pub(super) fn write_payload(
-    disk: &mut impl Disk,
-    plan: &PayloadPlan,
-    bytes: &[u8],
-) -> Result<(), Error> {
-    let mut offset = 0;
-    let mut block = [0u8; 512];
-    for run in plan.runs() {
-        for sector in 0..run.sectors {
-            block.fill(0);
-            let count = (bytes.len() - offset).min(block.len());
-            block[..count].copy_from_slice(&bytes[offset..offset + count]);
-            disk.write(PAYLOAD_SECTOR + run.start + sector, &block)?;
-            offset += count;
-        }
-    }
-    if offset != bytes.len() {
-        return Err(Error::Corrupt);
-    }
-    Ok(())
-}
-
 /// The payload-relative sector holding logical sector `index` of `runs`.
 pub(super) fn run_sector(runs: &[Extent], mut index: u64) -> Option<u64> {
     for run in runs {

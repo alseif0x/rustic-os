@@ -11,7 +11,7 @@ per file. On 2026-09-24, after the V7 tracked-write service and its receipt
 lookups, `file-server.elf` measured 364,104 bytes (it grew with the write
 service) and `block-probe.elf` 283,544 bytes; after owner retention
 maintenance the same day it measured 368,872 bytes and `block-probe.elf`
-283,520 bytes; both still fit 512 KiB; V5/V6 remain frozen. Feature bit 3 identifies this development profile
+283,520 bytes; both still fit 512 KiB; V5 remains frozen. Feature bit 3 identifies this development profile
 and the reader refuses earlier 256 KiB V7 images, which must be reprovisioned.
 The current host-tested owner supports
 tracked replacement, durable staged admission, explicit admitted execution,
@@ -19,27 +19,26 @@ cause-bearing cancellation and explicit retry-epoch retention maintenance.
 Payloads and exact retries use bounded sector I/O; candidate bytes and inactive
 metadata are flushed before the alternate header, and owner state changes only
 after final flush settlement. Maintenance refuses open admissions and must only
-run after the service has resolved current-epoch outcomes. The host-only
-`upgrade_v5_to_v7` converter copies a v5 source to distinct disposable media,
-preserving supported scoped recovery records and refusing ambiguous or invalid
-history; `rustic-volume migrate7` runs it on disposable image files, and a
-guest run exercises the migrated history
-([deliberate data migration](#deliberate-data-migration-of-a-disposable-image)). The explicit `mode=terminal-v7` fixture now selects a V7 service with
+run after the service has resolved current-epoch outcomes. No converter,
+migration or rollback path into or out of V7 exists; a V7 image is always
+provisioned fresh ([storage policy](STORAGE-POLICY.md)). The explicit `mode=terminal-v7` fixture now selects a V7 service with
 bounded reads, [profile-2 tracked writes](FILES-V7-WRITES.md) and
 [profile-2 staged admissions](FILES-V7-ADMISSIONS.md) announced in its
 readiness report; production/default `mode=terminal` remains v5-backed, and
-no capability advertisement is wired. The v6 direct probe remains separate.
+no capability advertisement is wired.
 
 ## Why a successor
 
 The [measured workspace budget](WORKSPACES.md) selects 256 live objects, 64 MiB
-of payload, 512 KiB per V7 file and eight retained outcomes. The v6 extent prototype
-supports that payload geometry but does not persist the monotonic identity
-watermark or the subject/workspace/instance binding and exact candidate bytes
-required by the v5 service's durable admission and retry contracts. Substituting
-it directly would weaken authority and replay semantics.
+of payload, 512 KiB per V7 file and eight retained outcomes. V7 has to persist the
+monotonic identity watermark, the subject/workspace/instance binding and the exact
+candidate bytes that the v5 service's durable admission and retry contracts
+require; a layout without them would weaken authority and replay semantics.
+(Historical note: an intermediate v6 extent layout once existed, exercised only by
+a host tool and a guest block probe, never by a file service; it was removed and no
+data was carried from it.)
 
-Keep v5 and v6 frozen. Extend their copy-on-write design in an explicitly new
+Keep v5 frozen. Extend its copy-on-write design in an explicitly new
 layout: bounded control records reference immutable candidate extent snapshots.
 This retains exact-byte retry comparison without embedding whole large files in
 each record or replacing equality with a digest. A different filesystem would
@@ -284,71 +283,10 @@ is too late and the caller must settle the result. Dropping or failing with
 unresolved I/O fences the owner until remount. These APIs are storage primitives,
 not service authorization or scheduling policy.
 
-There is no automatic or in-place upgrade. `upgrade_v5_to_v7` reads the v5 source
-without mutation and writes a distinct target whose v7 header sectors must be
-zero. It preserves lineage, sequence, identity watermark, live files and scoped
-retained evidence that passes v7 validation; it refuses scope-less evidence or
-history that cannot be represented before writing the target. The target may be
-partial after I/O failure, so it must be disposable and backed up; this is not
-rollback atomicity or production service integration. Never experiment on the
-owner's `artifacts/terminal/data.raw`.
-
-### Deliberate data migration of a disposable image
-
-`rustic-volume migrate7 <v5-image> <v7-target> <lineage>` runs the converter on
-image files. It refuses a malformed or all-zero lineage and a source that is not
-exactly the legacy tool image (67,213,824 bytes, what `seed` and
-`seed5-history` create) before it creates anything, opens the source read-only,
-creates the target exclusively (an existing path, including the source, is
-never overwritten), remounts the result with the full `Volume7` mount and prints
-`report7`'s JSON as `target` together with the source's SHA-256 before and after,
-both streamed through the one read-only handle the migration reads, which must
-be equal. When anything after the target's creation fails, the target is
-removed, but only while its path still names the regular file this invocation
-created (same device and inode); anything else found there is left and named in
-the error. The tool's own tests cover each refusal:
-
-| Source | Answer |
-| --- | --- |
-| Malformed or all-zero lineage | lineage refusal, no target created |
-| Size other than the legacy tool image (short, long, V7-sized) | size refusal, no target created |
-| Existing target path | `cannot create new`, target and source unchanged |
-| Envelope naming another lineage | `Lineage`, target removed |
-| Recovery lineage (no envelope) naming another lineage | `Lineage`, target removed |
-| Retained record without an operation scope (legacy tracked receipt) | `Unsupported`, target removed |
-| Live payload whose v5 CRC does not match | `Corrupt`, target removed |
-| Checksum-valid live version below its own committed receipt | `Corrupt` (v7 history validation), target removed |
-| All-zero source | `Empty`, target removed |
-
-`seed5-history <image> <lineage> <receipts|admissions|completed>` builds such
-disposable v5 sources. It writes the provisioning envelope first, as the v5
-terminal host does, then records operations as one v5 service incarnation in
-`/workspaces/migrated` with the V7 shell's replace-pattern bytes. A v5 volume
-retains only two records, so the history is split: `receipts` holds a current
-direct commit of subject 2 and one of subject 1; `admissions` an unresolved
-admission and a `Requested` cancellation of subject 2; `completed` an executed
-admission of subject 2. v5 can represent all four record states, and the
-converter carries each; a unit test also migrates a source that enabled scoped
-operations only (no admissions or prevention causes) with every record field
-and snapshot byte preserved; a migrated image reports `recovered: true` until its
-first V7 publication, because its only header is generation 0 at a
-non-initial sequence; the guest run confirms the first execution publishes into
-the other slot and clears it.
-
-`python3 tools/fs7_test.py` migrates each set and compares the result with the
-independent v5 reader's view of the source (identity, file versions and bytes,
-every record field and snapshot digest) and with `oracle7` and `report7`.
-`python3 tools/v7_migration_test.py` boots the migrated images in the guest; see
-[migrated history in the guest](FILES-V7-ADMISSIONS.md#migrated-history-in-the-guest).
-
-**Limits.** Real v5 terminal volumes record their operations under subject 1
-(the v5 shell's owner client), while the V7 shell holds subject 2, so records
-migrated from such a volume stay invisible to the V7 shell (`OutcomeUnknown`).
-The seed uses subject 2 deliberately; remapping subjects would change who may
-replay or inspect an operation and needs a separate decision. The 4 GiB v5
-terminal disk is also refused by size, and nothing here migrates the owner's
-volume. Data migration is independent of executable rollback; see
-[executable rollback](NATIVE-RUNTIME.md#executable-rollback-on-one-migrated-volume).
+There is no automatic, in-place or out-of-place upgrade into V7: a V7 image is
+provisioned fresh, and a format change is made by re-provisioning (see the
+[storage policy](STORAGE-POLICY.md)). Never experiment on the owner's
+`artifacts/terminal/data.raw`.
 
 ### Adding a file to a disposable image
 
@@ -356,7 +294,7 @@ volume. Data migration is independent of executable rollback; see
 into an existing disposable V7 image through the `Volume7` API: `create`, then
 one `replace_tracked` direct commit, so the retained record names the exact
 bytes. `<workspace>` is a node ID, the `ws_` text of the image's own lineage, or
-an absolute path such as `/workspaces/migrated`; it must be a directory inside
+an absolute path such as `/workspaces/application`; it must be a directory inside
 `/workspaces`, the root the V7 service grants from. The commit uses the host
 subject `1`, as `seed7` does, the image's current retry epoch and the first
 retry key from the new object ID that no retained host record holds in that
@@ -373,7 +311,7 @@ byte-identical (the tool's tests check each digest):
 | Name that is not 1..=31 of `[A-Za-z0-9._-]`, or `.`/`..` | name refusal |
 | Empty, unreadable, non-regular or larger than 512 KiB source | source refusal |
 | Image that is not exactly 131,282 sectors (short, long, a v5 image) or not a regular file | size refusal |
-| Image path that is a symbolic link (as `seed7` and `migrate7` refuse) | symlink refusal, target unchanged |
+| Image path that is a symbolic link (as `seed7` refuses) | symlink refusal, target unchanged |
 | Image that does not mount (blank) | `v7 mount refused` |
 | Missing node, a file, a directory outside `/workspaces`, a bad path, `ws_` text of another lineage | workspace refusal |
 | Name already present in the workspace | `already exists` |
@@ -387,16 +325,14 @@ generation that removes the empty node and says whether that removal
 succeeded; if the removal publication itself fails (`Uncertain`), whether the
 empty node remains on the image is unknown until the next mount. No test
 reaches this path. `add7` is a host
-publication step on a V7 image, not a migration: it never reads a v5 source.
-A migrated image stops reporting `recovered` after its first `add7`, because
-that is its first V7 publication. `python3 tools/fs7_test.py` adds two files
-beside a migrated `receipts` history and checks with `oracle7` and `report7` that
-the migrated files and records are unchanged and that the two new records name
-the added bytes.
+publication step on a V7 image; it never reads a v5 source.
+`python3 tools/fs7_test.py` adds two files beside a `seed7` application pair and
+checks with `oracle7` and `report7` that the seeded files and records are
+unchanged, that the two new records name the added bytes and that an existing
+name is refused with the image unchanged.
 
 The records `add7` retains carry the host subject `1`. The V7 shell holds
-subject `2`, so, like the subject-1 record of a migrated `receipts` history,
-they are invisible to its lookups (`OutcomeUnknown`); they still occupy
+subject `2`, so they are invisible to its lookups (`OutcomeUnknown`); they still occupy
 retained-record slots until retention maintenance retires them.
 
 `rustic-volume maintain7 <v7-image>` is that maintenance on the host: the same
@@ -576,9 +512,8 @@ recovery after final-flush errors, and streamed staging (byte-identical media
 against borrowed replacement and admission from 0 bytes to 512 KiB, a three-run
 fragmented payload, 106 streamed tracked and 105 streamed admission cuts,
 reservation, abort, release, stale and foreign-token, two interleaved stages,
-retry and refusal cases). The separate `upgrade7` suite exercises
-conversion/remount, 18 success/refusal cases, and each publication write/flush
-failure on sparse host disks. These host tests do not demonstrate real
+retry and refusal cases). The former `upgrade7` converter suite was removed with
+the v5 to v7 converter ([storage policy](STORAGE-POLICY.md)). These host tests do not demonstrate real
 device/DMA behavior. Guest evidence is recorded in
 `artifacts/boot/terminal-v7/result.json` (build `2338ead14911b84f`): the
 host-provisioned 67,216,384-byte image passed read-only service reads for

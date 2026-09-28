@@ -19,11 +19,10 @@ use rustic_fs::format7::{self, Node7};
 use rustic_fs::{DATA_SECTORS, Kind, Volume7, WriteIdentity7};
 
 use crate::command::{
-    V7_IMAGE_BYTES, V7_IMAGE_SECTORS, hex, read_bounded, record_json, resource_text, valid_name,
-    workspace_text,
+    V7_IMAGE_BYTES, V7_IMAGE_SECTORS, hex, read_bounded, record_json, resource_text, sha256_hex,
+    valid_name, workspace_text,
 };
 use crate::disk::FileDisk;
-use crate::migrate7::sha256_hex;
 
 /// Root of every workspace the v7 file service will grant.
 const WORKSPACES_ROOT: u32 = 4;
@@ -153,7 +152,7 @@ pub(crate) fn add7(
 /// Open an existing disposable v7 image for a host publication: a regular,
 /// non-symlinked file of exactly one v7 volume. Nothing is written here.
 pub(crate) fn open_image(image: &Path) -> Result<FileDisk, String> {
-    // `seed7` and `migrate7` refuse a symlinked target; so does this.
+    // `seed7` refuses a symlinked target; so does this.
     let metadata = std::fs::symlink_metadata(image)
         .map_err(|error| format!("cannot open {}: {error}", image.display()))?;
     if metadata.file_type().is_symlink() {
@@ -173,7 +172,7 @@ pub(crate) fn open_image(image: &Path) -> Result<FileDisk, String> {
 }
 
 /// Resolve `text` (a node id, `ws_` text of this lineage, or an absolute path
-/// such as `/workspaces/migrated`) to a directory inside `/workspaces`.
+/// such as `/workspaces/application`) to a directory inside `/workspaces`.
 fn resolve_workspace(volume: &Volume7, lineage: [u8; 16], text: &str) -> Result<Node7, String> {
     let id = if let Some(path) = text.strip_prefix('/') {
         let mut parent = 0;
@@ -263,24 +262,16 @@ fn unused_key(volume: &Volume7, workspace: u32, epoch: u64, start: u64) -> Resul
 mod tests {
     use super::*;
     use crate::command::{parse_lineage, report7};
-    use crate::history5::seed5_history;
-    use crate::migrate7::migrate7;
-    use crate::testing::TempDir;
+    use crate::testing::{HISTORY, History, TempDir, history7};
     use rustic_fs::format7::Record7;
     use std::path::PathBuf;
 
     const LINEAGE: &str = "7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c7c";
-    const MIGRATED: u32 = 5;
 
-    /// A v7 image migrated from the `receipts` history: workspace 5
-    /// (`/workspaces/migrated`) holding `direct.bin` and `owner.bin` with two
-    /// retained direct commits.
-    fn migrated(dir: &TempDir) -> PathBuf {
-        let source = dir.path().join("receipts.v5");
-        let target = dir.path().join("receipts.v7");
-        seed5_history(&source, LINEAGE, "receipts").unwrap();
-        migrate7(&source, &target, LINEAGE).unwrap();
-        target
+    /// A v7 image with retained history: workspace 5 (`/workspaces/history`)
+    /// holding `direct.bin` and `owner.bin` with two retained direct commits.
+    fn seeded(dir: &TempDir) -> PathBuf {
+        history7(dir, "receipts.v7", LINEAGE, History::Receipts)
     }
 
     fn input(dir: &TempDir, name: &str, bytes: &[u8]) -> PathBuf {
@@ -329,26 +320,27 @@ mod tests {
     }
 
     #[test]
-    fn two_pairs_are_added_beside_migrated_history_without_touching_it() {
+    fn two_pairs_are_added_beside_retained_history_without_touching_it() {
         let dir = TempDir::new();
-        let image = migrated(&dir);
-        let migrated_records = records(&image);
-        assert_eq!(migrated_records.len(), 2);
+        let image = seeded(&dir);
+        let history_records = records(&image);
+        assert_eq!(history_records.len(), 2);
+        let base = mounted(&image).1.header().unwrap().sequence;
         let lineage = parse_lineage(LINEAGE).unwrap();
 
         let files = [
             (
                 "tag-2.elf",
                 pattern(2, 131_360),
-                "/workspaces/migrated".to_owned(),
+                "/workspaces/history".to_owned(),
             ),
-            ("tag-2.manifest", pattern(3, 128), MIGRATED.to_string()),
+            ("tag-2.manifest", pattern(3, 128), HISTORY.to_string()),
             (
                 "tag-1.elf",
                 pattern(1, 131_104),
-                workspace_text(lineage, MIGRATED).unwrap(),
+                workspace_text(lineage, HISTORY).unwrap(),
             ),
-            ("tag-1.manifest", pattern(4, 128), MIGRATED.to_string()),
+            ("tag-1.manifest", pattern(4, 128), HISTORY.to_string()),
         ];
         let mut added = Vec::new();
         for (name, bytes, workspace) in &files {
@@ -361,11 +353,11 @@ mod tests {
         let header = *volume.header().unwrap();
         assert!(!volume.recovered_from_header().unwrap());
         for (index, (output, bytes)) in added.iter().enumerate() {
-            // Objects 6 and 7 came from the source; each add is one create and
+            // Objects 6 and 7 came from the fixture; each add is one create and
             // one commit, so ids start at 8 and versions advance by two.
             let id = 8 + index as u32;
-            let created = 13 + 2 * index as u64;
-            let resource = resource_text(lineage, MIGRATED, id).unwrap();
+            let created = base + 1 + 2 * index as u64;
+            let resource = resource_text(lineage, HISTORY, id).unwrap();
             assert!(
                 output.starts_with(&format!(
                     "{{\"lineage\":\"{LINEAGE}\",\"sequence\":{},\
@@ -389,7 +381,7 @@ mod tests {
             let node = volume.stat(id).unwrap();
             assert_eq!(
                 (node.parent, node.version, node.length as usize),
-                (MIGRATED, created + 1, bytes.len())
+                (HISTORY, created + 1, bytes.len())
             );
             let mut read = vec![0; bytes.len()];
             let count = volume
@@ -397,13 +389,13 @@ mod tests {
                 .unwrap();
             assert_eq!((count, &read), (bytes.len(), *bytes));
         }
-        assert_eq!(header.sequence, 20);
+        assert_eq!(header.sequence, base + 8);
         let after = records(&image);
         assert_eq!(after.len(), 6);
-        for record in &migrated_records {
+        for record in &history_records {
             assert!(
                 after.contains(record),
-                "a migrated record changed: {record:?}"
+                "a fixture record changed: {record:?}"
             );
         }
         assert!(report7(&image).unwrap().contains("\"recovered\":false"));
@@ -412,20 +404,20 @@ mod tests {
     #[test]
     fn a_full_retention_table_is_refused_before_anything_is_created() {
         let dir = TempDir::new();
-        let image = migrated(&dir);
+        let image = seeded(&dir);
         let source = input(&dir, "one.bin", &pattern(9, 700));
         for index in 0..(format7::RETAINED - 2) {
             add7(&image, "5", &format!("f{index}.bin"), &source).unwrap();
         }
         assert_eq!(records(&image).len(), format7::RETAINED);
         assert_refused(&image, "5", "last.bin", &source, "never evicts");
-        assert!(mounted(&image).1.lookup(MIGRATED, b"last.bin").is_err());
+        assert!(mounted(&image).1.lookup(HISTORY, b"last.bin").is_err());
     }
 
     #[test]
     fn missing_foreign_and_non_workspace_directories_are_refused() {
         let dir = TempDir::new();
-        let image = migrated(&dir);
+        let image = seeded(&dir);
         let source = input(&dir, "one.bin", &pattern(9, 700));
         let foreign = format!("ws_{}_00000005", "23".repeat(16));
         for (workspace, expected) in [
@@ -436,7 +428,7 @@ mod tests {
             ("/workspaces/", "workspace path"),
             (foreign.as_str(), "another lineage"),
             ("ws_nonsense", "invalid workspace text"),
-            ("migrated", "must be a node id"),
+            ("history", "must be a node id"),
         ] {
             assert_refused(&image, workspace, "new.bin", &source, expected);
         }
@@ -445,7 +437,7 @@ mod tests {
     #[test]
     fn an_existing_name_invalid_name_empty_or_oversized_file_is_refused() {
         let dir = TempDir::new();
-        let image = migrated(&dir);
+        let image = seeded(&dir);
         let source = input(&dir, "one.bin", &pattern(9, 700));
         assert_refused(&image, "5", "direct.bin", &source, "already exists");
         for name in ["", "..", "a/b", "has space", &"n".repeat(32)] {
@@ -554,7 +546,7 @@ mod tests {
     #[test]
     fn a_symlinked_image_path_is_refused_and_its_target_left_unchanged() {
         let dir = TempDir::new();
-        let image = migrated(&dir);
+        let image = seeded(&dir);
         let source = input(&dir, "one.bin", &pattern(9, 700));
         let link = dir.path().join("link.v7");
         std::os::unix::fs::symlink(&image, &link).unwrap();
@@ -565,7 +557,7 @@ mod tests {
     #[test]
     fn an_image_that_is_not_exactly_one_v7_volume_is_refused() {
         let dir = TempDir::new();
-        let image = migrated(&dir);
+        let image = seeded(&dir);
         let source = input(&dir, "one.bin", &pattern(9, 700));
         let bytes = std::fs::read(&image).unwrap();
 
@@ -575,8 +567,8 @@ mod tests {
         longer.extend_from_slice(&[0; 512]);
         let long = input(&dir, "long.v7", &longer);
         assert_refused(&long, "5", "new.bin", &source, "not an exact v7 image");
-        let v5 = dir.path().join("receipts.v5");
-        assert_refused(&v5, "5", "new.bin", &source, "not an exact v7 image");
+        let v5_sized = input(&dir, "v5.img", &vec![0; rustic_fs::SECTORS as usize * 512]);
+        assert_refused(&v5_sized, "5", "new.bin", &source, "not an exact v7 image");
         let blank = input(&dir, "blank.v7", &vec![0; bytes.len()]);
         assert_refused(&blank, "5", "new.bin", &source, "v7 mount refused");
         let directory = dir.path().join("directory.v7");
