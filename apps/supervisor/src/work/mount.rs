@@ -141,14 +141,9 @@ impl Mount {
                 }
             }
             4 => {
-                // V7 policy: the shell may read, make tracked replacements and
-                // admit, execute and cancel its own admissions as subject 2, a
-                // retry scope distinct from the host provisioner's subject 1
-                // records. The owner stays read-only.
-                let words = match profile {
-                    FileProfile::V5 => [32, 0, state.shell, self.shell[0], 0, 15, 0, 1],
-                    FileProfile::V7 => shell_binding::grant(state.shell, self.shell[0]),
-                };
+                // The chosen shell authority survives restart, adoption and
+                // rebind independently of the file-service format.
+                let words = shell_binding::grant(state.shell, self.shell[0], state.shell_policy);
                 if let Some(generation) = self.grant(state, words)? {
                     return Ok(Some([
                         0,

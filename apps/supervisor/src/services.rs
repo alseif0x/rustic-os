@@ -19,6 +19,7 @@ pub enum FileSource {
 }
 pub struct State {
     pub profile: FileProfile,
+    pub(super) shell_policy: rustic_supervisor::shell_binding::ShellPolicy,
     pub files: u64,
     pub(super) files_source: FileSource,
     /// A staged image cancelled before it became `files`, awaiting restart's

@@ -6,9 +6,9 @@ import environment
 
 
 if __name__ == "__main__":
-    initialize = build("terminal-init")
+    initialize = build("recovery-test")
     verify(
-        build("terminal"),
+        initialize,
         initialize_image=initialize,
         output=environment.ROOT / "artifacts/boot/terminal-capacity-topology",
     )

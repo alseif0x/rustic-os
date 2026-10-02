@@ -21,9 +21,10 @@ const DERIVE: u64 = 37;
 /// own owner binding, so child slot `n` is administered as client slot `n + 2`.
 const RESERVED: usize = 2;
 
-/// Recovery identity shared by owner-launched diagnostic actors and the legacy
-/// shell. The V7 workspace shell uses subject 2; actors recover subject 1 through
-/// another explicitly granted actor. Tasks owners use their journal identity.
+/// Recovery identity shared by owner-launched diagnostic actors and the manual
+/// shell policy. The workspace shell policy uses subject 2; actors recover
+/// subject 1 through another explicitly granted actor. Tasks owners use their
+/// journal identity.
 const OWNER_SUBJECT: u64 = 1;
 
 /// Everything the service is told about one child's authority.

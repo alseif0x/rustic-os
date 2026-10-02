@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 import tempfile
 import time
-from boot_support.image import package
 from .machine import machine, disk
 from .connection import Connection
 from .cases import exercise, transfer_measurement
@@ -35,7 +34,7 @@ def verify(image, timeout=60, output=None):
     if metadata.get("tasks_acceptance") is not True:
         raise ValueError("terminal acceptance requires the explicit tasks-acceptance build profile")
     # This second boot reuses the exact ELF; it never invokes candidate host code.
-    mount = package(image.parent / "kernel.elf", "terminal", metadata["build_id"], {})
+    mount = image  # Legacy fixture mounts first and initializes only empty media.
     cases, serials, logs = 0, [], []
     started = time.monotonic()
     try:

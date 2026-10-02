@@ -209,6 +209,16 @@ revocation, indefinite-stall restart and fresh bindings. The reboot changes no
 volume bytes. Evidence is in `artifacts/boot/terminal-v7-owner/`; the harness runs
 in the `v7` CI job.
 
+`python3 tools/v7_manual_test.py` builds the ordinary default `terminal-init`
+image and packages the same kernel as `terminal` for its second boot. A fresh
+4 GiB disposable V7 device exercises all four roots, system write refusal,
+subject-1 lost-reply recovery, the shell's own tasks journal, shell rebind and
+service restart preserving the manual policy, and an unchanged entire device
+after reboot. Evidence is in `artifacts/boot/terminal-v7-manual/`; it runs in the
+`v7` CI job. Explicit workspace fixtures retain their separate authority.
+Legacy terminal/recovery/measurement acceptance still uses the existing fixture
+spellings while its remaining format consumers are ported.
+
 `python3 tools/v7_launch_test.py` builds that image once, copies it aside and
 boots the same bytes twice. It builds two tagged utility variants
 (`RUSTIC_UTILITY_TAG=1` and `2`) in separate cargo invocations under

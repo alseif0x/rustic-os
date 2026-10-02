@@ -11,6 +11,6 @@ if __name__ == '__main__':
     parser.add_argument('--image')
     parser.add_argument('--output', default=str(environment.ROOT / 'artifacts/tasks-owner-normal'))
     args = parser.parse_args()
-    # `terminal-init` is an ordinary build (only `terminal-test` carries the
+    # `recovery-test` is an ordinary build (only `terminal-test` carries the
     # acceptance profile) that initializes the fresh disposable volume.
-    verify_normal(args.image or build('terminal-init'), args.output)
+    verify_normal(args.image or build('recovery-test'), args.output)

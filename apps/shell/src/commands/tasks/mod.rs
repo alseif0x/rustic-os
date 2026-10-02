@@ -35,7 +35,14 @@ pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Erro
             exact(args, 2)?;
             let reply = session.service([s::ENABLE_OPERATIONS, 0, 0, 0, 0, 0, 0, 0])?;
             files::Error::parse(reply[1] as u8)?;
-            output::text("Task writes enabled; persistent storage format is at least v3.\r\n");
+            if reply[3..].iter().any(|word| *word != 0) || !matches!(reply[2], 0 | 7) {
+                return Err(Error::Service(4));
+            }
+            output::text(if reply[2] == 7 {
+                "Task writes enabled; mounted format v7.\r\n"
+            } else {
+                "Task writes enabled; persistent storage format is at least v3.\r\n"
+            });
             Ok(())
         }
         "recover" => {

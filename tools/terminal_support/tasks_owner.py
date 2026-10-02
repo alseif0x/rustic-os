@@ -20,7 +20,6 @@ import re
 import tempfile
 import time
 from pathlib import Path
-from boot_support.image import package
 from .authority_cases import actor_result, cleanup, fence
 from .cases import counters, exited, pid
 from .connection import Connection
@@ -927,10 +926,9 @@ def verify_normal(image, output):
     """One ordinary-image boot on its own disposable volume.
 
     The image must not carry the acceptance profile: the point of this run is
-    that the cuts do not exist in it. It must also be an initializing mode, since
-    the volume is fresh: `mode=terminal` mounts an existing filesystem and its
-    file service exits with `Error::Empty` (code 15) on a blank one, while
-    `mode=terminal-init` formats it (kernel/src/boot/mode.rs:32-36).
+    that the cuts do not exist in it. The fresh legacy volume uses the existing
+    `mode=recovery-test` fixture, which mounts first and initializes only when
+    the legacy mount reports Empty. Default manual modes mount host-prepared V7.
     """
     image, output = Path(image).resolve(), Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -977,7 +975,7 @@ def verify(image, output):
     if metadata.get('tasks_acceptance') is not True:
         raise ValueError('the tasks-owner failure cuts require the explicit acceptance build')
     # The second boot reuses the exact ELF; it never invokes candidate host code.
-    mount = package(image.parent / 'kernel.elf', 'terminal', metadata['build_id'], {})
+    mount = image  # Legacy fixture mounts first and initializes only empty media.
     with tempfile.TemporaryDirectory(prefix='rustic-tasks-owner-') as directory:
         directory = Path(directory)
         with disk(directory / 'data.raw', True) as data, \

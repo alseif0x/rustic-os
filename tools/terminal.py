@@ -1,21 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 """Launch the native RusticOS serial terminal with its own persistent image."""
 import argparse
-from pathlib import Path
+import subprocess
 from boot_support.image import build
-from terminal_support.machine import disk, machine
+from terminal_support.machine import machine
+from terminal_support.v7_disk import disk
 import environment
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--initialize", action="store_true", help="create a NEW dedicated disk; never overwrite an existing one")
-    parser.add_argument("--upgrade-recovery", action="store_true", help="back up legacy filesystem sectors and provision a one-way receipt-format upgrade")
     args = parser.parse_args()
-    if args.initialize and args.upgrade_recovery:
-        parser.error("--initialize and --upgrade-recovery are mutually exclusive")
     directory = environment.ROOT / "artifacts/terminal"
+    volume_tool = environment.ROOT / "target/debug/rustic-volume"
+    if args.initialize:
+        subprocess.run(["cargo", "build", "-p", "rustic-volume", "--locked"],
+                       cwd=environment.ROOT, check=True)
     image = build("terminal-init" if args.initialize else "terminal")
-    with disk(directory / "data.raw", args.initialize, args.upgrade_recovery) as data:
+    with disk(directory / "data.raw", args.initialize, volume_tool=volume_tool) as data:
         print("Starting native RusticOS. Type exit for a clean stop. QEMU emergency exit: Ctrl-A X.", flush=True)
         with machine(image, data, "stdio", directory / "qemu.log") as process:
             code = process.wait()

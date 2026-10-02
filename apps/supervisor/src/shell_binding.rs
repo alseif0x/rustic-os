@@ -1,37 +1,44 @@
 // SPDX-License-Identifier: Apache-2.0
-//! The shell's V7 file binding: which authority the supervisor grants it and
-//! how an owner revocation replaces it, without transport.
+//! The shell's file binding: which authority the supervisor grants it and how
+//! an owner revocation replaces it, without transport.
 //!
 //! The supervisor binary owns the channels, the exchanges and the order of the
 //! owner's [`REVOKE_SHELL_V7`](rustic_sdk::abi::supervisor::REVOKE_SHELL_V7)
 //! job (revoke, then the mount's channel and grant phases); this module owns
 //! the administrative words and the checks on their replies, so they are
-//! exercised directly by host tests. The policy is fixed: the shell always
-//! holds file-service client slot 0 with the admission profile under subject
-//! 2, the retry scope reserved for it.
+//! exercised directly by host tests. The selected shell policy is independent
+//! of the mounted file format.
 use rustic_sdk::abi::files::{GRANT, REVOKE};
+
+/// Authority selected for the shell independently of the mounted file format.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShellPolicy {
+    /// Whole-volume manual policy, sharing the host provisioner's retry subject.
+    Manual,
+    /// Workspace-only policy with a distinct shell retry subject.
+    Workspace,
+}
 
 /// File-service client slot of the shell's binding.
 pub const SLOT: u64 = 0;
-/// Read, write, inspect and cancel: the V7 admission profile, which adds
-/// cancellation of the shell's own admissions to the tracked-write profile.
+/// Full shell file authority; the mounted format determines which operations exist.
 pub const RIGHTS: u64 = 15;
-/// Retry scope of the shell's tracked writes, distinct from the host
-/// provisioner's subject 1.
-pub const SUBJECT: u64 = 2;
-
 /// Administrative words that install the shell's binding on `endpoint`, the
-/// service-side end of a channel to `shell`, scoped to the workspaces root.
-pub fn grant(shell: u64, endpoint: u64) -> [u64; 8] {
+/// service-side end of a channel to `shell`, under the selected policy.
+pub fn grant(shell: u64, endpoint: u64, policy: ShellPolicy) -> [u64; 8] {
+    let (scope, subject) = match policy {
+        ShellPolicy::Manual => (0, 1),
+        ShellPolicy::Workspace => (4, 2),
+    };
     [
         u64::from(GRANT),
         SLOT,
         shell,
         endpoint,
-        4,
+        scope,
         RIGHTS,
         0,
-        SUBJECT,
+        subject,
     ]
 }
 
@@ -72,8 +79,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_shell_grant_is_slot_zero_admission_profile_subject_two_at_the_workspaces_root() {
-        assert_eq!(grant(3, 17), [32, 0, 3, 17, 4, 15, 0, 2]);
+    fn manual_shell_policy_covers_the_volume_under_subject_one() {
+        assert_eq!(
+            grant(3, 17, ShellPolicy::Manual),
+            [32, 0, 3, 17, 0, 15, 0, 1]
+        );
+    }
+
+    #[test]
+    fn workspace_shell_policy_is_scoped_under_subject_two() {
+        assert_eq!(
+            grant(3, 17, ShellPolicy::Workspace),
+            [32, 0, 3, 17, 4, 15, 0, 2]
+        );
         assert_eq!(revoke(), [33, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(rebound(5, 9, 12), [0, 5, 9, 12, 0, 0, 0, 0]);
     }

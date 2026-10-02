@@ -2,7 +2,7 @@
 
 # Current work state
 
-Updated 2026-10-02. Replace this checkpoint rather than appending conversation history.
+Updated 2026-10-03. Replace this checkpoint rather than appending conversation history.
 
 ## Active order and authorization
 
@@ -14,9 +14,9 @@ usable tasks on fresh volumes, external MCP over COM2. Do not introduce public
 features, protocols, formats, versions, migrations, upgrades or rollback paths.
 See [STORAGE-POLICY.md](STORAGE-POLICY.md).
 
-Branch `v7-single-format`; native consumers are committed and pushed as
-`344b6d7`, after
-`38cc2ab`, `9b1e937`, `c693cea`, `58bfe10`, `b5f058d` and `5f9bc70`, based on
+Branch `v7-single-format`; native consumers and owner maintenance were committed
+and pushed as `344b6d7` and `52fca7a`; this default-manual increment follows them.
+Earlier commits: `38cc2ab`, `9b1e937`, `c693cea`, `58bfe10`, `b5f058d` and `5f9bc70`, based on
 `main` at `097b4df`. No final-head CI or merge is claimed. No open PR exists for
 this branch. #51 is closed; #52 remains open. Terminal parity traces to #22
 and requirement R02; this increment does not close that broader issue.
@@ -60,108 +60,82 @@ Earlier evidence, limitations and reviewer corrections are preserved in
 consolidation history is in [the earlier archive](WORK-STATE-ARCHIVE-2026-10-02.md).
 See [FILES-V7-TERMINAL.md](FILES-V7-TERMINAL.md) for current contract decisions.
 
-## Native-consumer increment
+## Default-manual V7 increment
 
-The supervisor's private V7 client now has read-only whole-volume scope with
-subject zero, allowing it to read `/config/owner-policy` and staged artifacts.
-V7 policy loading never creates or repairs the file. Missing/malformed policy
-leaves mounting and the workspace shell usable but disables file-access child
-launches. Legacy policy initialization is preserved until format retirement.
-`rustic-volume provision7 IMAGE LINEAGE` exclusively creates fresh V7 media with
-the existing policy, using an ordinary replacement and no retry records.
-Existing `seed7` behavior and workspace shell authority remain unchanged.
+`terminal` and `terminal-init` now mount host-prepared V7. The supervisor stores
+shell policy separately from file profile: Manual is scope zero, rights 15,
+subject 1; the explicit `terminal-v7` workspace fixture remains scope 4, rights
+15, subject 2. Mount, restart, adoption and shell rebind use the selected policy.
+The private owner stays read-only, scope zero, subject zero. V7 journal guards
+continue reserving both subjects 1 and 2. Kernel changes only select bootstrap;
+no new unsafe, dependency, format, packet or selectable mode spelling was added.
 
-Native read/probe/session/helper/tasks roles no longer fail the supervisor's
-V5-only readiness gate. Tasks owners receive two disjoint files and use the
-journal object as subject, with subjects 1 and 2 reserved. The shell excludes
-its `/config/tasks-intent` by authorized journal metadata; it does not require
-parent-directory authority, so `/workspaces/tasks-intent` is valid. Owner-launched
-lost-reply/admission actors retain subject 1, distinct from workspace shell 2.
-Maintenance and shell rebind also wait for pending group takeover to settle.
-No kernel change, unsafe, dependency, packet layout or disk format was added.
+The manual launcher exclusively provisions fresh V7 with the existing owner
+policy under a separate file lock, validates the exact prefix, and extends only
+that fresh regular single-link file to the R0 sparse 4 GiB device with fsync.
+The filesystem retains its frozen 131,282-sector prefix (64 MiB payload); the
+remaining physical sectors do not enlarge it. Existing data must be a mountable
+V7 prefix on a dedicated 4 GiB file. Missing/linked/special/wrong-size/corrupt/
+legacy media and lock contention refuse; no conversion or repair is performed.
+`report7` and exact-size disposable fixture tools remain strict. The default
+CLI no longer exposes the legacy recovery-upgrade flag. The owner disk was never
+used for tests.
+
+Existing `terminal-test`/`recovery-test` spellings select a private legacy
+acceptance branch. That service mounts first and initializes only after Empty;
+its initializer also rejects nonzero reserved sectors. Second boots reuse the
+same fixture bytes, preserving populated volumes. Normal tasks-owner, capacity
+and measurement acceptance now use the existing ordinary recovery fixture;
+their implementations remain legacy pending the remaining port. Shell help and
+task-enable output report the actual mounted behavior/bounds.
 
 Validation on Ubuntu 26.04 / pinned QEMU 10.2.1:
 
-- `cargo xtask check`: 760 Rust tests in 100 suites; formatting, host/guest
-  Clippy and native builds passed on the final Rust implementation.
-- Python runner suite: 335 tests passed. Both new harnesses are registered in
-  `tools/boot.py` for the `v7` CI job.
-- `v7_consumers_test.py`: three boots, including mountable same-length malformed
-  policy refusal with unchanged volume; scoped probe; failed helper/second-scope
-  grants without leaks; saturated client/helper reply queues, settled group
-  revocation releasing a stage, old READ Closed and subsequent fresh grants;
-  tasks apply using a separate journal; lost acceptance retained across reboot,
-  foreign-subject lookup refused and explicit same-subject execution/replay.
-  Oracle7 verifies live bytes and both retained outcomes. Ordinary build
-  `74513684b93f693b`, 11.822 seconds.
-- `v7_authority_test.py`: two boots on the same build, held ACCEPT/EXECUTE
-  authority-loss prevention, unchanged targets and recovery pass; 10.995 seconds.
-- `v7_tasks_recovery_test.py`: two boots on explicit `tasks-acceptance` build
-  `62cdeed555f2f767`, 5.908 seconds. A lost replacement reply leaves a nonempty
-  journal and exact committed receipt. A fresh client after reboot clears only
-  the journal; target version/bytes and receipt remain unchanged, and idle
-  repeat recovery changes no volume bytes.
-- `terminal_test.py`: 2,983 commands across two boots pass, including the
-  original policy initialization and reserved journal collision refusals, on
-  acceptance build `62cdeed555f2f767`.
-- `v7_read_test.py`: two boots, service restart, exact 485,136-byte ELF/manifest
-  reads, stale pins, staging cancellation/cleanup and missing-policy consumer
-  denial pass. The entire volume stays unchanged; build `74513684b93f693b`.
+- `cargo xtask check`: 762 Rust tests in 100 suites, formatting, host/guest
+  Clippy and builds pass. Python runner suite: 342 tests pass, including dedicated
+  device refusal/locking and mismatched mode/build/kernel provenance refusals.
+- `v7_manual_test.py`: two boots (`terminal-init`, `terminal`) with verified
+  identical kernel/build, whole-volume navigation, system write refusal,
+  subject-1 lost-reply receipt, shell task edit and cleared `/config/tasks-intent`,
+  cut rebind reporting Closed/NoTransfer, restart preserving authority, same
+  receipt after reboot and idle tasks recovery. The entire 4 GiB device stays
+  unchanged after boot 2. Build `d9c7997a2d511400`, 20.974 seconds.
+- `v7_consumers_test.py`: three boots, scoped native consumers, tasks owner,
+  invalid policy refusal, group revocation, fresh grants and lost admission
+  reconciliation pass on the same ordinary build, 10.214 seconds.
+- `v7_owner_test.py`: two boots, read-only confirmations, shared rotation,
+  refusal hashes, finite/indefinite stalled-service recovery and fresh grants
+  pass on that same build, 15.774 seconds.
+- `terminal_test.py`: 2,985 commands across two populated legacy fixture boots
+  pass on acceptance build `3432032777cf5282`, 205.705 seconds. It validates the
+  preserved legacy behavior, not default V7 parity for every former scenario.
 
-Evidence is in `artifacts/boot/terminal-v7-{consumers,authority,tasks-recovery}/result.json`.
-Logs: `/tmp/rustic-v7-consumers-{check,python,native,authority,tasks-recovery,legacy,read}.log`.
-The five native harnesses completed eleven boots on the final Rust sources.
-File-server ELF remains 485,136 bytes, below 524,288.
+Four native harnesses establish nine boots on final Rust sources. File-server
+ELF is 473,496 bytes, below 524,288. Both new owner/manual harnesses are in the
+V7 CI inventory. Evidence: `artifacts/boot/terminal-v7-{manual,consumers,owner}/`
+and `artifacts/terminal-test/result.json`; logs
+`/tmp/rustic-v7-manual-{check,python,native,consumers,owner,legacy}.log`.
 
-Astra low final source/harness review found no material issue. Luna max completed
-the bounded supervisor and recovery-harness work after the configured DeepSeek
-route returned unavailable; no default model route changed. Root integrated,
-fixed the shell's directory-authority dependency and harness error expectations,
-and owns every build/VM run. No token/quota savings are claimed.
+Luna max implemented the bounded native policy/bootstrap changes under the
+existing documented unavailable-provider fallback. Root owns integration and
+all builds/VMs. Independent source inspection found a mode label overwritten
+by package provenance; root filtered the metadata, added identity refusal tests,
+and reran the manual harness. Explicit Astra low final independent review
+completed through the inspection agent's single review child after direct root
+review delegation hit its thread limit. It found no material issue in the final
+diff, module/authority/persistence boundaries or inspected evidence. No new unsafe
+or dependency inversion. Locks coordinate cooperating launchers; no hostile host
+path-race protection is claimed. No quota savings, final-head CI or merge is
+claimed.
 
-Limits: drain status alone is not closure evidence; subsequent READ Closed
-checks establish it. Failed COMMIT transport reports Uncertain; settled owner
-revocation and bytes establish prevention. The pending-takeover-before-admin-
-submission guard is source-reviewed, not separately forced in a guest. Guest
-power cuts model owned QEMU termination, not physical media durability. Full
-final-head CI and complete default-terminal parity remain pending.
-
-## Owner-maintenance increment
-
-Existing owner selectors now work on V7: `rotate-receipts` runs shared retention;
-feature-enable commands confirm already available capabilities without writes
-and report format v7. Authenticated idle `stall files` reuses the original
-diagnostic; publication-time stall remains Busy. Existing readiness, takeover,
-admin-drain and work-capacity gates remain intact. Legacy fixture messages and
-behavior are preserved. No kernel, unsafe, dependency or format change.
-
-Validation: `cargo xtask check` passed (760 Rust tests, 100 suites, formatting,
-host/guest Clippy and builds); Python runner suite passed 335 tests.
-`v7_owner_test.py` passed two native boots on build `dfb1546aa3a69179`, 16.868
-seconds, with capability-confirmation/refusal hashes unchanged; unresolved
-admission/active candidate rotation refused; terminal records from subjects 1
-and 2 expired together; oracle-checked reclaimed sectors and unchanged live
-bytes; responsive owner control during finite stall, late settled revocation,
-old helper READ Closed, indefinite-stall restart and fresh grants; unchanged
-volume after reboot. Only the new epoch is command-reported; other rotation
-fields are independent oracle observations. Max measured owner command 0.800 s
-is a regression tripwire, not an SLO. Registered in the `v7` CI inventory.
-
-Evidence: `artifacts/boot/terminal-v7-owner/result.json` and
-`/tmp/rustic-v7-owner-{check,python,native}.log`. Explicit Astra low independent
-review found no material issue. Luna max completed the bounded Rust changes
-under the documented unavailable-provider fallback; root fixed the header error
-mapping, integrated the native harness and ran every check. A separate inherited
-model source inspection incorrectly suggested settlement cannot clear degraded;
-`poll_takeover` and the native pass establish that settled late replies do clear
-it. No model/quota savings claimed.
+Completed native-consumer (`344b6d7`) and owner-maintenance (`52fca7a`) evidence
+is preserved in [the port archive](WORK-STATE-V7-PORT-2026-10-02.md).
 
 ## Next acceptance target
 
-Continue with fresh default-terminal provisioning and whole-volume manual V7
-shell policy while retaining explicit workspace-scope and legacy acceptance
-fixtures. Port remaining block-probe, host and native acceptance consumers;
-retire RUSTFS1 only after parity has evidence. Default terminal still uses the
-legacy Volume/Server. Do not delete its tests or claim one format prematurely.
-After complete parity, open the PR and wait for every final-head CI job before
-merging to main. Tasks usability and COM2 follow the storage phase.
+Default manual behavior is V7, but complete legacy-format retirement is pending.
+Port the remaining recovery, block-probe, host/measurement and native acceptance
+consumers with their existing behaviors, then retire RUSTFS1 after parity has
+native evidence. Do not delete tests or claim one format prematurely. After
+complete parity, open the PR and wait for every authoritative final-head CI job before merging to main. #22/#52
+remain open; tasks usability and COM2 follow the storage phase.

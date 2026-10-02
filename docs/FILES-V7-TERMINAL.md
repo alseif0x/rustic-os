@@ -4,8 +4,8 @@
 
 This port moves the terminal's existing file operations onto the V7 service.
 It does not change file opcodes, packet layouts or the on-disk format. The
-owner selected V7 unification on 2026-10-02; the default terminal and its
-remaining consumers must be ported before the legacy volume can be removed.
+owner selected V7 unification on 2026-10-02; remaining legacy acceptance
+consumers must be ported before the legacy volume can be removed.
 See [current work state](WORK-STATE.md), [storage policy](STORAGE-POLICY.md),
 [V7 format](WORKSPACE-FORMAT7.md) and requirement R02.
 
@@ -59,8 +59,13 @@ read calls report `Closed`; the SDK still classifies a failed COMMIT exchange
 as `Uncertain`. Only the owner's settled revocation and file observations
 establish whether an effect was prevented. New explicit grants do not restore
 the old bindings. Staged application launch retains its separate control-only
-policy. The default terminal remains pending conversion; this increment does
-not establish full format parity.
+policy. The default manual terminal now mounts host-prepared V7 with whole-volume
+scope and subject 1; both restart and shell rebind preserve that selection.
+Fresh manual media retains the R0 4 GiB physical device and frozen V7 prefix.
+Older media is refused without conversion. Existing `terminal-test` and
+`recovery-test` fixtures retain legacy behavior during the remaining acceptance
+port: they mount first and initialize only genuinely empty media. This does not
+establish complete format retirement.
 
 ## Existing owner maintenance commands
 

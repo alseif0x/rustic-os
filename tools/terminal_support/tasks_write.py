@@ -4,7 +4,6 @@ import json
 import re
 import tempfile
 from pathlib import Path
-from boot_support.image import package
 from .machine import machine, disk
 from .connection import Connection
 from .failure import preserve_failure
@@ -182,7 +181,7 @@ def verify(image, output):
     metadata = json.loads((image.parent / 'image.json').read_text())
     if metadata.get('tasks_acceptance') is not True:
         raise ValueError('task write cuts require the explicit acceptance build')
-    mount = package(image.parent / 'kernel.elf', 'terminal', metadata['build_id'], {})
+    mount = image  # Legacy fixture mounts first and initializes only empty media.
     with tempfile.TemporaryDirectory(prefix='rustic-tasks-write-') as directory:
         directory = Path(directory)
         with disk(directory / 'data.raw', True) as data, preserve_failure(data, output, 'tasks-write', metadata):

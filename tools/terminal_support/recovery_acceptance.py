@@ -7,7 +7,6 @@ import struct
 import tempfile
 import time
 import zlib
-from boot_support.image import package
 from .machine import machine, disk, SIZE
 from .connection import Connection
 from .failure import preserve_failure
@@ -23,7 +22,7 @@ def verify(image, timeout=60, output=None):
     output = Path(output or image.parent)
     output.mkdir(parents=True, exist_ok=True)
     metadata = json.loads((image.parent / "image.json").read_text())
-    mount = package(image.parent / "kernel.elf", "terminal", metadata["build_id"], {})
+    mount = image  # Legacy fixture mounts first and initializes only empty media.
     serials, logs, cases = [], [], []
     started = time.monotonic()
     @contextlib.contextmanager

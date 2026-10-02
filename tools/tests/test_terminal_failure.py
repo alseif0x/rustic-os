@@ -58,7 +58,6 @@ class TerminalFailureTests(unittest.TestCase):
                 return write_bytes(path, payload)
 
             with (
-                patch.object(recovery_acceptance, "package", return_value=root / "mount.img"),
                 patch.object(recovery_acceptance, "disk", owned_disk),
                 patch.object(recovery_acceptance, "machine", machine),
                 patch.object(recovery_acceptance, "Connection"),

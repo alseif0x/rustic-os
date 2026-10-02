@@ -309,3 +309,101 @@ this block does not close the broader #22 mission or justify removing RUSTFS1.
 **Stop here.** The current queue/cancellation block is complete and verified.
 The owner requested stopping at this boundary; do not begin later consumers,
 default-format conversion, tasks or MCP work without a new instruction.
+
+## Native consumers and owner maintenance (archived 2026-10-03)
+
+## Native-consumer increment
+
+The supervisor's private V7 client now has read-only whole-volume scope with
+subject zero, allowing it to read `/config/owner-policy` and staged artifacts.
+V7 policy loading never creates or repairs the file. Missing/malformed policy
+leaves mounting and the workspace shell usable but disables file-access child
+launches. Legacy policy initialization is preserved until format retirement.
+`rustic-volume provision7 IMAGE LINEAGE` exclusively creates fresh V7 media with
+the existing policy, using an ordinary replacement and no retry records.
+Existing `seed7` behavior and workspace shell authority remain unchanged.
+
+Native read/probe/session/helper/tasks roles no longer fail the supervisor's
+V5-only readiness gate. Tasks owners receive two disjoint files and use the
+journal object as subject, with subjects 1 and 2 reserved. The shell excludes
+its `/config/tasks-intent` by authorized journal metadata; it does not require
+parent-directory authority, so `/workspaces/tasks-intent` is valid. Owner-launched
+lost-reply/admission actors retain subject 1, distinct from workspace shell 2.
+Maintenance and shell rebind also wait for pending group takeover to settle.
+No kernel change, unsafe, dependency, packet layout or disk format was added.
+
+Validation on Ubuntu 26.04 / pinned QEMU 10.2.1:
+
+- `cargo xtask check`: 760 Rust tests in 100 suites; formatting, host/guest
+  Clippy and native builds passed on the final Rust implementation.
+- Python runner suite: 335 tests passed. Both new harnesses are registered in
+  `tools/boot.py` for the `v7` CI job.
+- `v7_consumers_test.py`: three boots, including mountable same-length malformed
+  policy refusal with unchanged volume; scoped probe; failed helper/second-scope
+  grants without leaks; saturated client/helper reply queues, settled group
+  revocation releasing a stage, old READ Closed and subsequent fresh grants;
+  tasks apply using a separate journal; lost acceptance retained across reboot,
+  foreign-subject lookup refused and explicit same-subject execution/replay.
+  Oracle7 verifies live bytes and both retained outcomes. Ordinary build
+  `74513684b93f693b`, 11.822 seconds.
+- `v7_authority_test.py`: two boots on the same build, held ACCEPT/EXECUTE
+  authority-loss prevention, unchanged targets and recovery pass; 10.995 seconds.
+- `v7_tasks_recovery_test.py`: two boots on explicit `tasks-acceptance` build
+  `62cdeed555f2f767`, 5.908 seconds. A lost replacement reply leaves a nonempty
+  journal and exact committed receipt. A fresh client after reboot clears only
+  the journal; target version/bytes and receipt remain unchanged, and idle
+  repeat recovery changes no volume bytes.
+- `terminal_test.py`: 2,983 commands across two boots pass, including the
+  original policy initialization and reserved journal collision refusals, on
+  acceptance build `62cdeed555f2f767`.
+- `v7_read_test.py`: two boots, service restart, exact 485,136-byte ELF/manifest
+  reads, stale pins, staging cancellation/cleanup and missing-policy consumer
+  denial pass. The entire volume stays unchanged; build `74513684b93f693b`.
+
+Evidence is in `artifacts/boot/terminal-v7-{consumers,authority,tasks-recovery}/result.json`.
+Logs: `/tmp/rustic-v7-consumers-{check,python,native,authority,tasks-recovery,legacy,read}.log`.
+The five native harnesses completed eleven boots on the final Rust sources.
+File-server ELF remains 485,136 bytes, below 524,288.
+
+Astra low final source/harness review found no material issue. Luna max completed
+the bounded supervisor and recovery-harness work after the configured DeepSeek
+route returned unavailable; no default model route changed. Root integrated,
+fixed the shell's directory-authority dependency and harness error expectations,
+and owns every build/VM run. No token/quota savings are claimed.
+
+Limits: drain status alone is not closure evidence; subsequent READ Closed
+checks establish it. Failed COMMIT transport reports Uncertain; settled owner
+revocation and bytes establish prevention. The pending-takeover-before-admin-
+submission guard is source-reviewed, not separately forced in a guest. Guest
+power cuts model owned QEMU termination, not physical media durability. Full
+final-head CI and complete default-terminal parity remain pending.
+
+## Owner-maintenance increment
+
+Existing owner selectors now work on V7: `rotate-receipts` runs shared retention;
+feature-enable commands confirm already available capabilities without writes
+and report format v7. Authenticated idle `stall files` reuses the original
+diagnostic; publication-time stall remains Busy. Existing readiness, takeover,
+admin-drain and work-capacity gates remain intact. Legacy fixture messages and
+behavior are preserved. No kernel, unsafe, dependency or format change.
+
+Validation: `cargo xtask check` passed (760 Rust tests, 100 suites, formatting,
+host/guest Clippy and builds); Python runner suite passed 335 tests.
+`v7_owner_test.py` passed two native boots on build `dfb1546aa3a69179`, 16.868
+seconds, with capability-confirmation/refusal hashes unchanged; unresolved
+admission/active candidate rotation refused; terminal records from subjects 1
+and 2 expired together; oracle-checked reclaimed sectors and unchanged live
+bytes; responsive owner control during finite stall, late settled revocation,
+old helper READ Closed, indefinite-stall restart and fresh grants; unchanged
+volume after reboot. Only the new epoch is command-reported; other rotation
+fields are independent oracle observations. Max measured owner command 0.800 s
+is a regression tripwire, not an SLO. Registered in the `v7` CI inventory.
+
+Evidence: `artifacts/boot/terminal-v7-owner/result.json` and
+`/tmp/rustic-v7-owner-{check,python,native}.log`. Explicit Astra low independent
+review found no material issue. Luna max completed the bounded Rust changes
+under the documented unavailable-provider fallback; root fixed the header error
+mapping, integrated the native harness and ran every check. A separate inherited
+model source inspection incorrectly suggested settlement cannot clear degraded;
+`poll_takeover` and the native pass establish that settled late replies do clear
+it. No model/quota savings claimed.
