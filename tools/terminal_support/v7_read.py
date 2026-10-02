@@ -305,6 +305,9 @@ def _namespace_cases(uart, seeded, read_note):
     if not stat or tuple(map(int, stat.groups())) != expected:
         raise AssertionError(f"V7 ordinary stat differs from independently provisioned metadata: {stat_text!r}")
     uart.command(f"cat {READ_NOTE_NAME}", "\r\n" + READ_NOTE.replace("\n", "\r\n") + "\r\n")
+    # seed7 intentionally carries no owner policy. Mount/read still work,
+    # while file-access consumer launch must remain disabled without writes.
+    uart.command(f"run read {READ_NOTE_NAME}", "error: service denied")
     uart.command("cat .", "error: IsDirectory")
     uart.command("stat missing.txt", "error: NotFound")
     for root_name in ("system", "data", "config"):
@@ -315,7 +318,8 @@ def _namespace_cases(uart, seeded, read_note):
     return {"root": root, "entries": entries, "elf_stat": dict(zip(
         ("id", "parent", "size", "version"), expected)),
         "read_note_resource": read_note["resource"],
-        "read_note_sha256": read_note["sha256"], "denied_roots": ["system", "data", "config"]}
+        "read_note_sha256": read_note["sha256"], "denied_roots": ["system", "data", "config"],
+        "missing_policy_consumer_denied": True}
 
 
 def verify(image, volume_tool, output=None):

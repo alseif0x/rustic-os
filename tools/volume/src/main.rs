@@ -9,11 +9,13 @@ mod add7;
 mod command;
 mod disk;
 mod maintain7;
+mod provision7;
 #[cfg(test)]
 mod testing;
 
 const USAGE: &str = "\
 usage: rustic-volume <command>
+  provision7 <image> <lineage>   create a fresh v7 image with the owner policy
   seed7 <image> <lineage> <elf> <manifest> [--scratch]
                                 create a fresh v7 application fixture; --scratch
                                 also creates an empty writable scratch.bin
@@ -47,6 +49,9 @@ fn main() -> ExitCode {
 
 fn run(args: &[String]) -> Result<String, String> {
     match args {
+        [command, image, lineage] if command == "provision7" => {
+            provision7::provision7(Path::new(image), lineage)
+        }
         [command, image, lineage, elf, manifest] if command == "seed7" => command::seed7(
             Path::new(image),
             lineage,

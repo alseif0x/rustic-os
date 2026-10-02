@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Bounded policy loading/initialization over asynchronous native file requests.
+//! Bounded owner-policy loading and V5 initialization over native file requests.
 use rustic_sdk::abi::files as f;
 use rustic_sdk::files::{Client, Error, Metadata, Packet};
 const CONTENT: &[u8] = b"rustic-owner-v1\nhelpers=explicit\n";
@@ -26,7 +26,7 @@ impl Policy {
             version: 0,
         }
     }
-    pub fn poll(&mut self, files: &mut Client) -> Option<u32> {
+    pub fn poll(&mut self, files: &mut Client, create_missing: bool) -> Option<u32> {
         if !self.sent {
             let mut p = Packet::new(match self.phase {
                 Phase::Lookup => f::LOOKUP,
@@ -66,7 +66,7 @@ impl Policy {
         let r = match files.poll() {
             Ok(None) => return None,
             Ok(Some(r)) => r,
-            Err(Error::NotFound) if matches!(self.phase, Phase::Lookup) => {
+            Err(Error::NotFound) if matches!(self.phase, Phase::Lookup) && create_missing => {
                 self.phase = Phase::Create;
                 self.sent = false;
                 return None;

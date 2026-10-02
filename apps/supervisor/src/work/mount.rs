@@ -119,9 +119,10 @@ impl Mount {
             2 => {
                 let rights = if profile == FileProfile::V5 { 7 } else { 1 };
                 let subject = if profile == FileProfile::V5 { 1 } else { 0 };
-                // V7's supervisor owner fixture reaches the workspace tree by
-                // an explicit node scope; scope zero is whole-volume authority.
-                let scope = if profile == FileProfile::V5 { 0 } else { 4 };
+                // The V7 owner stays read-only. Its private binding covers the
+                // mounted volume so it can verify /config/owner-policy as well
+                // as read workspace ELF and manifest bytes for staged launch.
+                let scope = 0;
                 if let Some(generation) =
                     self.grant(state, [32, 1, me, self.owner[1], scope, rights, 0, subject])?
                 {
@@ -130,11 +131,10 @@ impl Mount {
                 }
             }
             3 => {
-                if profile == FileProfile::V7 {
-                    state.policy = 0;
-                    self.shell = connect(state.files, state.shell).map_err(|_| 3u64)?;
-                    self.phase = 4;
-                } else if let Some(policy) = self.policy.poll(&mut state.owner) {
+                if let Some(policy) = self
+                    .policy
+                    .poll(&mut state.owner, profile == FileProfile::V5)
+                {
                     state.policy = policy;
                     self.shell = connect(state.files, state.shell).map_err(|_| 3u64)?;
                     self.phase = 4;

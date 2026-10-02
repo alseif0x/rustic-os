@@ -34,6 +34,34 @@ node scopes, including `data` and `config`, use the same ancestry checks.
 The dedicated V7 workspace fixture explicitly requests node 4; it does not
 depend on rewriting scope zero inside the service.
 
+## Existing native consumers
+
+The supervisor's private V7 binding is read-only, scope zero, subject zero. It
+reads `/config/owner-policy` and the application artifacts used for staging.
+V7 mount never creates that policy: an absent or malformed policy leaves the
+shell usable but disables file-access child launches. Fresh owner-managed
+images are created explicitly with `rustic-volume provision7 IMAGE LINEAGE`;
+the existing policy is written with ordinary replacement and consumes no retry
+record. `seed7` remains the application fixture without an owner policy.
+
+Existing embedded read/probe/session/helper/tasks roles use the existing grant
+sequence, including a second disjoint file for a tasks owner's journal. The
+workspace shell retains scope 4 and subject 2. Owner-launched lost-reply and
+admission actors use subject 1, so the workspace shell cannot recover their
+history; another explicitly authorized actor with the same subject can.
+Tasks owners use their journal object as subject, with 1 and 2 reserved. A
+workspace journal named `tasks-intent` remains distinct from the shell's own
+`/config/tasks-intent`; the launcher checks authorized file metadata without
+requesting directory authority over `/config`.
+
+Group revocation closes V7 endpoints and clears queued service replies. Old
+read calls report `Closed`; the SDK still classifies a failed COMMIT exchange
+as `Uncertain`. Only the owner's settled revocation and file observations
+establish whether an effect was prevented. New explicit grants do not restore
+the old bindings. Staged application launch retains its separate control-only
+policy. The default terminal and old owner maintenance selectors are still
+pending conversion; this increment does not establish full format parity.
+
 `LIST` cursors are ordinals among returned children, rather than V7's physical
 node-table positions. The physical successor can be 256, which would wrap
 when encoded in the existing one-byte cursor. Four canonical roots occupy

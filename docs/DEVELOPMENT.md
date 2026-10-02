@@ -184,6 +184,23 @@ keys, receipts after reboot and epoch expiry against `oracle7`. The `v7`
 CI job runs it and retains evidence in `artifacts/boot/terminal-v7-recovery/`.
 See the [recovery compatibility decision](FILES-V7-TERMINAL.md#recovery-compatibility-decision).
 
+`python3 tools/v7_consumers_test.py` provisions fresh V7 owner-policy media and
+exercises existing native probe/tasks/session/helper consumers. It checks a
+mountable but invalid policy, group revocation under queued reply pressure,
+fresh grants, two-file tasks ownership, and a lost admission reply reconciled
+after reboot by a same-subject actor. The ordinary `v7_read_test.py` fixture
+also checks missing-policy launch refusal while keeping the entire volume
+unchanged. Consumer evidence is in `artifacts/boot/terminal-v7-consumers/`.
+
+`python3 tools/v7_tasks_recovery_test.py` uses the existing explicit
+`tasks-acceptance` build and packages its kernel in `terminal-v7` mode. Two
+fresh-volume boots exercise a deliberately lost replacement reply, a nonempty
+tasks-owner journal, and a fresh client's recovery after reboot. The independent
+reader checks that recovery clears only the journal, preserves the exact target
+version and receipt, and an idle repeat writes nothing. Evidence, including the
+acceptance build identity, is in `artifacts/boot/terminal-v7-tasks-recovery/`.
+Both consumer harnesses run in the `v7` CI job.
+
 `python3 tools/v7_launch_test.py` builds that image once, copies it aside and
 boots the same bytes twice. It builds two tagged utility variants
 (`RUSTIC_UTILITY_TAG=1` and `2`) in separate cargo invocations under
