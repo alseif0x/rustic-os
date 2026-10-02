@@ -22,52 +22,63 @@ pub(super) fn request(volume: &Volume7, grant: Grant7, packet: Packet) -> Result
 
 fn lookup(volume: &Volume7, grant: Grant7, packet: Packet) -> Result<Packet, Error> {
     let node = if packet.id == 0 {
-        // The terminal uses a virtual absolute-path root. It exposes only the
-        // workspace root to a grant whose actual scope is that root.
-        if grant.scope != scope::WORKSPACES_ROOT {
+        // The virtual root contains the canonical mounted roots only. A whole-
+        // volume grant can see all four; a workspaces grant sees that root alone.
+        if grant.scope != 0 && grant.scope != scope::WORKSPACES_ROOT {
             return Err(Error::Denied);
         }
         let node = match volume.lookup(0, packet.payload()) {
             Ok(node) => node,
-            Err(rustic_fs::Error::NotFound) => return Err(Error::Denied),
+            Err(rustic_fs::Error::NotFound) if grant.scope == scope::WORKSPACES_ROOT => {
+                return Err(Error::Denied);
+            }
             Err(error) => return Err(reply::error(error)),
         };
-        if node.id != scope::WORKSPACES_ROOT {
+        if !scope::root_visible(grant, node) {
             return Err(Error::Denied);
         }
         node
     } else {
-        scope::authorized_node(volume, grant.scope, packet.id)?;
+        scope::authorized_node(volume, grant, packet.id)?;
         let node = volume
             .lookup(packet.id, packet.payload())
             .map_err(reply::error)?;
-        scope::authorized_node(volume, grant.scope, node.id)?
+        scope::authorized_node(volume, grant, node.id)?
     };
     Ok(node_reply(packet, node, 0))
 }
 
 fn stat(volume: &Volume7, grant: Grant7, packet: Packet) -> Result<Packet, Error> {
-    let node = scope::authorized_node(volume, grant.scope, packet.id)?;
+    let node = scope::authorized_node(volume, grant, packet.id)?;
     Ok(node_reply(packet, node, 0))
 }
 
 fn list(volume: &Volume7, grant: Grant7, packet: Packet) -> Result<Packet, Error> {
     let cursor = u8::try_from(packet.arg).map_err(|_| Error::Invalid)?;
     if packet.id == 0 {
-        if grant.scope != scope::WORKSPACES_ROOT {
+        if grant.scope != 0 && grant.scope != scope::WORKSPACES_ROOT {
             return Err(Error::Denied);
         }
-        if cursor == 0 {
-            let node = volume.stat(scope::WORKSPACES_ROOT).map_err(reply::error)?;
-            return Ok(node_reply(packet, node, 1));
+        let total = if grant.scope == 0 { 4 } else { 1 };
+        if usize::from(cursor) >= total {
+            return Ok(empty_reply(packet));
         }
-        return Ok(empty_reply(packet));
+        let id = if grant.scope == 0 {
+            u32::from(cursor) + 1
+        } else {
+            scope::WORKSPACES_ROOT
+        };
+        let node = volume.stat(id).map_err(reply::error)?;
+        if !scope::root_visible(grant, node) {
+            return Err(Error::Corrupt);
+        }
+        return Ok(node_reply(packet, node, cursor + 1));
     }
 
     // A cursor is an ordinal among authorized children, never a physical V7
     // node-table slot. Keeping the physical cursor as `usize` also preserves
     // the final slot's successor value of 256 without narrowing or wrapping.
-    scope::authorized_node(volume, grant.scope, packet.id)?;
+    scope::authorized_node(volume, grant, packet.id)?;
     let mut physical_cursor = 0usize;
     let mut ordinal = 0u16;
     loop {
@@ -78,7 +89,7 @@ fn list(volume: &Volume7, grant: Grant7, packet: Packet) -> Result<Packet, Error
             return Ok(empty_reply(packet));
         };
         physical_cursor = next_physical;
-        match scope::authorized_node(volume, grant.scope, node.id) {
+        match scope::authorized_node(volume, grant, node.id) {
             Ok(_) => {
                 if ordinal == u16::from(cursor) {
                     let next_ordinal = ordinal.checked_add(1).ok_or(Error::Corrupt)?;

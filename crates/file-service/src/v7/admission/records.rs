@@ -114,5 +114,5 @@ pub(super) fn observation(lineage: [u8; 16], record: &Record7) -> Result<Observa
 }
 
 fn visible(volume: &Volume7, grant: Grant7, record: &Record7) -> bool {
-    scope::retained_visible(volume, grant.scope, record.workspace, record.object)
+    scope::retained_visible(volume, grant, record.workspace, record.object)
 }

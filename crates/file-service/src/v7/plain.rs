@@ -56,7 +56,7 @@ impl PlainTransfers {
                 if packet.id == 0 {
                     return Err(Error::Denied);
                 }
-                scope::authorized_node(volume, grant.scope, packet.id)?;
+                scope::authorized_node(volume, grant, packet.id)?;
                 let kind = if packet.op == CREATE {
                     Kind::File
                 } else {
@@ -68,7 +68,7 @@ impl PlainTransfers {
                 Ok(namespace::node_reply(packet, node, 0))
             }
             REMOVE => {
-                scope::authorized_node(volume, grant.scope, packet.id)?;
+                scope::authorized_node(volume, grant, packet.id)?;
                 volume.remove(disk, packet.id).map_err(reply::error)?;
                 Ok(ack(&packet))
             }
@@ -88,7 +88,7 @@ impl PlainTransfers {
         packet: Packet,
         profile_busy: bool,
     ) -> Result<Packet, Error> {
-        let node = scope::authorized_node(volume, grant.scope, packet.id)?;
+        let node = scope::authorized_node(volume, grant, packet.id)?;
         if node.kind != Kind::File {
             return Err(Error::IsDirectory);
         }
@@ -113,7 +113,7 @@ impl PlainTransfers {
         grant: Grant7,
         packet: Packet,
     ) -> Result<Packet, Error> {
-        scope::authorized_node(volume, grant.scope, packet.id)?;
+        scope::authorized_node(volume, grant, packet.id)?;
         self.transfers.chunk(slot, &packet)?;
         Ok(ack(&packet))
     }
@@ -126,7 +126,7 @@ impl PlainTransfers {
         grant: Grant7,
         packet: Packet,
     ) -> Result<Packet, Error> {
-        scope::authorized_node(volume, grant.scope, packet.id)?;
+        scope::authorized_node(volume, grant, packet.id)?;
         let transfer = self.transfers.take(slot, &packet)?;
         let node = volume
             .replace(

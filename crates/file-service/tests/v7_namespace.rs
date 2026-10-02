@@ -114,12 +114,34 @@ fn assert_zero_error(packet: &Packet, error: Error, context: u32) {
 }
 
 #[test]
-fn scope_zero_resolves_to_the_filtered_workspace_root_and_preserves_node_reply_shape() {
+fn scope_zero_reaches_the_mounted_volume_and_virtual_root_lists_all_four_roots() {
     let mut fixture = setup();
     let mut server = Server7::new(&mut fixture.volume);
     let authorization = grant(&mut server, 0, 0, 11);
-    assert_eq!(authorization.scope, WORKSPACES);
+    assert_eq!(authorization.scope, 0);
 
+    for (id, name) in [
+        (1, b"system".as_slice()),
+        (2, b"data"),
+        (3, b"config"),
+        (4, b"workspaces"),
+    ] {
+        let found = server.handle(
+            &mut fixture.disk,
+            0,
+            11,
+            lookup(0, name, authorization.context),
+            0,
+        );
+        assert_eq!(found.status, 0);
+        assert_eq!(
+            (found.id, found.arg, found.version, found.count),
+            (id, 0, 1, 40)
+        );
+        assert_eq!(found.data[0], Kind::Directory as u8);
+        assert_eq!(node_name(&found), name);
+        assert_eq!(found.data[18..], [0; 22]);
+    }
     let found = server.handle(
         &mut fixture.disk,
         0,
@@ -127,46 +149,43 @@ fn scope_zero_resolves_to_the_filtered_workspace_root_and_preserves_node_reply_s
         lookup(0, b"workspaces", authorization.context),
         0,
     );
-    assert_eq!(found.status, 0);
-    assert_eq!(
-        (found.id, found.arg, found.version, found.count),
-        (WORKSPACES, 0, 1, 40)
-    );
-    assert_eq!(
-        (found.data[0], found.data[1], found.data[2], found.data[3]),
-        (Kind::Directory as u8, 4, b"workspaces".len() as u8, 0)
-    );
     assert_eq!(u32::from_le_bytes(found.data[4..8].try_into().unwrap()), 0);
-    assert_eq!(node_name(&found), b"workspaces");
-    assert_eq!(found.data[18..], [0; 22]);
 
     let mut root_list = request(LIST, 0, authorization.context);
-    let listed = server.handle(&mut fixture.disk, 0, 11, root_list, 0);
-    assert_eq!(
-        (listed.status, listed.id, listed.count, listed.data[3]),
-        (0, WORKSPACES, 40, 1)
-    );
-    assert_eq!(node_name(&listed), b"workspaces");
-
-    root_list.arg = 1;
+    for (cursor, (id, name)) in [
+        (1, b"system".as_slice()),
+        (2, b"data"),
+        (3, b"config"),
+        (4, b"workspaces"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        root_list.arg = cursor as u32;
+        let listed = server.handle(&mut fixture.disk, 0, 11, root_list, 0);
+        assert_eq!(
+            (listed.status, listed.id, listed.count, listed.data[3]),
+            (0, id, 40, cursor as u8 + 1)
+        );
+        assert_eq!(node_name(&listed), name);
+    }
+    root_list.arg = 4;
     let end = server.handle(&mut fixture.disk, 0, 11, root_list, 0);
     assert_eq!(end.status, 0);
     assert_eq!((end.id, end.arg, end.version, end.count), (0, 0, 0, 0));
     assert_eq!(end.data, [0; rustic_abi::files::DATA]);
 
-    for hidden in [b"system".as_slice(), b"data", b"config", b"missing"] {
-        assert_zero_error(
-            &server.handle(
-                &mut fixture.disk,
-                0,
-                11,
-                lookup(0, hidden, authorization.context),
-                0,
-            ),
-            Error::Denied,
-            authorization.context,
-        );
-    }
+    assert_zero_error(
+        &server.handle(
+            &mut fixture.disk,
+            0,
+            11,
+            lookup(0, b"missing", authorization.context),
+            0,
+        ),
+        Error::NotFound,
+        authorization.context,
+    );
     assert_zero_error(
         &server.handle(
             &mut fixture.disk,
@@ -178,6 +197,67 @@ fn scope_zero_resolves_to_the_filtered_workspace_root_and_preserves_node_reply_s
         Error::Denied,
         authorization.context,
     );
+}
+
+#[test]
+fn workspace_and_narrow_scopes_keep_virtual_roots_filtered() {
+    let mut fixture = setup();
+    let mut server = Server7::new(&mut fixture.volume);
+    let workspace = grant(&mut server, 0, WORKSPACES, 11);
+    let directory = grant(&mut server, 1, fixture.directory, 12);
+    let file = grant(&mut server, 2, fixture.file, 13);
+
+    let root = server.handle(
+        &mut fixture.disk,
+        0,
+        11,
+        lookup(0, b"workspaces", workspace.context),
+        0,
+    );
+    assert_eq!((root.status, root.id), (0, WORKSPACES));
+    for hidden in [b"system".as_slice(), b"data", b"config", b"missing"] {
+        assert_zero_error(
+            &server.handle(
+                &mut fixture.disk,
+                0,
+                11,
+                lookup(0, hidden, workspace.context),
+                0,
+            ),
+            Error::Denied,
+            workspace.context,
+        );
+    }
+    let mut list = request(LIST, 0, workspace.context);
+    let only = server.handle(&mut fixture.disk, 0, 11, list, 0);
+    assert_eq!((only.status, only.id, only.data[3]), (0, WORKSPACES, 1));
+    list.arg = 1;
+    assert_eq!(server.handle(&mut fixture.disk, 0, 11, list, 0).id, 0);
+
+    for (slot, peer, grant) in [(1, 12, directory), (2, 13, file)] {
+        assert_zero_error(
+            &server.handle(
+                &mut fixture.disk,
+                slot,
+                peer,
+                lookup(0, b"workspaces", grant.context),
+                0,
+            ),
+            Error::Denied,
+            grant.context,
+        );
+        assert_zero_error(
+            &server.handle(
+                &mut fixture.disk,
+                slot,
+                peer,
+                request(LIST, 0, grant.context),
+                0,
+            ),
+            Error::Denied,
+            grant.context,
+        );
+    }
 }
 
 #[test]
@@ -240,7 +320,7 @@ fn scopes_reach_their_own_node_and_descendants_but_hide_siblings_and_ancestors()
 }
 
 #[test]
-fn each_existing_read_profile_can_query_and_a_readless_profile_cannot_be_installed() {
+fn rights_subsets_install_but_a_write_only_grant_cannot_query() {
     let mut fixture = setup();
     let mut server = Server7::new(&mut fixture.volume);
     for (slot, rights) in [READ_ONLY7, TRACKED_WRITE7, ADMISSION7]
@@ -274,8 +354,8 @@ fn each_existing_read_profile_can_query_and_a_readless_profile_cannot_be_install
         assert_eq!((response.status, response.id), (0, fixture.file));
     }
 
-    assert_eq!(
-        server.grant(
+    let write_only = server
+        .grant(
             3,
             GrantRequest7 {
                 peer: 50,
@@ -284,10 +364,31 @@ fn each_existing_read_profile_can_query_and_a_readless_profile_cannot_be_install
                 rights: WRITE_RIGHT,
                 subject: 7,
                 expires: 0,
+            },
+        )
+        .unwrap();
+    let denied = server.handle(
+        &mut fixture.disk,
+        3,
+        50,
+        request(STAT, fixture.file, write_only.context),
+        0,
+    );
+    assert_eq!(denied.status, Error::Denied as u8);
+
+    assert_eq!(
+        server.grant(
+            3,
+            GrantRequest7 {
+                peer: 50,
+                endpoint: 90,
+                scope: fixture.workspace,
+                rights: 0,
+                subject: 7,
+                expires: 0,
             }
         ),
-        Err(Error::Invalid),
-        "the existing V7 profiles all include READ"
+        Err(Error::Invalid)
     );
 }
 

@@ -18,31 +18,41 @@ const PROBE: u64 = 34;
 /// The owner's request during a publication.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Admin7 {
-    /// Revoke the slot and close its endpoint now; acknowledge with all-zero
-    /// words once the publication has settled.
+    /// Revoke the slot and close its endpoint now; acknowledge with the
+    /// settlement report once the publication has settled.
     Revoke(usize),
+    /// Fence an incarnation-local root group and defer its settlement report.
+    RevokeRoot(u32),
     /// Close the slot's endpoint and forget it now, and acknowledge.
     Detach(usize),
-    /// Readiness probe: acknowledge.
+    /// Owner status query: report the still-open transfer count.
     Probe,
     /// Refuse now; nothing changed.
     Refuse(Error),
 }
 
-/// Classify administrative `words` for a service with `clients` slots. The
-/// shapes are those of the idle service: a malformed revocation is `Invalid`
-/// and a malformed probe or detach `Protocol`.
+/// Classify administrative `words` for a service with `clients` slots using
+/// the same word shapes and refusals as the idle service.
 pub fn admin(words: [u64; 8], clients: usize) -> Admin7 {
-    let slot = usize::try_from(words[1])
-        .ok()
-        .filter(|slot| *slot < clients);
+    let slot = usize::try_from(words[1]).ok();
+    let client_slot = slot.filter(|slot| *slot < clients);
     let rest_zero = words[2..].iter().all(|word| *word == 0);
     match words[0] {
-        command if command == u64::from(REVOKE) => match slot {
-            Some(slot) if rest_zero => Admin7::Revoke(slot),
-            _ => Admin7::Refuse(Error::Invalid),
+        command if command == u64::from(REVOKE) => {
+            if !rest_zero {
+                Admin7::Refuse(Error::Protocol)
+            } else if let Some(slot) = slot {
+                Admin7::Revoke(slot)
+            } else {
+                Admin7::Refuse(Error::Invalid)
+            }
+        }
+        40 if rest_zero && words[1] != 0 => match u32::try_from(words[1]) {
+            Ok(root) => Admin7::RevokeRoot(root),
+            Err(_) => Admin7::Refuse(Error::Invalid),
         },
-        DETACH => match slot {
+        40 => Admin7::Refuse(Error::Protocol),
+        DETACH => match client_slot {
             Some(slot) if rest_zero => Admin7::Detach(slot),
             _ => Admin7::Refuse(Error::Protocol),
         },
@@ -79,6 +89,7 @@ mod tests {
     fn only_revocation_detach_and_the_probe_are_served() {
         assert_eq!(admin([33, 0, 0, 0, 0, 0, 0, 0], 4), Admin7::Revoke(0));
         assert_eq!(admin([33, 3, 0, 0, 0, 0, 0, 0], 4), Admin7::Revoke(3));
+        assert_eq!(admin([40, 17, 0, 0, 0, 0, 0, 0], 4), Admin7::RevokeRoot(17));
         assert_eq!(admin([35, 2, 0, 0, 0, 0, 0, 0], 4), Admin7::Detach(2));
         assert_eq!(admin([34, 0, 0, 0, 0, 0, 0, 0], 4), Admin7::Probe);
     }
@@ -94,14 +105,23 @@ mod tests {
 
     #[test]
     fn malformed_owner_requests_keep_their_idle_refusals() {
-        for words in [
-            [33, 4, 0, 0, 0, 0, 0, 0],
-            [33, 0, 1, 0, 0, 0, 0, 0],
-            [33, u64::MAX, 0, 0, 0, 0, 0, 0],
-        ] {
-            assert_eq!(admin(words, 4), Admin7::Refuse(Error::Invalid), "{words:?}");
+        // A representable but absent slot reaches Server7::revoke, which
+        // preserves the legacy `NotFound` result for revoke.
+        assert_eq!(admin([33, 4, 0, 0, 0, 0, 0, 0], 4), Admin7::Revoke(4));
+        match usize::try_from(u64::MAX) {
+            Ok(slot) => assert_eq!(
+                admin([33, u64::MAX, 0, 0, 0, 0, 0, 0], 4),
+                Admin7::Revoke(slot)
+            ),
+            Err(_) => assert_eq!(
+                admin([33, u64::MAX, 0, 0, 0, 0, 0, 0], 4),
+                Admin7::Refuse(Error::Invalid)
+            ),
         }
         for words in [
+            [33, 0, 1, 0, 0, 0, 0, 0],
+            [40, 0, 0, 0, 0, 0, 0, 0],
+            [40, 9, 0, 0, 0, 0, 0, 1],
             [35, 4, 0, 0, 0, 0, 0, 0],
             [35, 0, 0, 0, 0, 0, 0, 9],
             [34, 1, 0, 0, 0, 0, 0, 0],
@@ -112,6 +132,10 @@ mod tests {
                 "{words:?}"
             );
         }
+        assert_eq!(
+            admin([40, u64::MAX, 0, 0, 0, 0, 0, 0], 4),
+            Admin7::Refuse(Error::Invalid)
+        );
     }
 
     #[test]

@@ -36,6 +36,7 @@ pub struct Control7<'a> {
     lost: &'a mut u8,
     phase: Publication7Phase,
     pending: bool,
+    transfers: u8,
 }
 
 impl Control7<'_> {
@@ -51,6 +52,12 @@ impl Control7<'_> {
         self.pending
     }
 
+    /// Open client candidates that have not lost authority. Their buffers are
+    /// released after settlement; the publishing candidate is already consumed.
+    pub fn transfer_count(&self) -> usize {
+        (self.transfers & !*self.lost).count_ones() as usize
+    }
+
     /// Read-only snapshot for endpoint lifecycle routing.
     pub fn grant_at(&self, slot: usize) -> Option<Grant7> {
         self.grants.grant_at(slot)
@@ -59,19 +66,29 @@ impl Control7<'_> {
     /// Permanently revoke the slot's current generation. A caller in this
     /// slot loses its authority at the next check; the slot's stage and
     /// receipt are dropped once the publication has settled.
-    pub fn revoke(&mut self, slot: usize) -> Result<(), Error> {
-        self.grants.revoke(slot)?;
-        *self.lost |= 1 << slot;
-        Ok(())
+    pub fn revoke(&mut self, slot: usize) -> Result<u8, Error> {
+        let lost = self.grants.revoke_mask(slot)?;
+        *self.lost |= lost;
+        Ok(lost)
+    }
+
+    /// Fence every current member of a root generation, including when called
+    /// from the callback of another slot in that group.
+    pub fn revoke_root(&mut self, root: u32) -> u8 {
+        let lost = self.grants.revoke_root(root);
+        *self.lost |= lost;
+        lost
     }
 
     /// Forget the slot after its endpoint closed, with the same deferred
     /// storage consequences as [`Self::revoke`].
-    pub fn detach(&mut self, slot: usize) {
-        if slot < CLIENTS7 {
-            self.grants.detach(slot);
-            *self.lost |= 1 << slot;
+    pub fn detach(&mut self, slot: usize) -> u8 {
+        if slot >= CLIENTS7 {
+            return 0;
         }
+        let lost = self.grants.detach_with_loss(slot);
+        *self.lost |= lost;
+        lost
     }
 }
 
@@ -89,6 +106,7 @@ pub(super) struct Owner<'a> {
     grants: &'a mut Grants,
     caller: Caller7,
     lost: u8,
+    transfers: u8,
     control: &'a mut dyn FnMut(&mut Control7<'_>) -> u64,
 }
 
@@ -105,12 +123,14 @@ impl<'a> Owner<'a> {
     pub(super) fn new(
         grants: &'a mut Grants,
         caller: Caller7,
+        transfers: u8,
         control: &'a mut dyn FnMut(&mut Control7<'_>) -> u64,
     ) -> Self {
         Self {
             grants,
             caller,
             lost: 0,
+            transfers,
             control,
         }
     }
@@ -120,6 +140,11 @@ impl<'a> Owner<'a> {
         self.lost
     }
 
+    /// Acceptance consumes its candidate before the first publication poll.
+    pub(super) fn consumed(&mut self, slot: usize) {
+        self.transfers &= !(1 << slot);
+    }
+
     /// One owner-control opportunity; returns the owner's clock.
     fn poll(&mut self, phase: Publication7Phase, pending: bool) -> u64 {
         (self.control)(&mut Control7 {
@@ -127,6 +152,7 @@ impl<'a> Owner<'a> {
             lost: &mut self.lost,
             phase,
             pending,
+            transfers: self.transfers,
         })
     }
 

@@ -191,10 +191,10 @@ timings measured during 512 KiB writes.
 The file server's ready report is `[0, 2, 256, 524288, 8, 3, 0, 0]`. Word 5
 bit 0 means profile-2 tracked writes are served and bit 1 that
 [staged admissions](FILES-V7-ADMISSIONS.md) are served; the supervisor checks
-the whole report exactly. V7 grants accept three rights profiles: read-only
-(`1`) with subject 0, read, write and inspect (`7`) with a nonzero subject, or
-the admission profile (`15`, which adds cancel) with a nonzero subject. Any
-other combination is refused with `Invalid`. The supervisor keeps its own
+the whole report exactly. V7 grants preserve any nonzero subset of the existing
+read, write, inspect and cancel rights. Inspection or cancellation requires a
+nonzero subject; ordinary read/write authority does not acquire inspection.
+Unknown rights and zero rights are refused with `Invalid`. The supervisor keeps its own
 owner binding read-only and grants the shell profile `15` with subject 2
 (profile `7` before the admission increment). That
 retry scope is separate from the host provisioner's subject 1 seed records, so

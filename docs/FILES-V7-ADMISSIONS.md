@@ -258,8 +258,9 @@ opportunity, then keeps the other clients' transport moving
 (`apps/file-server/src/serving/v7/control.rs`, policy in
 `apps/file-server/src/publication.rs`):
 
-- **Owner requests.** `REVOKE` takes effect at once: the slot is revoked, its
-  endpoint closed and the slot forgotten. Its all-zero acknowledgement is
+- **Owner requests.** `REVOKE` and root-generation revocation take effect at
+  once: every member is fenced, its endpoint closed and queued reply dropped.
+  Revoked bindings remain available for owner bookkeeping. The acknowledgement is
   queued only after the whole request has settled, including any
   `AuthorityLost` prevention, so the supervisor's `REVOKE_SHELL_V7` job never
   re-grants the shell under an unsettled effect. If that job is cancelled
@@ -305,12 +306,15 @@ Differences from v5, all deliberate:
   publications. V7 has no live requests and answers `Busy` during every
   admission publication.
 - A v5 revocation keeps the slot and rewrites queued replies to `Revoked`; a
-  V7 revocation closes and forgets the slot at once, as it always did, so the
+  V7 revocation closes its endpoint at once, so the
   revoked caller's reply is dropped and its old endpoint reports `Closed`
   (`Uncertain` in the SDK for a durable request). The outcome is read on the
   new binding.
-- The v5 deferred acknowledgement carries a settlement summary; the V7 one
-  stays all-zero, which the supervisor requires, and carries no result.
+- Both deferred acknowledgements carry the affected slot mask, number of
+  released candidates, fenced flag and sequence. A fenced V7 volume has erased
+  its header and reports sequence zero as unavailable; this is not a claim
+  about which generation is durable. The workspace supervisor requires a
+  successful, unfenced settlement before issuing its new shell binding.
 - There is no REQUEST_CANCEL stop, so `Requested` is never a cause of a stopped
   V7 execution.
 - Tracked-write commits (`REPLACE_COMMIT`, `finish_tracked`) and retention

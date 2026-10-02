@@ -13,7 +13,8 @@ storage unification, usable tasks on fresh volumes, external MCP over COM2.
 No new public functionality, protocols, formats, versions, migrations, upgrades
 or rollback paths are authorized in this order. See [STORAGE-POLICY.md](STORAGE-POLICY.md).
 
-Branch: `v7-single-format`; parent revision `5f9bc70`, based on `main` at `097b4df`.
+Branch: `v7-single-format`; committed terminal port `b5f058d`, following
+`5f9bc70`, based on `main` at `097b4df`.
 There was no open PR when this port began. Issue #51 is closed; #52 remains open.
 Namespace/terminal parity traces to #22 and requirement R02. An issue closure or
 the V7 foundation does not establish completion of this unification.
@@ -77,13 +78,57 @@ changed and no token/quota savings are claimed. Root owns shared builds/VMs.
 
 ## Next acceptance and remaining work
 
-Port the existing owner-issued grant contract: root/helper lineage, attenuation,
-one disjoint companion file, stale-root-safe group revocation and endpoint
-cleanup during publication. Restore the existing terminal's owner-authorized
-volume scope and rights combinations without promoting READ|WRITE to INSPECT.
-Keep workspace fixtures explicitly scoped to node 4. This ports existing
-authority, not a new delegation protocol; test each boundary before consumers
-use it. Existing consumers need data/config scopes as well as workspaces.
+The authority increment ports root/helper lineage, attenuation,
+one disjoint companion file, stale-root-safe group revocation, full owner scope
+zero and exact rights subsets. Workspace fixtures must explicitly request node
+4. Core `cargo test -p rustic-file-service --locked` passed 149 tests in 16
+suites. Root additionally checks mixed plain/staged group cleanup,
+helper detachment, extension refusals, expired-grant permanence and cached
+receipt cleanup. Astra found cached receipt parts bypassing the live companion
+scope check; root fixed and regression-tested it, and follow-up core review
+found no remaining material issue. Native review also found no material defect
+in group cleanup, fresh endpoint reuse, stale reply suppression or deferred ACKs.
+
+Native admin routing now handles the existing derive, second scope and root
+revocation commands. Loss closes all affected endpoints and clears queued
+replies, preserving tokens used by fresh live bindings. Revocation reports the
+affected mask, released candidates, fenced status and settled sequence; a
+fenced V7 volume reports sequence zero as unavailable. The supervisor requires
+an unfenced settlement with a valid shell mask before regranting.
+
+Authority increment validation so far:
+
+- `cargo xtask check`: 725 Rust tests in 96 suites, formatting, lints and native
+  builds passed. Log: `/tmp/rustic-v7-authority-check.log`.
+- `python3 tools/v7_authority_test.py`: two boots; held EXECUTE cancelled with
+  authority-lost cause, unchanged target and one prevention generation; held
+  ACCEPT published nothing and the same key subsequently admitted/executed.
+  Evidence: `artifacts/boot/terminal-v7-authority/result.json`, source build
+  `f9a4e8705d316f3b`.
+- `python3 tools/v7_plain_test.py`: two boots, twenty writes and exact persistence
+  through service restart, retained snapshots unchanged.
+- `python3 tools/v7_read_test.py`: two boots and service restart; exact
+  452,208-byte ELF (442 ranges) and manifest, workspace namespace filtering,
+  stale pins and staging cancellation/cleanup passed; volume digest unchanged.
+  Source build `f9a4e8705d316f3b`; evidence is in
+  `artifacts/boot/terminal-v7/result.json`.
+- `python3 tools/v7_write_test.py`: six streamed writes through 512 KiB,
+  mid-transfer revocation closed the old endpoint and freed the stage, stale
+  versions and Full refused, reboot replay and cold receipt lookups matched,
+  independent oracle agreed and the second boot left the volume unchanged.
+  Evidence: `artifacts/boot/terminal-v7-write/result.json`.
+
+Both implementations used the explicitly recorded Luna max fallback; root
+integrated and owns all tests. Full final-head CI remains pending. Group grant
+semantics and mixed candidate cleanup have host evidence; group endpoint
+revocation/regrant with a queued helper reply still requires guest evidence
+when the legacy native consumers are ported. Current guest authority evidence
+covers the shell binding and deferred publication ACK, not that helper case.
+
+Save this authority checkpoint, then port the existing profile-1 tracked and
+admission codecs onto the same V7 storage/service owners. Existing consumers
+need data/config scopes as well as workspaces. Preserve explicit receipt-size
+limits and transfer mode binding when adding those existing request shapes.
 
 Then port mounted capabilities/lifecycle negotiation, profile-1 tracked and
 admission/scheduling/recovery consumers, safe fresh-volume provisioning, default

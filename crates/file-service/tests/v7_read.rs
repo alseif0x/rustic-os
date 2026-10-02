@@ -147,15 +147,25 @@ fn references_open_and_chunk_use_the_mounted_v7_identity_and_exact_range_bytes()
 }
 
 #[test]
-fn verified_ancestry_scope_and_lineage_are_all_required() {
+fn verified_ancestry_and_lineage_are_required_while_each_live_root_is_grantable() {
     let (mut volume, mut disk, workspace, file, sibling) = setup(b"inside");
     let mut server = Server7::new(&mut volume);
     let directory_grant = grant(&mut server, 0, workspace, 11, 0);
-    assert_eq!(
-        server.grant(3, read_only(33, 93, 1, 0)),
-        Err(Error::Denied),
-        "a grant cannot widen outside the workspaces tree"
-    );
+    for root in [1, 2, 3] {
+        let system = server.grant(3, read_only(33, 93, root, 0)).unwrap();
+        let stat = server.handle(
+            &mut disk,
+            3,
+            33,
+            Packet {
+                id: root,
+                context: system.context,
+                ..Packet::new(rustic_abi::files::STAT)
+            },
+            0,
+        );
+        assert_eq!((stat.status, stat.id), (0, root));
+    }
 
     for request in [
         read_request(workspace, file, [0x33; 16], 0, 1, None),
@@ -213,8 +223,13 @@ fn slots_bind_peer_context_expiry_and_endpoint_lifecycle() {
     assert_eq!(server.expire(11), 0);
     assert_eq!(server.grant_at(0), Some(first));
     assert_eq!(
+        server.handle(&mut disk, 0, 11, old_packet, 0).status,
+        Error::Expired as u8,
+        "an explicitly expired grant cannot revive with an earlier clock"
+    );
+    assert_eq!(
         server.handle(&mut disk, 0, 11, old_packet, 10).status,
-        Error::Revoked as u8
+        Error::Expired as u8
     );
 
     let replacement = grant(&mut server, 0, workspace, 11, 0);
@@ -224,7 +239,13 @@ fn slots_bind_peer_context_expiry_and_endpoint_lifecycle() {
         Error::Revoked as u8
     );
     server.revoke(0).unwrap();
-    assert_eq!(server.grant_at(0), Some(replacement));
+    assert_eq!(
+        server.grant_at(0),
+        Some(Grant7 {
+            rights: 0,
+            ..replacement
+        })
+    );
     assert_eq!(
         server
             .handle(

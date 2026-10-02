@@ -18,6 +18,7 @@
 //! for the caller's publication (see the `control` module).
 //! [`Server7::handle`] settles them synchronously inside the request.
 mod admission;
+mod authority;
 mod control;
 mod grants;
 mod lookup;
@@ -61,47 +62,9 @@ impl<'a> Server7<'a> {
         self.volume
     }
 
-    /// Install one scope and return its endpoint/context binding. Scope zero,
-    /// used by the terminal for an absolute path root, names the workspaces
-    /// root in V7. Replacing a slot makes its previous context stale and
-    /// aborts its open stage.
-    pub fn grant(&mut self, slot: usize, mut request: GrantRequest7) -> Result<Grant7, Error> {
-        request.scope = scope::normalized_grant_scope(request.scope);
-        let grant = self.grants.grant(self.volume, slot, request)?;
-        self.writes.reset(self.volume, slot);
-        self.plain.reset(slot);
-        Ok(grant)
-    }
-
-    /// Permanently revoke the current generation while retaining its endpoint
-    /// binding for the serving layer's close/detach bookkeeping. Any open
-    /// stage is aborted without I/O, so no later request can commit it.
-    pub fn revoke(&mut self, slot: usize) -> Result<(), Error> {
-        self.grants.revoke(slot)?;
-        self.writes.reset(self.volume, slot);
-        self.plain.reset(slot);
-        Ok(())
-    }
-
-    /// Forget the slot after the endpoint has detached. A later request has no
-    /// installed authority, and a future grant receives a different context.
-    pub fn detach(&mut self, slot: usize) {
-        self.grants.detach(slot);
-        self.writes.reset(self.volume, slot);
-        self.plain.reset(slot);
-    }
-
-    /// Mark expired slots revoked, abort their stages and return their bit
-    /// mask for endpoint cleanup.
-    pub fn expire(&mut self, now: u64) -> u8 {
-        let expired = self.grants.expire(now);
-        for slot in 0..CLIENTS7 {
-            if expired & (1 << slot) != 0 {
-                self.writes.reset(self.volume, slot);
-                self.plain.reset(slot);
-            }
-        }
-        expired
+    /// Number of staged and ordinary replacement candidates still owned by clients.
+    pub fn pending(&self) -> usize {
+        self.writes.transfer_count() + self.plain.transfer_count()
     }
 
     /// Owner-requested retention maintenance: drop every terminal retained
@@ -137,11 +100,6 @@ impl<'a> Server7<'a> {
             self.writes.forget_receipts();
         }
         result
-    }
-
-    /// Read-only snapshot for endpoint lifecycle routing.
-    pub fn grant_at(&self, slot: usize) -> Option<Grant7> {
-        self.grants.grant_at(slot)
     }
 
     /// Serve one client request, settling any admission publication inside
@@ -235,7 +193,13 @@ impl<'a> Server7<'a> {
                     peer,
                     context: packet.context,
                 };
-                let mut owner = control::Owner::new(&mut self.grants, caller, control);
+                let mut transfers = 0;
+                for index in 0..CLIENTS7 {
+                    if self.writes.transfer_open(index) || self.plain.transfer_open(index) {
+                        transfers |= 1 << index;
+                    }
+                }
+                let mut owner = control::Owner::new(&mut self.grants, caller, transfers, control);
                 let result = admission::request(
                     &mut self.writes,
                     self.volume,
@@ -248,12 +212,7 @@ impl<'a> Server7<'a> {
                 // Slots that lost their grant during the publication drop
                 // their stages and receipts now that the volume is free.
                 let lost = owner.lost();
-                for index in 0..CLIENTS7 {
-                    if lost & (1 << index) != 0 {
-                        self.writes.reset(self.volume, index);
-                        self.plain.reset(index);
-                    }
-                }
+                self.reset_lost(lost);
                 result
             }
             _ => Err(Error::Unsupported),
@@ -276,7 +235,7 @@ impl<'a> Server7<'a> {
         }
         scope::authorized_resource(
             self.volume,
-            grant.scope,
+            grant,
             request.workspace.root(),
             request.resource.object(),
         )?;

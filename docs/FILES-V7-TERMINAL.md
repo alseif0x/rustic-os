@@ -29,6 +29,11 @@ The grant's real scope is node 4; listing `/` grants no access to `system`,
 `data` or `config`. File-scoped grants cannot browse ancestors through that
 virtual root.
 
+The trusted owner's scope zero reaches all four mounted roots. Other live
+node scopes, including `data` and `config`, use the same ancestry checks.
+The dedicated V7 workspace fixture explicitly requests node 4; it does not
+depend on rewriting scope zero inside the service.
+
 `LIST` cursors are ordinals among returned children, rather than V7's physical
 node-table positions. The physical successor can be 256, which would wrap
 when encoded in the existing one-byte cursor. Four canonical roots occupy
@@ -65,12 +70,36 @@ Previously retained snapshots remain intact. A lost reply requires inspection
 of the file; it does not gain tracked retry semantics. Publication failures
 fence and clear the volume, and remount selects a complete generation.
 
+## Owner authority
+
+The existing owner commands install roots, derive one helper level, add one
+disjoint live companion file and revoke a root generation. Any nonzero subset
+of known rights is preserved exactly; `READ | WRITE` does not acquire
+inspection. Inspection or cancellation requires a trusted nonzero subject.
+Helpers inherit that subject, attenuate rights, primary scope and deadline,
+and never inherit a companion scope or delegate further.
+
+Replacing or detaching a root fences its whole group. Revoking a helper also
+revokes that group; naturally detaching a helper leaves the root and siblings
+live. Generation-specific revocation cannot affect a later independent grant
+reusing a slot. Validation precedes replacement, so an invalid new grant keeps
+the old group intact. Expiration, once observed, cannot be undone by an older
+clock value.
+
+Every affected slot loses ordinary candidates, streamed stages and cached
+receipts. During an admission publication the loss takes effect immediately;
+storage cleanup and the revocation acknowledgement wait for settlement.
+Companion-file history and cached receipt parts require that file to remain
+live. The existing primary exact scope can still inspect its removed identity.
+Endpoint closure and queued-reply cleanup belong to the serving transport.
+
 ## Verification
 
 The focused host suites are:
 
 ```sh
 cargo test -p rustic-file-service --test v7_namespace --test v7_read --test v7_plain --locked
+cargo test -p rustic-file-service --test v7_authority --test v7_admission --locked
 cargo test -p rustic-fs --test volume7 untracked --locked
 ```
 

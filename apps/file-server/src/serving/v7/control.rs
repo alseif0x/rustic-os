@@ -10,9 +10,10 @@
 //! `Busy`. The publishing client's endpoint is not read: its reply is
 //! outstanding. Device completion is not a `WAIT_SET` source, so a command
 //! still pending at a second consecutive opportunity costs one tick.
+use super::admin;
 use super::{ADMIN_SLOT, Replies};
 use rustic_file_server::publication::{self, Admin7};
-use rustic_file_service::{CLIENTS7, Control7};
+use rustic_file_service::{CLIENTS7, Control7, Server7};
 use rustic_sdk::{
     abi::{files, runtime as wire},
     ipc::{Endpoint, Message},
@@ -24,8 +25,8 @@ pub(super) struct Owner<'a> {
     administrator: &'a mut u64,
     replies: &'a mut Replies,
     publishing: usize,
-    /// Correlation of a revocation acknowledged after settlement.
-    deferred: Option<u64>,
+    /// Correlation and settlement report of a revocation acknowledged after it settles.
+    deferred: Option<(u64, [u64; 8])>,
     /// The previous opportunity already saw the command outstanding.
     waiting: bool,
     /// The serving loop's exit code once the administrative channel is lost.
@@ -74,10 +75,15 @@ impl<'a> Owner<'a> {
 
     /// Queue the deferred revocation ACK once the request has settled, and
     /// return the serving loop's exit code if the owner was lost.
-    pub(super) fn finish(self) -> Option<u64> {
-        if let Some(correlation) = self.deferred {
+    pub(super) fn finish(self, server: &Server7<'_>) -> Option<u64> {
+        if let Some((correlation, mut words)) = self.deferred {
+            let header = server.volume().header();
+            words[3] = u64::from(header.is_err());
+            // A fenced V7 volume has no readable in-memory header; zero marks
+            // an unavailable sequence and makes no claim about its outcome.
+            words[4] = header.map_or(0, |header| header.sequence);
             self.replies[ADMIN_SLOT] =
-                Some(Message::new(correlation, &wire::encode([0; 8])).unwrap());
+                Some(Message::new(correlation, &wire::encode(words)).unwrap());
         }
         self.exit
     }
@@ -112,16 +118,38 @@ impl<'a> Owner<'a> {
         match wire::decode(message.payload()) {
             Err(_) => output[0] = files::Error::Invalid as u64,
             Ok(words) => match publication::admin(words, CLIENTS7) {
-                Admin7::Revoke(slot) => match control.revoke(slot) {
-                    Ok(()) => {
-                        self.close(control, slot);
-                        self.deferred = Some(message.correlation());
-                        return;
+                Admin7::Revoke(slot) => {
+                    let before_count = control.transfer_count();
+                    let before = admin::control_bindings(control);
+                    match control.revoke(slot) {
+                        Ok(lost) => {
+                            let after_count = control.transfer_count();
+                            admin::cleanup_control(control, self.replies, before, lost);
+                            output[1] = u64::from(lost);
+                            output[2] = before_count.saturating_sub(after_count) as u64;
+                            self.deferred = Some((message.correlation(), output));
+                            return;
+                        }
+                        Err(error) => output[0] = error as u64,
                     }
-                    Err(error) => output[0] = error as u64,
-                },
-                Admin7::Detach(slot) => self.close(control, slot),
-                Admin7::Probe => {}
+                }
+                Admin7::RevokeRoot(root) => {
+                    let before_count = control.transfer_count();
+                    let before = admin::control_bindings(control);
+                    let lost = control.revoke_root(root);
+                    let after_count = control.transfer_count();
+                    admin::cleanup_control(control, self.replies, before, lost);
+                    output[1] = u64::from(lost);
+                    output[2] = before_count.saturating_sub(after_count) as u64;
+                    self.deferred = Some((message.correlation(), output));
+                    return;
+                }
+                Admin7::Detach(slot) => {
+                    admin::detach_control(control, self.replies, slot);
+                }
+                Admin7::Probe => {
+                    output[1] = control.transfer_count() as u64;
+                }
                 Admin7::Refuse(error) => output[0] = error as u64,
             },
         }
@@ -139,6 +167,10 @@ impl<'a> Owner<'a> {
                 self.replies[slot] = None;
                 continue;
             };
+            if grant.rights == 0 {
+                admin::discard_revoked_control_slot(control, self.replies, slot);
+                continue;
+            }
             if grant.expires != 0 && now >= grant.expires {
                 self.close(control, slot);
                 continue;
@@ -169,12 +201,8 @@ impl<'a> Owner<'a> {
         }
     }
 
-    /// Close the slot's endpoint and forget the slot and its queued reply.
+    /// Detach a lost endpoint; a root loss also fences its helpers and their queued replies.
     fn close(&mut self, control: &mut Control7<'_>, slot: usize) {
-        if let Some(grant) = control.grant_at(slot) {
-            let _ = Endpoint::from_bootstrap(grant.endpoint).close();
-        }
-        control.detach(slot);
-        self.replies[slot] = None;
+        admin::detach_control(control, self.replies, slot);
     }
 }

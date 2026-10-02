@@ -92,7 +92,7 @@ pub(super) fn retained(
 
 /// Whether the record lies within the grant scope in the live namespace.
 fn visible(volume: &Volume7, grant: Grant7, record: &Record7) -> bool {
-    scope::retained_visible(volume, grant.scope, record.workspace, record.object)
+    scope::retained_visible(volume, grant, record.workspace, record.object)
 }
 
 /// SHA-256 of a retained snapshot, streamed through one sector buffer.

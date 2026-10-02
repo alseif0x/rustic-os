@@ -104,7 +104,7 @@ impl Writes {
             return Err(Error::Denied);
         }
         match p.op {
-            OPERATION_PART => self.part(slot, grant, p),
+            OPERATION_PART => self.part(volume, slot, grant, p),
             OPERATION_ID | OPERATION_RETRY => {
                 let receipt = lookup::retained(volume, disk, grant, &p)?;
                 let first = receipt.part(p.op, p.context, 0)?;
@@ -158,7 +158,7 @@ impl Writes {
         }
         let workspace = request.workspace.root();
         let object = request.resource.object();
-        scope::authorized_resource(volume, grant.scope, workspace, object)?;
+        scope::authorized_resource(volume, grant, workspace, object)?;
         let header = volume.header().map_err(reply::error)?;
         if header.lineage != request.workspace.lineage() {
             return Err(Error::Denied);
@@ -268,7 +268,13 @@ impl Writes {
     /// Receipt parts are served only for the operation this slot last
     /// completed or looked up; a lookup by ID or retry identity recomputes a
     /// retained record's receipt first.
-    fn part(&self, slot: usize, grant: Grant7, p: Packet) -> Result<Packet, Error> {
+    fn part(
+        &self,
+        volume: &Volume7,
+        slot: usize,
+        grant: Grant7,
+        p: Packet,
+    ) -> Result<Packet, Error> {
         grant.holds(INSPECT_RIGHT)?;
         let operation::Lookup::Id(id) = Lookup::decode(&p)?.query else {
             return Err(Error::Protocol);
@@ -276,6 +282,14 @@ impl Writes {
         let receipt = self.receipts[slot]
             .filter(|receipt| receipt.id == id)
             .ok_or(Error::OutcomeUnknown)?;
+        if !scope::retained_visible(
+            volume,
+            grant,
+            receipt.workspace.root(),
+            receipt.resource.object(),
+        ) {
+            return Err(Error::OutcomeUnknown);
+        }
         receipt.part(OPERATION_PART, p.context, p.arg as usize)
     }
 

@@ -96,6 +96,7 @@ pub(super) fn request<D: Disk + PollDisk7>(
         a::ACCEPT => {
             grant.holds(INSPECT_RIGHT)?;
             let transfer = writes.take_complete(slot, grant, KIND, &p)?;
+            owner.consumed(slot);
             // Only an admission this request creates is the service's to
             // retire; an exact retry reports a record that already existed.
             let fresh = !retained(volume, grant.subject, transfer.request())?;
@@ -148,7 +149,7 @@ pub(super) fn request<D: Disk + PollDisk7>(
             }
             // Execution is a file effect under live write authority.
             grant.holds(WRITE_RIGHT)?;
-            scope::authorized_resource(volume, grant.scope, record.workspace, record.object)?;
+            scope::authorized_resource(volume, grant, record.workspace, record.object)?;
             let result = volume
                 .prepare_execute(disk, records::identity(&record), record.previous)
                 .map_err(reply::error)
@@ -323,14 +324,15 @@ mod tests {
             endpoint: 2,
             context: 3,
             scope: 4,
+            second: 0,
             rights,
             subject: 2,
             expires: 0,
         }
     }
 
-    // No installable profile holds CANCEL without INSPECT, so the rule is
-    // checked here, below the grant table, on an unmounted volume.
+    // Cancellation returns status as well as changing state, so CANCEL alone
+    // must be refused before even an unmounted volume is inspected.
     #[test]
     fn cancel_without_inspection_is_denied_before_any_lookup() {
         let mut volume = Volume7::EMPTY;
@@ -346,7 +348,7 @@ mod tests {
             peer: 1,
             context: 3,
         };
-        let mut owner = Owner::new(&mut grants, caller, &mut control);
+        let mut owner = Owner::new(&mut grants, caller, 0, &mut control);
         let denied = request(
             &mut writes,
             &mut volume,

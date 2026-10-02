@@ -511,20 +511,17 @@ fn an_exact_retry_after_remount_replays_the_receipt_without_writes() {
 }
 
 #[test]
-fn write_authority_requires_the_tracked_profile_a_subject_and_scope() {
+fn tracked_operations_require_rights_subject_and_scope() {
     let mut f = fixture();
     let current = version(&f.volume, f.file);
     let request = replacement(&f.volume, f.workspace, f.file, current, 3);
     let mut server = Server7::new(&mut f.volume);
     for (rights, subject) in [
-        (READ_ONLY7, 1),
+        (0, 0),
         (TRACKED_WRITE7, 0),
-        (0b011, 1),
-        (0b101, 1),
-        (0b1101, 1),
-        // The admission profile (15) needs a subject too.
+        (0b1101, 0),
         (0b1111, 0),
-        (0b1_1111, 1),
+        (0b1_0000, 1),
     ] {
         assert_eq!(
             server.grant(0, authority(f.workspace, rights, subject)),

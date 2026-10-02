@@ -28,7 +28,7 @@ pub fn grant(shell: u64, endpoint: u64) -> [u64; 8] {
         SLOT,
         shell,
         endpoint,
-        0,
+        4,
         RIGHTS,
         0,
         SUBJECT,
@@ -50,9 +50,15 @@ pub fn granted(reply: [u64; 8]) -> Option<u32> {
         .filter(|generation| *generation != 0)
 }
 
-/// Whether the service confirmed the revocation. Only an all-zero reply does.
+/// Whether the service confirmed revocation with an unfenced settlement report.
 pub fn revoked(reply: [u64; 8]) -> bool {
-    reply == [0; 8]
+    reply[0] == 0
+        && reply[1] & 1 != 0
+        && reply[1] & !0x0f == 0
+        && reply[2] <= 2
+        && reply[3] == 0
+        && reply[4] != 0
+        && reply[5..].iter().all(|word| *word == 0)
 }
 
 /// The owner job's result: the same binding words a restart reports, which
@@ -67,16 +73,21 @@ mod tests {
 
     #[test]
     fn the_shell_grant_is_slot_zero_admission_profile_subject_two_at_the_workspaces_root() {
-        assert_eq!(grant(3, 17), [32, 0, 3, 17, 0, 15, 0, 2]);
+        assert_eq!(grant(3, 17), [32, 0, 3, 17, 4, 15, 0, 2]);
         assert_eq!(revoke(), [33, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(rebound(5, 9, 12), [0, 5, 9, 12, 0, 0, 0, 0]);
     }
 
     #[test]
-    fn only_a_clean_revocation_reply_confirms_it() {
-        assert!(revoked([0; 8]));
+    fn only_an_unfenced_settlement_report_confirms_revocation() {
+        assert!(revoked([0, 1, 0, 0, 12, 0, 0, 0]));
         for reply in [
             [18, 0, 0, 0, 0, 0, 0, 0],
+            [0; 8],
+            [0, 0, 0, 0, 12, 0, 0, 0],
+            [0, 1, 3, 0, 12, 0, 0, 0],
+            [0, 1, 0, 2, 12, 0, 0, 0],
+            [0, 1, 0, 1, 12, 0, 0, 0],
             [0, 1, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 1],
         ] {

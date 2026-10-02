@@ -20,7 +20,7 @@ pub(super) fn request(
 ) -> Result<Packet, Error> {
     grant.holds(READ_RIGHT)?;
     if packet.op == READ {
-        let node = scope::authorized_node(volume, grant.scope, packet.id)?;
+        let node = scope::authorized_node(volume, grant, packet.id)?;
         let expected_version = (packet.version != 0).then_some(packet.version);
         let mut response = Packet::new(READ);
         let count = volume
@@ -40,7 +40,7 @@ pub(super) fn request(
         return Ok(response);
     }
     if packet.op == REFERENCES {
-        scope::authorized_resource(volume, grant.scope, packet.arg, packet.id)?;
+        scope::authorized_resource(volume, grant, packet.arg, packet.id)?;
         let lineage = volume.header().map_err(reply::error)?.lineage;
         return References::new(lineage, packet.arg, packet.id)?.packet(packet.context);
     }
@@ -48,7 +48,7 @@ pub(super) fn request(
     let request = Request::decode(&packet)?;
     let node = scope::authorized_resource(
         volume,
-        grant.scope,
+        grant,
         request.workspace.root(),
         request.resource.object(),
     )?;

@@ -119,8 +119,11 @@ impl Mount {
             2 => {
                 let rights = if profile == FileProfile::V5 { 7 } else { 1 };
                 let subject = if profile == FileProfile::V5 { 1 } else { 0 };
+                // V7's supervisor owner fixture reaches the workspace tree by
+                // an explicit node scope; scope zero is whole-volume authority.
+                let scope = if profile == FileProfile::V5 { 0 } else { 4 };
                 if let Some(generation) =
-                    self.grant(state, [32, 1, me, self.owner[1], 0, rights, 0, subject])?
+                    self.grant(state, [32, 1, me, self.owner[1], scope, rights, 0, subject])?
                 {
                     state.owner = Client::new(self.owner[0], state.files, generation);
                     self.phase = 3;
