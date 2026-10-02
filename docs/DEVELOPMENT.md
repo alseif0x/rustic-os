@@ -284,6 +284,17 @@ it after `tools/v7_admission_test.py`. The output parser has unit tests in
 `tools/tests/test_v7_authority.py`. See
 [owner control during a publication](FILES-V7-ADMISSIONS.md#owner-control-during-a-publication).
 
+`python3 tools/v7_scheduling_test.py` uses two fresh temporary V7 volumes over
+four boots. It checks the two-ticket FIFO, live observation and stop requests
+while a native completion is held, durable requested cancellations, and a fresh
+scheduled commit after the queue becomes available. A second image is rebooted
+after terminating the owned QEMU process while work is active and queued:
+retained admissions must not resume without a fresh SCHEDULE. The independent
+`oracle7` reader checks selected records, bytes and versions. This tests VM
+process loss, not physical power failure. Evidence is stored in
+`artifacts/boot/terminal-v7-scheduling/`; `tools/boot.py v7` includes the harness.
+See [V7 scheduling](FILES-V7-ADMISSIONS.md#scheduled-execution-and-live-cancellation).
+
 Two host commands extend a disposable V7 fixture after `seed7`:
 
 ```sh

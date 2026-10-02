@@ -233,7 +233,8 @@ the one persisted in the record. The SHA-256 covers the file bytes. The
 unification port also accepts the existing profile-1 opens and lookups,
 ordinary terminal mutations and shared admission requests; see
 [existing profiles](FILES-V7-TERMINAL.md#existing-tracked-and-admission-profiles).
-Scheduling and live admission requests remain unsupported.
+The existing scheduling and live admission requests use the same retained
+records; see [V7 admission scheduling](FILES-V7-ADMISSIONS.md#scheduled-execution-and-live-cancellation).
 
 ## Service behavior
 

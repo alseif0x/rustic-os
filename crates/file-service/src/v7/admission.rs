@@ -31,19 +31,22 @@
 //!   receives its authority error.
 //!
 //! Each publication is driven to settlement inside its request, with owner
-//! control between its polls; no other client request is served meanwhile.
+//! control and restricted live lifecycle requests between its polls.
 //! The volume enforces versions, retry scopes, the retained-record budget and
 //! publication barriers.
+pub(super) mod active;
 mod records;
+pub(super) mod scheduling;
+pub(super) mod scope;
 
 use super::control::{Driven, Owner, drive};
 use super::profile;
 use super::write::Writes;
-use super::{Grant7, scope};
+use super::{Grant7, scope as namespace};
 use crate::reply;
 use rustic_abi::files::{
     admission::{self as a, AdmissionId},
-    operation, *,
+    lifecycle, operation, *,
 };
 use rustic_fs::{
     Disk, PollDisk7, PreventionReason, Stage7Kind, Volume7,
@@ -52,8 +55,8 @@ use rustic_fs::{
 
 /// Whether `p` selects an existing admission path. OPEN and RETRY decoders
 /// enforce either profile's exact shape; other transfer requests bind to an
-/// open admission transfer or name an admission ID. Live scheduling and
-/// activity requests are not served on V7.
+/// open admission transfer or name an admission ID. Live requests are routed
+/// through the server-owned scheduler before this direct path.
 pub(super) fn selected(p: &Packet) -> bool {
     matches!(
         p.op,
@@ -66,6 +69,10 @@ pub(super) fn selected(p: &Packet) -> bool {
             | a::EXECUTE
             | a::CANCEL
             | a::OBSERVE
+            | a::SCHEDULE
+            | a::ACTIVITY
+            | a::REQUEST_CANCEL
+            | lifecycle::CANCEL
     )
 }
 
@@ -154,19 +161,38 @@ pub(super) fn request<D: Disk + PollDisk7>(
             }
             // Execution is a file effect under live write authority.
             grant.holds(WRITE_RIGHT)?;
-            scope::authorized_resource(volume, grant, record.workspace, record.object)?;
+            namespace::authorized_resource(volume, grant, record.workspace, record.object)?;
+            // The ticket owns its accepted stop and original executor binding.
+            // A direct execution must not bypass either before the queue runs.
+            if owner.scheduled(AdmissionId::decode(&p)?) {
+                return Err(Error::Busy);
+            }
+            owner.activate(volume, record)?;
             let result = volume
                 .prepare_execute(disk, records::identity(&record), record.previous)
                 .map_err(reply::error)
-                .and_then(|publication| drive(owner, publication, Some(INSPECT_RIGHT)));
+                .and_then(|publication| {
+                    drive(owner, publication, Some(INSPECT_RIGHT | WRITE_RIGHT))
+                });
             let Driven {
                 record: committed,
                 denied,
             } = published(writes, volume, result)?;
             if committed.is_none() {
-                // Stopped before its header: the file is unchanged. Record
-                // the decisive cause so the admission can never run later.
-                authority_lost(writes, volume, disk, owner, &record)?;
+                // Stop requests are volatile until terminal prevention settles.
+                // Simultaneous guard loss supplies the durable cause.
+                prevent(
+                    writes,
+                    volume,
+                    disk,
+                    owner,
+                    &record,
+                    if denied.is_some() {
+                        PreventionReason::AuthorityLost
+                    } else {
+                        PreventionReason::Requested
+                    },
+                )?;
             }
             if let Some(error) = denied {
                 // A settled effect stands, but it is not reported to a caller
@@ -177,8 +203,10 @@ pub(super) fn request<D: Disk + PollDisk7>(
                     error
                 });
             }
-            let committed = committed.ok_or(Error::Uncertain)?;
-            status_reply(volume, &committed, &p).map_err(|_| Error::Uncertain)
+            owner.recheck_caller(INSPECT_RIGHT)?;
+            let latest = records::by_id(volume, grant, AdmissionId::decode(&p)?)
+                .map_err(|_| Error::Uncertain)?;
+            status_reply(volume, &latest, &p).map_err(|_| Error::Uncertain)
         }
         a::CANCEL => {
             // The reply discloses the status, so cancelling also needs inspection.
@@ -251,13 +279,29 @@ fn authority_lost<D: Disk + PollDisk7>(
     owner: &mut Owner<'_>,
     record: &Record7,
 ) -> Result<(), Error> {
+    prevent(
+        writes,
+        volume,
+        disk,
+        owner,
+        record,
+        PreventionReason::AuthorityLost,
+    )
+}
+
+/// Publish service-owned no-effect prevention after a live stop or lost guard.
+/// Its polls remain owner-controlled, but nobody can stop it once accepted.
+fn prevent<D: Disk + PollDisk7>(
+    writes: &mut Writes,
+    volume: &mut Volume7,
+    disk: &mut D,
+    owner: &mut Owner<'_>,
+    record: &Record7,
+    reason: PreventionReason,
+) -> Result<(), Error> {
+    owner.set_cleanup(true);
     let result = volume
-        .prepare_cancellation(
-            disk,
-            records::identity(record),
-            record.previous,
-            PreventionReason::AuthorityLost,
-        )
+        .prepare_cancellation(disk, records::identity(record), record.previous, reason)
         .map_err(reply::error)
         .and_then(|publication| drive(owner, publication, None));
     let driven = published(writes, volume, result).map_err(|_| Error::Uncertain)?;
@@ -345,6 +389,7 @@ mod tests {
         let id = AdmissionId::new([7; 16], 9).unwrap();
         let cancel = id.packet(a::CANCEL, 3).unwrap();
         let mut grants = Grants::new();
+        let mut scheduler = super::scheduling::Scheduler7::new();
         let mut control = |_: &mut super::super::Control7<'_>| -> u64 {
             panic!("a refused request started a publication")
         };
@@ -353,7 +398,7 @@ mod tests {
             peer: 1,
             context: 3,
         };
-        let mut owner = Owner::new(&mut grants, caller, 0, &mut control);
+        let mut owner = Owner::new(&mut grants, &mut scheduler, caller, 0, &mut control);
         let denied = request(
             &mut writes,
             &mut volume,

@@ -12,7 +12,7 @@ from boot_support.scenarios import MODES
 # CI runs them as their own job (`v7`) so neither job outgrows its time budget.
 V7_HARNESSES = ("v7_read_test.py", "v7_plain_test.py", "v7_launch_test.py", "v7_adopt_test.py", "v7_corrupt_test.py", "v7_write_test.py",
                 "v7_retention_test.py", "v7_faults_test.py", "v7_admission_test.py",
-                "v7_authority_test.py", "v7_profile1_test.py", "v7_recovery_test.py", "v7_capacity_test.py")
+                "v7_authority_test.py", "v7_profile1_test.py", "v7_recovery_test.py", "v7_scheduling_test.py", "v7_capacity_test.py")
 CAPACITY_HARNESSES = ("capacity_topology_test.py",)
 
 

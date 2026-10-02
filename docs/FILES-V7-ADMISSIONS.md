@@ -12,8 +12,9 @@ mirror the v5 direct (unscheduled) admission path, including owner control
 while an admission publication is in flight: a revocation before the header
 stops it, and an execution stopped that way is recorded cancelled with cause
 `AuthorityLost` ([owner control during a publication](#owner-control-during-a-publication)).
-Scheduling, live activity and REQUEST_CANCEL are not served on V7. The v5
-service stays the default and is unchanged. Tracked writes are described in
+The existing scheduler, live activity and REQUEST_CANCEL are also served on V7
+([scheduling](#scheduled-execution-and-live-cancellation)). The v5 service stays
+the default pending the remaining consumer ports. Tracked writes are described in
 [V7 tracked writes](FILES-V7-WRITES.md).
 
 ## What is verified
@@ -101,8 +102,9 @@ service stays the default and is unchanged. Tracked writes are described in
   (`cargo test -p rustic-file-server`, `publication.rs`, 4 tests): revocation,
   detach and the readiness probe are served; grants, retention maintenance
   and every other owner request are `Busy`; malformed owner requests keep the
-  idle service's refusals; and another client's request is answered `Busy`
-  without consuming it.
+  idle service's refusals; and unrelated client requests are answered `Busy`
+  without consuming a transfer. The V7 scheduling tests additionally cover
+  restricted live requests during publication.
 
   The SDK's stepwise client has host tests in `crates/sdk/tests/file_workspace.rs`:
   admission requests only, source failure → ABORT, a foreign-lineage status →
@@ -225,8 +227,8 @@ requires the exact report `[0, 2, 256, 524288, 8, 3, 0, 0]`.
   the authority the caller holds when it asks, which must include write access
   to the file within its scope. A file version that changed since admission is
   refused with `Version` before any I/O, and the record stays `Admitted`. This
-  is the v5 direct path. Without a scheduler there is no automatic
-  `VersionConflict` prevention; the client decides whether to CANCEL. A
+  is the v5 direct path. For direct execution the client decides whether to
+  CANCEL; queued execution instead retains `VersionConflict` prevention. A
   committed execution's receipt is the ordinary profile-2 receipt, looked up
   by the completion ID (`op_…_TERMINAL`) or the retry key. If the target file was
   removed after admission, EXECUTE is `Denied` without I/O (there is no live
@@ -274,9 +276,11 @@ opportunity, then keeps the other clients' transport moving
   request are `Busy` with nothing changed. A lost administrative channel
   detaches every client (which stops an unsettled publication like a
   revocation) and ends the service after settlement.
-- **Other clients.** Every request from a client other than the publishing
-  one is answered `Busy`; nothing is consumed or replaced. Queued replies are
-  still retried, and expired slots are closed.
+- **Other clients.** Existing live inspection, scheduling and cancellation
+  requests reach a restricted controller with fresh authority checks.
+  Other requests are answered `Busy`. Queued replies are retried and expired
+  slots are closed. Synchronous publication excludes its initiating client;
+  scheduled execution keeps every client endpoint available.
 - **Replays.** A publication that is already settled when it starts (an
   exact-retry ACCEPT) has nothing in flight: it is returned without an owner
   opportunity or authority recheck.
@@ -303,10 +307,10 @@ opportunity, then keeps the other clients' transport moving
 
 Differences from v5, all deliberate:
 
-- The v5 service answers other clients `Busy` (and serves live requests) only
-  during an execution, leaving their requests queued during other
-  publications. V7 has no live requests and answers `Busy` during every
-  admission publication.
+- The v5 service serves other clients during execution and leaves their
+  requests queued during other publications. V7 polls their transport during
+  every admission publication; restricted lifecycle requests can proceed,
+  while unrelated operations receive `Busy`.
 - A v5 revocation keeps the slot and rewrites queued replies to `Revoked`; a
   V7 revocation closes its endpoint at once, so the
   revoked caller's reply is dropped and its old endpoint reports `Closed`
@@ -317,11 +321,42 @@ Differences from v5, all deliberate:
   its header and reports sequence zero as unavailable; this is not a claim
   about which generation is durable. The workspace supervisor requires a
   successful, unfenced settlement before issuing its new shell binding.
-- There is no REQUEST_CANCEL stop, so `Requested` is never a cause of a stopped
-  V7 execution.
 - Retention maintenance stays blocking with no owner control inside it.
   Tracked commits now use `finish_tracked_poll` with the same control driver;
   their preheader stop discards a candidate without an admission cancellation.
+
+## Scheduled execution and live cancellation
+
+`Server7` owns a volatile FIFO with two tickets and an inventory of up to eight
+retained admissions. SCHEDULE acknowledges queueing separately from execution;
+repeating it keeps the original executor binding. The native loop runs at most
+one ticket per pass and does not sleep while tickets remain. No disk-format or
+packet-version change is involved.
+
+A direct EXECUTE of an admission that already owns a ticket is `Busy`, after
+the caller's authority checks. It cannot bypass a queued stop or replace the
+executor's saved grant generation.
+
+ACTIVITY and both OBSERVE profiles expose queued or active state. REQUEST_CANCEL
+and the existing lifecycle cancellation API latch a stop. Before execution the
+service rechecks the original executor's grant, scope and target version.
+An authority loss or version conflict produces a durable no-effect cancellation
+with the corresponding cause. A requested stop before header submission drains
+any outstanding I/O and then retains `Requested`; simultaneous executor authority
+loss takes precedence. After header submission settlement continues. Prevention
+publication is service-owned and cannot itself be cancelled.
+
+During publication, the restricted controller checks live peer, context, expiry
+and rights against captured scope proofs, including the optional companion file.
+Cancellation-only grants can request prevention without obtaining inspection or
+write authority. Unrelated namespace mutations and new grants remain outside
+that controller. Queue state is discarded on service restart or uncertain
+publication; retained admissions do not resume automatically.
+
+DESCRIBE now reports the existing reviewed lifecycle contract with eight retained
+records, two execution tickets and one active publication. This specific
+negotiation API does not advertise the full service-v1 capability catalogue.
+Validation and its limits are recorded in [WORK-STATE.md](WORK-STATE.md).
 
 ## Authority
 
@@ -340,8 +375,7 @@ not cancel.
   host tests only.
 - **Owner control inside maintenance.** It stays blocking; tracked commits
   now provide owner-control opportunities between publication polls.
-- **No scheduling.** There is no queue, live activity, REQUEST_CANCEL or
-  automatic `VersionConflict` cancellation.
 - **No guest fault injection yet** on admission, execution or cancellation
-  publications. The host tests cover only successful publications and
-  refusals before I/O.
+  publications. Host fixtures cover publication failures and fencing; the
+  scheduling guest harness separately tests termination of the owned QEMU
+  process before header submission. Neither establishes physical durability.

@@ -48,6 +48,7 @@ pub struct Server7<'a> {
     grants: grants::Grants,
     writes: write::Writes,
     plain: plain::PlainTransfers,
+    scheduler: admission::scheduling::Scheduler7,
 }
 
 impl<'a> Server7<'a> {
@@ -58,6 +59,7 @@ impl<'a> Server7<'a> {
             grants: grants::Grants::new(),
             writes,
             plain: plain::PlainTransfers::new(),
+            scheduler: admission::scheduling::Scheduler7::new(),
         }
     }
 
@@ -144,7 +146,14 @@ impl<'a> Server7<'a> {
         now: u64,
         mut control: impl FnMut(&mut Control7<'_>) -> u64,
     ) -> Packet {
-        match self.dispatch(disk, slot, peer, request, now, &mut control) {
+        let result = self.dispatch(disk, slot, peer, request, now, &mut control);
+        // Any publication or staging failure can fence the shared volume,
+        // including ordinary namespace operations outside owner control.
+        if matches!(result, Err(Error::Uncertain)) || self.volume.header().is_err() {
+            self.scheduler.clear();
+            self.writes.forget_receipts();
+        }
+        match result {
             Ok(reply) => reply,
             Err(error) => {
                 let mut response = Packet::new(request.op);
@@ -166,6 +175,12 @@ impl<'a> Server7<'a> {
     ) -> Result<Packet, Error> {
         crate::validation::envelope(&packet)?;
         let grant = self.grants.check(slot, peer, packet.context, now)?;
+        if admission::scheduling::is_lifecycle(packet.op) {
+            self.scheduler.refresh(self.volume, &self.grants)?;
+            return Ok(self
+                .scheduler
+                .request(&self.grants, None, slot, peer, packet, now));
+        }
         match packet.op {
             CAPABILITIES => {
                 crate::validation::request(&packet)?;
@@ -232,6 +247,12 @@ impl<'a> Server7<'a> {
         packet: Packet,
         control: &mut dyn FnMut(&mut Control7<'_>) -> u64,
     ) -> Result<Packet, Error> {
+        // A fenced mount supplies no live inventory. Keep each operation's
+        // existing validation precedence (for example NoTransfer after a
+        // failed CHUNK); it cannot begin publication on that mount.
+        if self.scheduler.refresh(self.volume, &self.grants).is_err() {
+            self.scheduler.clear();
+        }
         let caller = control::Caller7 {
             slot,
             peer: grant.peer,
@@ -243,7 +264,13 @@ impl<'a> Server7<'a> {
                 transfers |= 1 << index;
             }
         }
-        let mut owner = control::Owner::new(&mut self.grants, caller, transfers, control);
+        let mut owner = control::Owner::new(
+            &mut self.grants,
+            &mut self.scheduler,
+            caller,
+            transfers,
+            control,
+        );
         let result = if packet.op == COMMIT {
             self.writes
                 .commit_legacy_with(self.volume, disk, slot, grant, packet, &mut owner)

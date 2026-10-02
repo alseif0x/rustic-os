@@ -20,7 +20,8 @@ pub(super) fn request(volume: &Volume7, packet: Packet) -> Result<Packet, Error>
         availability: [
             // The catalogue is answered for this service's strict subset.
             Availability::Degraded,
-            // V7 has no reviewed lifecycle descriptor implementation.
+            // Native V1's full descriptor registry remains unavailable even
+            // though this service implements the reviewed lifecycle-v2 subset.
             Availability::Unavailable,
             Availability::Available,
             Availability::Available,

@@ -116,8 +116,12 @@ pub(crate) fn run(
                 Ok(message) => {
                     let response = match files::Packet::decode(message.payload()) {
                         Ok(request) => {
-                            let mut owner =
-                                control::Owner::new(&admin, &mut administrator, &mut replies, slot);
+                            let mut owner = control::Owner::new(
+                                &admin,
+                                &mut administrator,
+                                &mut replies,
+                                Some(slot),
+                            );
                             let response = server.handle_with(
                                 disk,
                                 slot,
@@ -149,6 +153,18 @@ pub(crate) fn run(
                 Err(rustic_sdk::Error::Ipc(rustic_sdk::abi::ipc::Error::WouldBlock)) => {}
                 Err(_) => close_slot(server, &mut replies, slot),
             }
+        }
+
+        // The scheduling acknowledgement is independent from the eventual
+        // effect. Its client remains available to inspect or stop live work,
+        // including when that acknowledgement has not yet been collected.
+        let mut owner = control::Owner::new(&admin, &mut administrator, &mut replies, None);
+        let ran = server.run_scheduled(disk, runtime::clock(), |control| owner.poll(control));
+        if let Some(code) = owner.finish(server) {
+            return code;
+        }
+        if ran || server.has_scheduled() {
+            continue;
         }
 
         if replies.iter().all(Option::is_none) {

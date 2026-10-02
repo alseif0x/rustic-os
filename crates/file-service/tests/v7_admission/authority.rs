@@ -87,7 +87,7 @@ fn read_only_and_out_of_scope_grants_cannot_stage_an_admission() {
 }
 
 #[test]
-fn unmarked_profile_one_admission_forms_work_but_live_scheduling_is_unsupported() {
+fn unmarked_profile_one_admission_forms_and_live_queue_requests_share_the_retained_id() {
     let mut f = fixture();
     let mut server = Server7::new(&mut f.volume);
     let (client, accepted) = admitted(&mut server, &mut f.disk, (f.workspace, f.file));
@@ -118,13 +118,14 @@ fn unmarked_profile_one_admission_forms_work_but_live_scheduling_is_unsupported(
         requests.push(accepted.id.packet(op, client.context).unwrap());
     }
     for p in requests {
-        assert_eq!(
-            status(client.send(&mut server, &mut f.disk, p)),
-            Err(Error::Unsupported),
-            "op {}",
-            p.op
-        );
+        let reply = status(client.send(&mut server, &mut f.disk, p)).unwrap();
+        let activity = a::Activity::decode(&reply).unwrap();
+        assert_eq!(activity.id, accepted.id);
+        assert_eq!(activity.phase, a::ActivityPhase::Queued);
+        assert_eq!(activity.cancel_requested, p.op == a::REQUEST_CANCEL);
+        assert!(!activity.io_pending);
     }
+    assert!(server.has_scheduled());
     // An unknown observation profile is refused as such.
     let mut observe = accepted.id.packet(a::OBSERVE, client.context).unwrap();
     observe.arg = 3;

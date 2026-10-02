@@ -4,9 +4,9 @@
 //! A tracked commit or admission acceptance, execution or cancellation drives one pollable
 //! `Volume7` publication. Between its polls the serving layer's callback gets
 //! a [`Control7`]: it may observe the publication and revoke or detach client
-//! slots, which is all the owner can do while the volume is borrowed. Issuing
-//! grants, maintenance and every client request need the whole service and
-//! wait until the publication settles.
+//! slots and serve restricted lifecycle requests from captured scope proofs.
+//! Issuing grants, maintenance and namespace requests need the whole service
+//! and wait until the publication settles.
 //!
 //! The rules mirror the v5 owner-control loop:
 //!
@@ -24,15 +24,20 @@
 //!   is driven without a caller: owner control continues between its polls,
 //!   but nothing stops it.
 use super::grants::Grants;
-use super::{CLIENTS7, Grant7};
+use super::{
+    CLIENTS7, Grant7,
+    admission::{active::Active7, scheduling::Scheduler7},
+};
 use crate::reply;
 use core::task::Poll;
-use rustic_abi::files::Error;
-use rustic_fs::{PollDisk7, PollPublication7, Publication7Phase, format7::Record7};
+use rustic_abi::files::{Error, Packet};
+use rustic_fs::{PollDisk7, PollPublication7, Publication7Phase, Volume7, format7::Record7};
 
 /// What the owner may do while a tracked or admission publication is in flight.
 pub struct Control7<'a> {
     grants: &'a mut Grants,
+    scheduler: &'a mut Scheduler7,
+    active: &'a mut Option<Active7>,
     lost: &'a mut u8,
     phase: Publication7Phase,
     pending: bool,
@@ -40,6 +45,14 @@ pub struct Control7<'a> {
 }
 
 impl Control7<'_> {
+    /// Route one existing lifecycle-v2 request using the immutable inventory
+    /// captured before the current publication borrowed the mounted volume.
+    /// The transport supplies the trusted slot and peer binding.
+    pub fn request(&mut self, slot: usize, peer: u64, packet: Packet, now: u64) -> Packet {
+        self.scheduler
+            .request(self.grants, self.active.as_mut(), slot, peer, packet, now)
+    }
+
     /// Phase of the publication in flight. From `Settling` on its header may
     /// have been submitted, and losing the caller's authority no longer stops
     /// it.
@@ -104,9 +117,12 @@ pub(super) struct Caller7 {
 /// grant during the request.
 pub(super) struct Owner<'a> {
     grants: &'a mut Grants,
+    scheduler: &'a mut Scheduler7,
     caller: Caller7,
     lost: u8,
     transfers: u8,
+    active: Option<Active7>,
+    cleanup: bool,
     control: &'a mut dyn FnMut(&mut Control7<'_>) -> u64,
 }
 
@@ -122,17 +138,55 @@ pub(super) struct Driven {
 impl<'a> Owner<'a> {
     pub(super) fn new(
         grants: &'a mut Grants,
+        scheduler: &'a mut Scheduler7,
         caller: Caller7,
         transfers: u8,
         control: &'a mut dyn FnMut(&mut Control7<'_>) -> u64,
     ) -> Self {
         Self {
             grants,
+            scheduler,
             caller,
             lost: 0,
             transfers,
+            active: None,
+            cleanup: false,
             control,
         }
+    }
+
+    /// Capture immutable admission scope proofs before `Volume7` is mutably
+    /// borrowed by execution/prevention publication.
+    pub(super) fn activate(&mut self, volume: &Volume7, record: Record7) -> Result<(), Error> {
+        let scope = super::admission::scope::Scope7::capture(volume, self.grants, record)?;
+        self.active = Some(Active7::new(scope));
+        Ok(())
+    }
+
+    pub(super) fn set_cleanup(&mut self, cleanup: bool) {
+        self.cleanup = cleanup;
+    }
+
+    pub(super) fn scheduled(&self, id: rustic_abi::files::admission::AdmissionId) -> bool {
+        self.scheduler.contains(id)
+    }
+
+    pub(super) fn stop_active(&mut self) {
+        if let Some(active) = self.active.as_mut() {
+            active.stop();
+        }
+    }
+
+    pub(super) fn active_stopping(&self) -> bool {
+        self.active.as_ref().is_some_and(Active7::stopping)
+    }
+
+    /// Check the original requester's current authority after service-owned
+    /// terminal prevention has settled. A stale caller must not receive status.
+    pub(super) fn recheck_caller(&mut self, right: u8) -> Result<(), Error> {
+        let now = self.poll(Publication7Phase::Committed, false);
+        self.expire(now);
+        self.caller_holds(now, right).map_err(|_| Error::Uncertain)
     }
 
     /// Slots that lost their grant while the request ran.
@@ -147,8 +201,13 @@ impl<'a> Owner<'a> {
 
     /// One owner-control opportunity; returns the owner's clock.
     fn poll(&mut self, phase: Publication7Phase, pending: bool) -> u64 {
+        if let Some(active) = self.active.as_mut() {
+            active.observe(phase, pending, self.cleanup);
+        }
         (self.control)(&mut Control7 {
             grants: self.grants,
+            scheduler: self.scheduler,
+            active: &mut self.active,
             lost: &mut self.lost,
             phase,
             pending,
@@ -206,8 +265,10 @@ pub(super) fn drive<D: PollDisk7>(
         }
         // After the check, so an expired caller is told `Expired`.
         owner.expire(now);
-        if denied.is_some() {
-            // Cancelled, draining or too late: settlement decides which.
+        if denied.is_some() || right.is_some() && owner.active_stopping() {
+            // Caller authority loss and a live stop both request a pre-header
+            // abort. The caller denial remains decisive if both are present.
+            // Service-owned prevention uses `right == None` and cannot stop.
             publication.abort_before_header().map_err(reply::error)?;
         }
         match publication.phase() {
@@ -218,7 +279,9 @@ pub(super) fn drive<D: PollDisk7>(
                     denied,
                 });
             }
-            Publication7Phase::Cancelled if denied.is_some() => {
+            Publication7Phase::Cancelled
+                if denied.is_some() || right.is_some() && owner.active_stopping() =>
+            {
                 return Ok(Driven {
                     record: None,
                     denied,

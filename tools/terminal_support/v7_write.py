@@ -233,8 +233,14 @@ def _write(uart, refs, version, epoch, key, seed, size):
     return result
 
 
-def boot_terminal(image, data, output, phase, temporary, body):
-    """Boot `mode=terminal-v7` once over `data` and run `body(uart)` until a clean exit."""
+def boot_terminal(image, data, output, phase, temporary, body, *, abrupt=False):
+    """Boot `mode=terminal-v7` once over `data` and run `body(uart)`.
+
+    By default the guest exits cleanly after the body. ``abrupt=True`` leaves
+    the guest at its prompt and lets the owning ``machine`` context terminate
+    QEMU, so callers can test volatile state loss without claiming a guest
+    shutdown or physical power loss.
+    """
     sock = temporary / f"uart-{phase}.sock"
     transcript = output / f"serial-{phase}.log"
     log = output / f"qemu-{phase}.log"
@@ -248,13 +254,28 @@ def boot_terminal(image, data, output, phase, temporary, body):
                 if "status=0" not in startup:
                     raise AssertionError(f"initial V7 mount job did not succeed: {startup!r}")
             result = body(uart)
-            uart.send(b"exit\r")
-            uart.until(b"RUSTIC TERMINAL stopped=1 reclaimed=1")
-            if vm.wait(timeout=10) != 33:
-                raise RuntimeError("unclean terminal-v7 exit")
-            return result
+            if abrupt:
+                if vm.poll() is not None:
+                    raise RuntimeError("terminal-v7 stopped before the abrupt VM boundary")
+            else:
+                uart.send(b"exit\r")
+                uart.until(b"RUSTIC TERMINAL stopped=1 reclaimed=1")
+                if vm.wait(timeout=10) != 33:
+                    raise RuntimeError("unclean terminal-v7 exit")
         finally:
             uart.close()
+    if abrupt:
+        if vm.returncode is None:
+            raise RuntimeError("machine context did not terminate the abrupt terminal-v7 VM")
+        if not isinstance(result, dict):
+            raise TypeError("abrupt terminal-v7 evidence must be a mapping")
+        result = dict(result)
+        result["termination_boundary"] = {
+            "kind": "machine_context_terminated_qemu",
+            "guest_clean_exit_requested": False,
+            "qemu_returncode": vm.returncode,
+        }
+    return result
 
 
 def _first_boot(uart, refs, lineage, epoch, version, seeded_records):

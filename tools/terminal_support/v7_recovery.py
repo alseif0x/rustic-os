@@ -5,8 +5,8 @@ The fixture is a fresh ``seed7 --scratch`` image. It runs the old shell
 ``retry-key``, ``replace`` and ``receipt`` commands over two terminal boots,
 then checks the shared V7 records and both current and retained bytes with the
 independent ``oracle7`` reader. The same run checks mounted capability
-discovery and confirms that the unavailable lifecycle negotiation and read-only
-discovery leave the image unchanged.
+discovery and confirms that lifecycle negotiation and read-only discovery leave
+the image unchanged.
 """
 import hashlib
 import json
@@ -21,6 +21,7 @@ from . import oracle7
 from . import v7_profile1 as profile1
 from .discovery_cases import METHODS, capabilities as read_capabilities
 from .operation_cases import check as check_operation
+from .negotiation_cases import profiles
 from .recovery_cases import stat as stat_file
 from .v7_read import volume_json
 from .v7_write import boot_terminal
@@ -245,23 +246,19 @@ def _discovery(uart, data, what):
     if report["bounds"] != CAPABILITY_BOUNDS:
         raise AssertionError(f"{what}: capability limits differ from the mounted V7 profile: {report['bounds']!r}")
 
-    # This shell path invokes Client::negotiate_lifecycle for operations.cancel.
-    # V7 intentionally has no reviewed scheduler/lifecycle descriptor yet, so
-    # the SDK must surface its explicit Unavailable refusal.
-    lifecycle_text = uart.command("lifecycle-profile operations.cancel", "error: Unavailable")
-    _error(
-        lifecycle_text,
-        "Unavailable",
-        f"{what} lifecycle negotiation",
-    )
-    if any(line.startswith(("lifecycle-profile method=", "lifecycle-selected method="))
-           for line in _lines(lifecycle_text)):
-        raise AssertionError(f"{what}: unavailable lifecycle negotiation printed a success descriptor")
+    lifecycle = profiles(uart, True)
+    for descriptor in lifecycle:
+        expected = {"version": 2, "profile": 1, "retained": RETAINED,
+                    "tickets": 2, "active": 1}
+        if any(descriptor[key] != value for key, value in expected.items()) \
+                or descriptor["responder"] <= 0 or descriptor["context"] <= 0 \
+                or not re.fullmatch(r"[0-9a-f]{64}", descriptor["sha256"]):
+            raise AssertionError(f"{what}: incorrect mounted lifecycle descriptor: {descriptor!r}")
     after = environment.digest(data)
     if after != before:
-        raise AssertionError(f"{what}: capability discovery or unavailable negotiation changed the image")
+        raise AssertionError(f"{what}: capability discovery or negotiation changed the image")
     return {"availability": observed, "bounds": report["bounds"],
-            "lifecycle_cancel": "Unavailable", "image_unchanged": True}
+            "lifecycle": lifecycle, "image_unchanged": True}
 
 
 def _first_boot(uart, data, refs, refs_ids, lineage, epoch, initial_version, seeded_records):

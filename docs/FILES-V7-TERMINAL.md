@@ -119,8 +119,10 @@ submitted, settlement continues and a lost caller receives `Uncertain`;
 fresh authorized lookup can recover the committed receipt. Other revoked
 members lose their ordinary and streamed candidates after settlement.
 
-No new scheduling or live-cancellation interface is advertised by this port.
-Those existing legacy consumers remain the next integration boundary.
+The existing two-ticket scheduler and live cancellation interface are ported
+to V7; see [V7 admission scheduling](FILES-V7-ADMISSIONS.md#scheduled-execution-and-live-cancellation).
+Remaining legacy native consumers and default-volume selection are separate
+integration work.
 
 ## Recovery compatibility decision
 
@@ -155,6 +157,7 @@ cargo test -p rustic-file-service --test v7_namespace --test v7_read --test v7_p
 cargo test -p rustic-file-service --test v7_authority --test v7_admission --locked
 cargo test -p rustic-file-service --test v7_profile1 --test v7_write --locked
 cargo test -p rustic-file-service --test v7_discovery --test v7_recovery --locked
+cargo test -p rustic-file-service --test v7_scheduling --locked
 cargo test -p rustic-sdk --test file_binding --locked
 cargo test -p rustic-fs --test volume7 untracked --locked
 ```

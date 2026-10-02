@@ -203,7 +203,7 @@ fn capabilities_require_a_live_peer_context_and_unexpired_grant_only() {
 }
 
 #[test]
-fn discovery_rejects_malformed_frames_and_refuses_unimplemented_descriptors() {
+fn discovery_rejects_malformed_frames_and_reports_mounted_lifecycle_limits() {
     let mut fixture = fixture();
     let mut server = Server7::new(&mut fixture.volume);
     let context = grant(&mut server, 0);
@@ -234,12 +234,19 @@ fn discovery_rejects_malformed_frames_and_refuses_unimplemented_descriptors() {
 
     for method in [Method::OperationsGet, Method::OperationsCancel] {
         let request = n::request(method, context).unwrap();
-        assert_error(
-            server.handle(&mut NoIo, 0, PEER, request, 0),
-            n::DESCRIBE,
-            context,
-            Error::Unavailable,
-        );
+        let reply = server.handle(&mut NoIo, 0, PEER, request, 0);
+        let expected = Descriptor::reviewed(
+            method,
+            Availability::Available,
+            n::Limits {
+                retained_operations: 8,
+                execution_tickets: 2,
+                active_publications: 1,
+            },
+        )
+        .unwrap();
+        assert_eq!(Descriptor::decode(&reply, method), Ok(expected));
+        assert_eq!(reply, expected.packet(context).unwrap());
         assert_eq!(n::decode_request(&request), Ok(method));
     }
 
@@ -262,22 +269,6 @@ fn discovery_rejects_malformed_frames_and_refuses_unimplemented_descriptors() {
             expected,
         );
     }
-    // V7 refuses DESCRIBE without manufacturing a queue size to satisfy the
-    // reviewed descriptor codec's nonzero execution-ticket rule.
-    assert_eq!(
-        Descriptor::reviewed(
-            Method::OperationsGet,
-            Availability::Unavailable,
-            n::Limits {
-                retained_operations: 8,
-                execution_tickets: 0,
-                active_publications: 1,
-            },
-        )
-        .unwrap()
-        .packet(context),
-        Err(Error::Protocol)
-    );
 }
 
 #[test]

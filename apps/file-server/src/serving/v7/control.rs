@@ -6,9 +6,11 @@
 //! It first gives the administrative channel its opportunity (a revocation
 //! applies at once and is acknowledged after settlement; see
 //! [`rustic_file_server::publication`]), then keeps the other clients'
-//! transport moving: queued replies are retried and new requests are answered
-//! `Busy`. The publishing client's endpoint is not read: its reply is
-//! outstanding. Device completion is not a `WAIT_SET` source, so a command
+//! transport moving: queued replies are retried and restricted lifecycle
+//! requests reach the service controller. Other requests are answered `Busy`.
+//! A synchronous publishing client's endpoint is not read: its reply is
+//! outstanding. Scheduled work has no excluded client. Device completion is not
+//! a `WAIT_SET` source, so a command
 //! still pending at a second consecutive opportunity costs one tick.
 use super::admin;
 use super::{ADMIN_SLOT, Replies};
@@ -24,7 +26,7 @@ pub(super) struct Owner<'a> {
     admin: &'a Endpoint,
     administrator: &'a mut u64,
     replies: &'a mut Replies,
-    publishing: usize,
+    publishing: Option<usize>,
     /// Correlation and settlement report of a revocation acknowledged after it settles.
     deferred: Option<(u64, [u64; 8])>,
     /// The previous opportunity already saw the command outstanding.
@@ -38,7 +40,7 @@ impl<'a> Owner<'a> {
         admin: &'a Endpoint,
         administrator: &'a mut u64,
         replies: &'a mut Replies,
-        publishing: usize,
+        publishing: Option<usize>,
     ) -> Self {
         Self {
             admin,
@@ -160,7 +162,7 @@ impl<'a> Owner<'a> {
     fn clients(&mut self, control: &mut Control7<'_>) {
         let now = runtime::clock();
         for slot in 0..CLIENTS7 {
-            if slot == self.publishing {
+            if self.publishing == Some(slot) {
                 continue;
             }
             let Some(grant) = control.grant_at(slot) else {
@@ -190,8 +192,10 @@ impl<'a> Owner<'a> {
             }
             match endpoint.receive() {
                 Ok(message) => {
-                    let request = files::Packet::decode(message.payload()).ok();
-                    let reply = publication::busy(request.as_ref());
+                    let reply = match files::Packet::decode(message.payload()) {
+                        Ok(request) => control.request(slot, message.sender(), request, now),
+                        Err(_) => publication::busy(None),
+                    };
                     self.replies[slot] =
                         Some(Message::new(message.correlation(), &reply.encode()).unwrap());
                 }
