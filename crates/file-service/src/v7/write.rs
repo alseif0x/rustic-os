@@ -76,6 +76,16 @@ impl Writes {
         self.transfers.iter().any(Option::is_some)
     }
 
+    /// Number of profile-2 transfers holding one of the V7 storage stages.
+    pub(super) fn transfer_count(&self) -> usize {
+        self.transfers.iter().flatten().count()
+    }
+
+    /// Whether this client slot already owns a profile-2 transfer.
+    pub(super) fn transfer_open(&self, slot: usize) -> bool {
+        self.transfers.get(slot).is_some_and(Option::is_some)
+    }
+
     /// Forget every slot's cached receipt, after the records they describe
     /// were reclaimed.
     pub(super) fn forget_receipts(&mut self) {

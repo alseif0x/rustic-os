@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use rustic_abi::files::{
-    BEGIN, CREATE, Error, OPERATION_ID, Packet, READ_CHUNK, READ_OPEN, REMOVE, REPLACE_OPEN,
-    admission,
+    Error, OPERATION_ID, Packet, READ, READ_CHUNK, READ_OPEN, REPLACE_OPEN, admission,
     read::{Header, Request},
     reference::{References, Version},
 };
@@ -291,6 +290,63 @@ fn eof_version_and_request_validation_keep_the_existing_read_contract() {
 }
 
 #[test]
+fn legacy_read_uses_v7_full_length_version_pinning_and_eof_rules() {
+    let content: Vec<u8> = (0..(72 * 1024 + 19)).map(|index| index as u8).collect();
+    let (mut volume, mut disk, workspace, file, _) = setup(&content);
+    let mut server = Server7::new(&mut volume);
+    let authorization = grant(&mut server, 0, workspace, 11, 0);
+    let offset = 65_533u32;
+
+    let mut read = Packet::new(READ);
+    read.id = file;
+    read.arg = offset;
+    read.context = authorization.context;
+    let response = server.handle(&mut disk, 0, 11, read, 0);
+    assert_eq!(response.status, 0);
+    assert_eq!(response.id, file);
+    assert_eq!(response.arg, content.len() as u32);
+    assert_eq!(response.count, 40);
+    assert_eq!(
+        &response.data[..usize::from(response.count)],
+        &content[offset as usize..offset as usize + 40]
+    );
+    assert_eq!(
+        server.volume().stat(file).unwrap().version,
+        response.version,
+        "version zero requests the current version"
+    );
+
+    read.version = response.version - 1;
+    assert_eq!(
+        server.handle(&mut disk, 0, 11, read, 0).status,
+        Error::Version as u8
+    );
+
+    read.version = response.version;
+    read.arg = content.len() as u32;
+    let eof = server.handle(&mut disk, 0, 11, read, 0);
+    assert_eq!(
+        (eof.status, eof.id, eof.arg, eof.version, eof.count),
+        (0, file, content.len() as u32, response.version, 0)
+    );
+    assert_eq!(eof.data, [0; rustic_abi::files::DATA]);
+
+    read.arg += 1;
+    assert_eq!(
+        server.handle(&mut disk, 0, 11, read, 0).status,
+        Error::Size as u8
+    );
+
+    read.id = workspace;
+    read.arg = 0;
+    read.version = 0;
+    assert_eq!(
+        server.handle(&mut disk, 0, 11, read, 0).status,
+        Error::IsDirectory as u8
+    );
+}
+
+#[test]
 fn maximum_profile2_file_size_is_reported_while_range_stays_bounded() {
     let bytes: Vec<u8> = (0..rustic_abi::files::workspace::MAX_FILE_BYTES)
         .map(|index| index as u8)
@@ -322,15 +378,12 @@ fn maximum_profile2_file_size_is_reported_while_range_stays_bounded() {
 }
 
 #[test]
-fn mutations_and_profile_one_requests_are_not_dispatched() {
+fn unsupported_profile_requests_are_not_dispatched() {
     let (mut volume, mut disk, workspace, _, _) = setup(b"read only");
     let mut server = Server7::new(&mut volume);
     let authorization = grant(&mut server, 0, workspace, 11, 0);
     let io_before = disk.io_ops;
 
-    let mut create = Packet::new(CREATE);
-    create.count = 1;
-    create.data[0] = b'x';
     let mut replace = Packet::new(REPLACE_OPEN);
     replace.count = 36;
     let mut operation_id = Packet::new(OPERATION_ID);
@@ -341,14 +394,7 @@ fn mutations_and_profile_one_requests_are_not_dispatched() {
     admission_observe.arg = admission::OBSERVATION_VERSION;
     admission_observe.count = 16;
 
-    for packet in [
-        create,
-        Packet::new(REMOVE),
-        Packet::new(BEGIN),
-        replace,
-        operation_id,
-        admission_open,
-    ] {
+    for packet in [replace, operation_id, admission_open] {
         let packet = Packet {
             context: authorization.context,
             ..packet
@@ -374,7 +420,7 @@ fn mutations_and_profile_one_requests_are_not_dispatched() {
                 99,
                 Packet {
                     context: authorization.context,
-                    ..create
+                    ..replace
                 },
                 0
             )

@@ -9,7 +9,13 @@ use rustic_fs::{
 };
 
 /// Root of every grantable V7 workspace.
-const WORKSPACES_ROOT: u32 = 4;
+pub(super) const WORKSPACES_ROOT: u32 = 4;
+
+/// Resolve the shell's scope-zero spelling to the real workspace root before
+/// the owner installs the grant. All other scopes retain their own identity.
+pub(super) const fn normalized_grant_scope(scope: u32) -> u32 {
+    if scope == 0 { WORKSPACES_ROOT } else { scope }
+}
 
 /// A grant scope must exist and lie within the workspaces tree.
 pub(super) fn grantable(volume: &Volume7, scope: u32) -> Result<(), Error> {
@@ -44,6 +50,18 @@ pub(super) fn authorized_resource(
         return Err(Error::Denied);
     }
     Ok(resource_node)
+}
+
+/// The node itself when it is the grant scope or a verified descendant.
+/// Missing and out-of-scope identities share `Denied` so namespace queries do
+/// not become an identity oracle.
+pub(super) fn authorized_node(volume: &Volume7, scope: u32, id: u32) -> Result<Node7, Error> {
+    let resource = node(volume, id)?;
+    if within(volume, resource, node(volume, scope)?)? {
+        Ok(resource)
+    } else {
+        Err(Error::Denied)
+    }
 }
 
 /// Whether a retained record of `workspace`/`object` lies within `scope`, as

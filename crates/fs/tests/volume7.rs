@@ -13,6 +13,8 @@ mod stage;
 mod support;
 #[path = "volume7/tracked.rs"]
 mod tracked;
+#[path = "volume7/untracked.rs"]
+mod untracked;
 
 use rustic_fs::format7::{
     self, Header7, MAP_WORDS, MAX_EXTENTS, NAME_BYTES, NODES, Node7, RECEIPT_BLOCK_BYTES,

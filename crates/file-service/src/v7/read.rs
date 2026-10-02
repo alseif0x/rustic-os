@@ -19,6 +19,26 @@ pub(super) fn request(
     packet: Packet,
 ) -> Result<Packet, Error> {
     grant.holds(READ_RIGHT)?;
+    if packet.op == READ {
+        let node = scope::authorized_node(volume, grant.scope, packet.id)?;
+        let expected_version = (packet.version != 0).then_some(packet.version);
+        let mut response = Packet::new(READ);
+        let count = volume
+            .read_range(
+                disk,
+                node.id,
+                expected_version,
+                u64::from(packet.arg),
+                &mut response.data,
+            )
+            .map_err(reply::error)?;
+        response.id = node.id;
+        response.arg = node.length;
+        response.version = node.version;
+        response.count = count as u8;
+        response.context = packet.context;
+        return Ok(response);
+    }
     if packet.op == REFERENCES {
         scope::authorized_resource(volume, grant.scope, packet.arg, packet.id)?;
         let lineage = volume.header().map_err(reply::error)?.lineage;

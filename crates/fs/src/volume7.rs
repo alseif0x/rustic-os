@@ -23,6 +23,7 @@ mod publication;
 mod read;
 mod replacement;
 mod stage;
+mod untracked;
 
 pub use poll::{PollDisk7, PollPublication7, Publication7Cancel, Publication7Phase};
 pub use stage::{Stage7, Stage7Kind};

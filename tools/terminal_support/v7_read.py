@@ -33,6 +33,8 @@ COPYING_PHASE = 2
 # Shell rendering of the supervisor's `launch::IDENTITY` refusal.
 IDENTITY_REFUSAL = "manifest identity is not accepted for this storage launch"
 PROCESS_ROW = re.compile(r"(?m)^(\d+) (\w+) (\d+) (\d+) (\d+) (\d+) (\S+)\r?$")
+READ_NOTE = "Manual V7 namespace and read acceptance.\n"
+READ_NOTE_NAME = "read-note.txt"
 
 
 def version_text(value):
@@ -277,6 +279,45 @@ def _verify_report(report, seeded, elf, manifest):
         raise AssertionError("V7 host remount does not contain the expected application workspace")
 
 
+def _namespace_cases(uart, seeded, read_note):
+    """Resolve ordinary paths and read content through the production shell."""
+    def listing(path, expected):
+        text = uart.command(f"ls {path}")
+        rows = re.findall(r"(?m)^([df])\s+(\d+) (\S+)\r?$", text)
+        observed = [(kind, int(size), name) for kind, size, name in rows]
+        if observed != expected:
+            raise AssertionError(f"V7 listing {path}: {observed!r} != {expected!r}")
+        return observed
+
+    root = listing("/", [("d", 0, "workspaces")])
+    listing("/workspaces", [("d", 0, "application")])
+    entries = listing("/workspaces/application", [
+        ("f", seeded["elf"]["size"], "file-server.elf"),
+        ("f", seeded["manifest"]["size"], "file-server.manifest"),
+        ("f", len(READ_NOTE.encode("ascii")), READ_NOTE_NAME),
+    ])
+    uart.command("cd /workspaces/application")
+    uart.command("pwd", "\r\n/workspaces/application\r\n")
+    stat_text = uart.command("stat file-server.elf")
+    stat = re.search(r"(?m)^id=(\d+) parent=(\d+) kind=file bytes=(\d+) version=(\d+)\r?$", stat_text)
+    expected = (seeded["elf"]["id"], seeded["workspace"]["id"],
+                seeded["elf"]["size"], seeded["elf"]["version"])
+    if not stat or tuple(map(int, stat.groups())) != expected:
+        raise AssertionError(f"V7 ordinary stat differs from independently provisioned metadata: {stat_text!r}")
+    uart.command(f"cat {READ_NOTE_NAME}", "\r\n" + READ_NOTE.replace("\n", "\r\n") + "\r\n")
+    uart.command("cat .", "error: IsDirectory")
+    uart.command("stat missing.txt", "error: NotFound")
+    for root_name in ("system", "data", "config"):
+        uart.command(f"ls /{root_name}", "error: Denied")
+    uart.command("cd ..")
+    uart.command("pwd", "\r\n/workspaces\r\n")
+    uart.command("cd /")
+    return {"root": root, "entries": entries, "elf_stat": dict(zip(
+        ("id", "parent", "size", "version"), expected)),
+        "read_note_resource": read_note["resource"],
+        "read_note_sha256": read_note["sha256"], "denied_roots": ["system", "data", "config"]}
+
+
 def verify(image, volume_tool, output=None):
     image = Path(image).resolve()
     volume_tool = Path(volume_tool).resolve()
@@ -290,7 +331,7 @@ def verify(image, volume_tool, output=None):
     if environment.digest(manifest) != metadata["native_applications"]["file-server"][".manifest"]:
         raise RuntimeError("file-server manifest differs from the artifact recorded by the boot build")
 
-    reads, stages, serials, logs = [], [], [], []
+    reads, stages, namespace_reads, serials, logs = [], [], [], [], []
     started = time.monotonic()
     (output / "result.json").unlink(missing_ok=True)
     (output / "terminal-v7.json").unlink(missing_ok=True)
@@ -302,6 +343,9 @@ def verify(image, volume_tool, output=None):
             seeded = volume_json(volume_tool, "seed7", data, lineage, elf, manifest)
             if seeded["lineage"] != lineage:
                 raise AssertionError("host provisioner returned another lineage")
+            note = temporary / READ_NOTE_NAME
+            note.write_text(READ_NOTE, encoding="ascii")
+            added = volume_json(volume_tool, "add7", data, seeded["workspace"]["id"], READ_NOTE_NAME, note)
             initial_report = volume_json(volume_tool, "report7", data)
             _verify_report(initial_report, seeded, elf, manifest)
             volume_bytes = data.stat().st_size
@@ -334,6 +378,8 @@ def verify(image, volume_tool, output=None):
                             startup_job = uart.until()
                             if "status=0" not in startup_job:
                                 raise AssertionError(f"initial V7 mount job did not succeed: {startup_job!r}")
+                        namespace_reads.append({"boot": phase, "service_restart": False,
+                                                **_namespace_cases(uart, seeded, added["file"])})
                         full_reads = [
                             _read_file(uart, references["elf"], elf),
                             _read_file(uart, references["manifest"], manifest),
@@ -344,6 +390,8 @@ def verify(image, volume_tool, output=None):
                             stages.append({"boot": phase, "service_restart": False, **stage})
                             # This case performs the service restart itself.
                             cancelled = _cancel_case(uart, references, seeded)
+                            namespace_reads.append({"boot": phase, "service_restart": True,
+                                                    **_namespace_cases(uart, seeded, added["file"])})
                             offsets = [0, elf.stat().st_size // 2, elf.stat().st_size - CHUNK_BYTES]
                             samples = _sample_file(uart, references["elf"], elf, offsets)
                             for sample, offset in zip(samples, offsets):
@@ -379,6 +427,7 @@ def verify(image, volume_tool, output=None):
                 "manifest": _read_file_summary(manifest, metadata["native_applications"]["file-server"][".manifest"]),
             },
             "reads": reads,
+            "namespace_reads": namespace_reads,
             "stages": stages,
             "volume": {
                 "bytes": volume_bytes,

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Explicit V7 dispatch: bounded reads, profile-2 tracked replacement and
-//! profile-2 staged admission only. No V5 mutation or admission path is
-//! reachable. Requests are served one at a time; a chunk that fills a sector,
-//! a commit and the owner's retention maintenance perform blocking disk I/O.
+//! Explicit V7 dispatch: namespace operations, bounded reads and ordinary
+//! replacement, profile-2 tracked replacement and profile-2 staged admission.
+//! Requests are served one at a time; ordinary publication, a streamed chunk
+//! that fills a sector, a commit and retention maintenance use blocking I/O.
 //! An admission acceptance, execution or cancellation polls its publication
 //! over the pollable disk and holds the client's reply until it settles; the
 //! owner may revoke or detach clients between polls ([`control`]).

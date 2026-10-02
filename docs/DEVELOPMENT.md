@@ -162,6 +162,14 @@ temporary QEMU data backend is not opened read-only because V7 mount requires an
 initial flush, which this host's read-only QEMU backend rejects; before/after
 volume hashes independently check for mutation.
 
+The [terminal V7 port](FILES-V7-TERMINAL.md) adds ordinary path/list/stat/read
+checks to that harness. `python3 tools/v7_plain_test.py` separately verifies
+existing namespace mutations and bounded ordinary replacement through two
+native boots and a service restart, comparing the retained records and exact
+persisted content with the independent V7 reader. It uses fresh temporary
+media and writes evidence to `artifacts/boot/terminal-v7-plain/`; it runs in
+the same `v7` CI job as the other V7 harnesses.
+
 `python3 tools/v7_launch_test.py` builds that image once, copies it aside and
 boots the same bytes twice. It builds two tagged utility variants
 (`RUSTIC_UTILITY_TAG=1` and `2`) in separate cargo invocations under

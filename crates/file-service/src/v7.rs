@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Explicitly selected V7 native service over one exclusively borrowed mounted
-//! volume: bounded range reads, profile-2 tracked replacement, profile-2 staged
-//! admission with explicit execution and cancellation, lookups of retained
-//! records and owner-requested retention maintenance.
+//! volume: bounded reads, plain replacement, profile-2 tracked replacement,
+//! profile-2 staged admission with explicit execution and cancellation,
+//! lookups of retained records and owner-requested retention maintenance.
 //!
 //! The composing [`Server7`] routes each request after the envelope and grant
 //! checks, and keeps the storage consequences of authority changes together:
@@ -21,6 +21,8 @@ mod admission;
 mod control;
 mod grants;
 mod lookup;
+mod namespace;
+mod plain;
 mod read;
 mod retention;
 mod scope;
@@ -34,10 +36,13 @@ pub use retention::Maintenance7;
 use rustic_abi::files::*;
 use rustic_fs::{Disk, PollDisk7, Volume7};
 
+const TRANSFER_LIMIT: usize = 2;
+
 pub struct Server7<'a> {
     volume: &'a mut Volume7,
     grants: grants::Grants,
     writes: write::Writes,
+    plain: plain::PlainTransfers,
 }
 
 impl<'a> Server7<'a> {
@@ -47,6 +52,7 @@ impl<'a> Server7<'a> {
             volume,
             grants: grants::Grants::new(),
             writes,
+            plain: plain::PlainTransfers::new(),
         }
     }
 
@@ -55,11 +61,15 @@ impl<'a> Server7<'a> {
         self.volume
     }
 
-    /// Install one scope and return its endpoint/context binding. Replacing a
-    /// slot makes its previous context stale and aborts its open stage.
-    pub fn grant(&mut self, slot: usize, request: GrantRequest7) -> Result<Grant7, Error> {
+    /// Install one scope and return its endpoint/context binding. Scope zero,
+    /// used by the terminal for an absolute path root, names the workspaces
+    /// root in V7. Replacing a slot makes its previous context stale and
+    /// aborts its open stage.
+    pub fn grant(&mut self, slot: usize, mut request: GrantRequest7) -> Result<Grant7, Error> {
+        request.scope = scope::normalized_grant_scope(request.scope);
         let grant = self.grants.grant(self.volume, slot, request)?;
         self.writes.reset(self.volume, slot);
+        self.plain.reset(slot);
         Ok(grant)
     }
 
@@ -69,6 +79,7 @@ impl<'a> Server7<'a> {
     pub fn revoke(&mut self, slot: usize) -> Result<(), Error> {
         self.grants.revoke(slot)?;
         self.writes.reset(self.volume, slot);
+        self.plain.reset(slot);
         Ok(())
     }
 
@@ -77,6 +88,7 @@ impl<'a> Server7<'a> {
     pub fn detach(&mut self, slot: usize) {
         self.grants.detach(slot);
         self.writes.reset(self.volume, slot);
+        self.plain.reset(slot);
     }
 
     /// Mark expired slots revoked, abort their stages and return their bit
@@ -86,6 +98,7 @@ impl<'a> Server7<'a> {
         for slot in 0..CLIENTS7 {
             if expired & (1 << slot) != 0 {
                 self.writes.reset(self.volume, slot);
+                self.plain.reset(slot);
             }
         }
         expired
@@ -115,7 +128,11 @@ impl<'a> Server7<'a> {
     ///
     /// Only the administrative channel may reach this; no client packet does.
     pub fn maintain_retention(&mut self, disk: &mut impl Disk) -> Result<Maintenance7, Error> {
-        let result = retention::maintain(self.volume, disk, self.writes.transfers_open());
+        let result = retention::maintain(
+            self.volume,
+            disk,
+            self.writes.transfers_open() || self.plain.transfers_open(),
+        );
         if result.is_ok() || self.volume.header().is_err() {
             self.writes.forget_receipts();
         }
@@ -188,14 +205,31 @@ impl<'a> Server7<'a> {
         crate::validation::envelope(&packet)?;
         let grant = self.grants.check(slot, peer, packet.context, now)?;
         match packet.op {
-            REFERENCES | READ_OPEN | READ_CHUNK => {
+            LOOKUP | STAT | LIST => {
+                crate::validation::request(&packet)?;
+                namespace::request(self.volume, grant, packet)
+            }
+            READ | REFERENCES | READ_OPEN | READ_CHUNK => {
                 crate::validation::request(&packet)?;
                 read::request(self.volume, disk, grant, packet)
             }
+            _ if plain::selected(&packet) => {
+                crate::validation::request(&packet)?;
+                let profile_busy = self.writes.transfer_open(slot)
+                    || self.plain.transfer_count() + self.writes.transfer_count() >= TRANSFER_LIMIT;
+                self.plain
+                    .request(self.volume, disk, slot, grant, packet, profile_busy)
+            }
             _ if write::selected(&packet) => {
+                if packet.op == REPLACE_OPEN {
+                    self.ensure_profile_open_available(slot, grant, &packet)?;
+                }
                 self.writes.request(self.volume, disk, slot, grant, packet)
             }
             _ if admission::selected(&packet) => {
+                if packet.op == rustic_abi::files::admission::OPEN {
+                    self.ensure_profile_open_available(slot, grant, &packet)?;
+                }
                 let caller = control::Caller7 {
                     slot,
                     peer,
@@ -217,11 +251,44 @@ impl<'a> Server7<'a> {
                 for index in 0..CLIENTS7 {
                     if lost & (1 << index) != 0 {
                         self.writes.reset(self.volume, index);
+                        self.plain.reset(index);
                     }
                 }
                 result
             }
             _ => Err(Error::Unsupported),
         }
+    }
+
+    /// Check the plain/profile-2 shared transfer limit after decoding and
+    /// validating the open request's authority, before its owner allocates a
+    /// V7 stage.
+    fn ensure_profile_open_available(
+        &self,
+        slot: usize,
+        grant: Grant7,
+        packet: &Packet,
+    ) -> Result<(), Error> {
+        let request = rustic_abi::files::workspace::Replacement::decode(packet)?.request;
+        grant.holds(WRITE_RIGHT | INSPECT_RIGHT)?;
+        if grant.subject == 0 || slot >= CLIENTS7 {
+            return Err(Error::Denied);
+        }
+        scope::authorized_resource(
+            self.volume,
+            grant.scope,
+            request.workspace.root(),
+            request.resource.object(),
+        )?;
+        let header = self.volume.header().map_err(crate::reply::error)?;
+        if header.lineage != request.workspace.lineage() {
+            return Err(Error::Denied);
+        }
+        if self.plain.transfer_open(slot)
+            || self.plain.transfer_count() + self.writes.transfer_count() >= TRANSFER_LIMIT
+        {
+            return Err(Error::Busy);
+        }
+        Ok(())
     }
 }
