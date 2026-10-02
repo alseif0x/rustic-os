@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Tracked commit keeps the legacy owner-control contract on both wire profiles.
+//! Tracked commit keeps owner control on both receipt profiles and flat recovery.
 use super::*;
 use core::task::Poll;
 use rustic_fs::{PollDisk, PollDisk7, Publication7Phase};
@@ -63,7 +63,7 @@ impl PollDisk7 for Held<'_> {
 
 #[test]
 fn root_loss_during_helper_commit_stops_before_header_or_withholds_settled_receipt() {
-    for profile_one in [false, true] {
+    for framing in [0, 1, 2] {
         for (late, fail) in [(false, false), (true, false), (false, true)] {
             let mut f = fixture();
             let mut server = Server7::new(&mut f.volume);
@@ -87,15 +87,38 @@ fn root_loss_during_helper_commit_stops_before_header_or_withholds_settled_recei
             };
             let before = server.volume().stat(f.file).unwrap();
             let request = replacement(server.volume(), f.workspace, f.file, before.version, 0x901);
-            let open = if profile_one {
+            let retry = rustic_abi::files::recovery::Retry {
+                lineage: request.workspace.lineage(),
+                epoch: request.retry.epoch.value(),
+                key: request.retry.key.value(),
+            };
+            let open = if framing == 2 {
+                let mut open = Packet::new(rustic_abi::files::TRACK_BEGIN);
+                open.context = helper.context;
+                open.id = f.file;
+                open.version = before.version;
+                open.arg = 900;
+                open.count = 32;
+                open.data[..32].copy_from_slice(&retry.encode());
+                open
+            } else if framing == 1 {
                 request.packet(900, helper.context).unwrap()
             } else {
                 Replacement { request }.packet(900, helper.context).unwrap()
             };
             status(helper.send(&mut server, &mut f.disk, open)).unwrap();
-            helper
-                .chunks(&mut server, &mut f.disk, f.file, &[77; 900])
-                .unwrap();
+            for (index, bytes) in [77; 900].chunks(DATA).enumerate() {
+                let mut chunk = Packet::new(if framing == 2 {
+                    rustic_abi::files::CHUNK
+                } else {
+                    REPLACE_CHUNK
+                });
+                chunk.id = f.file;
+                chunk.arg = (index * DATA) as u32;
+                chunk.count = bytes.len() as u8;
+                chunk.data[..bytes.len()].copy_from_slice(bytes);
+                status(helper.send(&mut server, &mut f.disk, chunk)).unwrap();
+            }
             let mut plain = Packet::new(rustic_abi::files::BEGIN);
             plain.context = root.context;
             plain.id = f.sibling;
@@ -103,7 +126,11 @@ fn root_loss_during_helper_commit_stops_before_header_or_withholds_settled_recei
             plain.arg = 1;
             status(server.handle(&mut f.disk, 0, PEER, plain, 0)).unwrap();
             assert_eq!(server.pending(), 2);
-            let mut commit = Packet::new(REPLACE_COMMIT);
+            let mut commit = Packet::new(if framing == 2 {
+                rustic_abi::files::COMMIT
+            } else {
+                REPLACE_COMMIT
+            });
             commit.context = helper.context;
             commit.id = f.file;
             let mut disk = Held {
@@ -159,13 +186,22 @@ fn root_loss_during_helper_commit_stops_before_header_or_withholds_settled_recei
                 usize::from(late)
             );
             let fresh = Writer::grant(&mut server, 1, f.workspace, TRACKED_WRITE7, SUBJECT);
-            let query = Lookup {
-                query: operation::Lookup::Retry {
-                    workspace: request.workspace,
-                    retry: request.retry,
-                },
-            }
-            .packet(fresh.context);
+            let query = if framing == 2 {
+                let mut query = Packet::new(rustic_abi::files::RECEIPT);
+                query.context = fresh.context;
+                query.id = f.file;
+                query.count = 32;
+                query.data[..32].copy_from_slice(&retry.encode());
+                query
+            } else {
+                Lookup {
+                    query: operation::Lookup::Retry {
+                        workspace: request.workspace,
+                        retry: request.retry,
+                    },
+                }
+                .packet(fresh.context)
+            };
             assert_eq!(
                 fresh.send(&mut server, &mut f.disk, query).status,
                 if late { 0 } else { Error::OutcomeUnknown as u8 }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Private decoders for the two existing completed-operation wire profiles.
+//! Private decoders for the completed-operation wire profiles and the legacy
+//! flat tracked-write framing.
 //!
 //! V7 stores the full-size V7 receipt internally. The profile selected by an
 //! OPEN or lookup determines only the request shape and the receipt encoding
@@ -10,11 +11,13 @@ use rustic_abi::files::{
     workspace,
 };
 
-/// Existing markerless profile 1 or explicitly marked profile 2.
+/// Existing markerless profile 1, explicitly marked profile 2, or the legacy
+/// TRACK_BEGIN / CHUNK / COMMIT framing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Profile {
     One,
     Two,
+    Legacy,
 }
 
 /// Shared, decoded OPEN fields passed from request framing into stage policy.
@@ -112,5 +115,8 @@ pub(super) fn receipt_part(
             legacy.part(op, context, offset)
         }
         Profile::Two => receipt.part(op, context, offset),
+        // Legacy tracked writes return their fixed 40-byte recovery receipt
+        // directly from COMMIT and do not have receipt-part requests.
+        Profile::Legacy => Err(Error::Protocol),
     }
 }

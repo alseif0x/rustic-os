@@ -122,6 +122,30 @@ members lose their ordinary and streamed candidates after settlement.
 No new scheduling or live-cancellation interface is advertised by this port.
 Those existing legacy consumers remain the next integration boundary.
 
+## Recovery compatibility decision
+
+On 2026-10-02 the owner approved retaining `RECOVERY`, `TRACK_BEGIN` and
+`RECEIPT` with shared V7 retry history. This is an API projection onto the
+existing format, not a disk conversion or a new format. Integration and its
+acceptance evidence are tracked in [WORK-STATE.md](WORK-STATE.md).
+
+The older volume could distinguish an unscoped recovery record from a scoped
+operation with the same subject, epoch and key. V7 records have no such
+discriminator. New recovery records therefore use the target's genuine
+top-level directory; no root is repurposed as a hidden namespace. The old
+framing searches the subject's retained retry history, returns an identical
+direct operation as a replay, and refuses ambiguous or incompatible matches.
+Modern scoped APIs keep their workspace-qualified keys. This intentionally
+does not preserve the historical separation between those API families.
+
+The projection must preserve the original 1024-byte recovery limit, target
+and subject authority, inspection-only replay, expected versions and exact
+retry-byte comparison. A competing operation can commit while a candidate is
+being staged, so collision checks are required again before publication.
+Generic CHUNK/COMMIT/ABORT must remain bound to the transfer family that opened
+the candidate. Eight retained records are a mounted service capacity; clients
+must not assume the older volume's two-record bound.
+
 ## Verification
 
 The focused host suites are:
@@ -130,6 +154,8 @@ The focused host suites are:
 cargo test -p rustic-file-service --test v7_namespace --test v7_read --test v7_plain --locked
 cargo test -p rustic-file-service --test v7_authority --test v7_admission --locked
 cargo test -p rustic-file-service --test v7_profile1 --test v7_write --locked
+cargo test -p rustic-file-service --test v7_discovery --test v7_recovery --locked
+cargo test -p rustic-sdk --test file_binding --locked
 cargo test -p rustic-fs --test volume7 untracked --locked
 ```
 
@@ -150,6 +176,14 @@ writes, removal without identity reuse and exact persistence through reboot
 and service restart. The independent Python V7 reader verifies content,
 versions, allocation ownership and unchanged retained records. Both harnesses
 create fresh temporary images and never use `artifacts/terminal/data.raw`.
+
+`python3 tools/v7_recovery_test.py` checks the original retry/receipt commands
+and mounted discovery over two boots. It verifies exact old receipt text,
+shared modern-operation replay, ambiguous cross-workspace keys, epoch expiry
+and live/retained bytes with the independent reader. Host tests additionally
+cover inspection-only replay, a collision introduced after staging began,
+wrong-family transfer requests, hidden records, deleted companion authority
+and owner revocation with a legacy commit's disk command still pending.
 
 Host checks and harness implementation alone do not establish guest acceptance.
 The current checkpoint records the commands actually completed and their

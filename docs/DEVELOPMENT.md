@@ -177,6 +177,13 @@ against the independent reader. A 1025-byte profile-2 receipt remains readable
 through profile 2 and is refused by profile 1's bounded codec. Evidence is in
 `artifacts/boot/terminal-v7-profile1/`; this also runs in the `v7` CI job.
 
+`python3 tools/v7_recovery_test.py` exercises the original `retry-key`,
+`replace` and `receipt` commands on disposable V7 media. It checks mounted
+capabilities, the approved shared retry history, conflicting and ambiguous
+keys, receipts after reboot and epoch expiry against `oracle7`. The `v7`
+CI job runs it and retains evidence in `artifacts/boot/terminal-v7-recovery/`.
+See the [recovery compatibility decision](FILES-V7-TERMINAL.md#recovery-compatibility-decision).
+
 `python3 tools/v7_launch_test.py` builds that image once, copies it aside and
 boots the same bytes twice. It builds two tagged utility variants
 (`RUSTIC_UTILITY_TAG=1` and `2`) in separate cargo invocations under

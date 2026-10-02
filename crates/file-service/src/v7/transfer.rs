@@ -30,6 +30,9 @@ pub(super) struct Transfer {
     stage: Stage7,
     kind: Stage7Kind,
     profile: Profile,
+    /// Legacy exact retries may be replayed by inspection-only grants. The
+    /// open policy has already matched a unique retained direct record.
+    legacy_replay: bool,
     request: Replacement,
     size: u32,
     received: u32,
@@ -43,6 +46,7 @@ impl Transfer {
         stage: Stage7,
         kind: Stage7Kind,
         profile: Profile,
+        legacy_replay: bool,
         request: Replacement,
         size: u32,
     ) -> Self {
@@ -50,6 +54,7 @@ impl Transfer {
             stage,
             kind,
             profile,
+            legacy_replay,
             request,
             size,
             received: 0,
@@ -71,12 +76,20 @@ impl Transfer {
         self.profile
     }
 
+    pub(super) fn legacy_replay(&self) -> bool {
+        self.profile == Profile::Legacy && self.legacy_replay
+    }
+
     pub(super) fn request(&self) -> Replacement {
         self.request
     }
 
     pub(super) fn complete(&self) -> bool {
         self.received == self.size
+    }
+
+    pub(super) fn size(&self) -> u32 {
+        self.size
     }
 
     /// Accept the client bytes at `offset`, staging every sector that fills.

@@ -13,8 +13,9 @@ storage unification, usable tasks on fresh volumes, external MCP over COM2.
 No new public functionality, protocols, formats, versions, migrations, upgrades
 or rollback paths are authorized in this order. See [STORAGE-POLICY.md](STORAGE-POLICY.md).
 
-Branch: `v7-single-format`; committed authority port `58bfe10`, following
-terminal port `b5f058d` and `5f9bc70`, based on `main` at `097b4df`.
+Branch: `v7-single-format`; committed profile/control port `c693cea`, following
+authority `58bfe10`, terminal `b5f058d` and `5f9bc70`, based on `main` at `097b4df`.
+The branch is pushed through `c693cea`; no final-head CI or merge is claimed.
 There was no open PR when this port began. Issue #51 is closed; #52 remains open.
 Namespace/terminal parity traces to #22 and requirement R02. An issue closure or
 the V7 foundation does not establish completion of this unification.
@@ -125,7 +126,7 @@ revocation/regrant with a queued helper reply still requires guest evidence
 when the legacy native consumers are ported. Current guest authority evidence
 covers the shell binding and deferred publication ACK, not that helper case.
 
-Authority is committed as `58bfe10`. The next increment ports existing
+Authority is committed as `58bfe10`. Increment `c693cea` ports existing
 profile-1 tracked and admission codecs onto the same V7 owners. The shared
 tracked candidate construction now supports pollable publication with exactly
 the original 103 commands/barriers. Owner revocation before header submission
@@ -166,19 +167,51 @@ control and owns verification. Astra reviewed storage/service changes and the
 new harness, with no remaining material findings. Final-head CI remains
 pending. Existing consumers still need data/config scopes as well as workspaces.
 
-The next mapped slice is mounted discovery. Do not advertise reviewed lifecycle
-support until the live scheduling/cancellation path is implemented. Legacy
-RECOVERY/TRACK_BEGIN/RECEIPT still execute on format 5 and must be accounted for:
-its flat retry namespace is distinct from scoped operations, whereas V7 stores
-workspace-qualified records without a legacy discriminator. Astra confirmed no existing root or identity can preserve that isolation.
-The owner explicitly approved retaining the old framing with shared V7 retry
-history on 2026-10-02: identical retries reuse the existing result, ambiguous
-matches are refused. Preserve rights, size bounds and genuine workspace ancestry.
-This approved projection is not exact historical namespace isolation and must
-not introduce a format change.
+The next verified increment adds mounted discovery and the approved recovery
+adapter. CAPABILITIES reports the actual 1024-byte inline/eight-record bounds;
+DESCRIBE validates framing but answers Unavailable until lifecycle scheduling
+and cancellation exist. No fictitious execution-ticket bound is advertised.
+The SDK accepts nonzero byte-sized mounted recovery capacity instead of two.
 
-Then port mounted capabilities/lifecycle negotiation, remaining
-admission/scheduling/recovery consumers, safe fresh-volume provisioning, default
+The owner explicitly approved shared V7 retry history on 2026-10-02. The
+original RECOVERY/TRACK_BEGIN/RECEIPT commands use canonical top-level ancestry
+for fresh writes, replay identical direct modern records, and refuse ambiguous
+flat keys. Modern keys remain workspace-qualified. This intentionally changes
+the old separation between API families, without changing the storage format.
+INSPECT-only replay cannot create a fresh effect. Generic and modern transfer
+frames cannot consume each other's candidates; flat-key ownership is checked
+again before publication. Deleted companion files grant no history access.
+
+Validation of the discovery/recovery increment:
+
+- `cargo xtask check`: 747 Rust tests in 99 suites, formatting, host/guest
+  Clippy and native builds passed (`/tmp/rustic-v7-recovery-check.log`).
+- 63 focused service tests passed; four recovery tests include readonly replay,
+  stale flat-key decisions, hidden ambiguity and removed companion scopes.
+  The held-I/O owner-revocation matrix now covers legacy COMMIT as well as
+  both completed-operation profiles, including late settlement and I/O failure.
+- Python runner suite: 335 tests passed; the new runner is registered in CI.
+- `python3 tools/v7_recovery_test.py`: two native boots, original SDK commands,
+  exact receipts and replay, shared modern history, ambiguous cross-workspace
+  keys, maintenance and epoch expiry agree with oracle7. Six retained records
+  before maintenance, zero afterwards, live bytes/version preserved.
+- `python3 tools/v7_profile1_test.py`: two native boots pass again, including
+  admission execution/cancellation and the 1025-byte size-boundary control.
+- Both native results use build `a9afc024bfc1a955`, with evidence in
+  `artifacts/boot/terminal-v7-{recovery,profile1}/result.json`; elapsed times
+  9.567 and 9.114 seconds. The native file-server ELF is 466,864 bytes.
+  Logs: `/tmp/rustic-v7-recovery-{focused,host,authority-host,sdk,python,native,profile1-native}.log`.
+
+Luna max completed the adapter/harness; root integrated, fixed error precedence
+and harness echo parsing, and added authority regressions. Astra final review
+found no material issue. These host fixtures and selected guest runs do not
+establish physical-media durability or final-head CI. Generic publication-fault
+coverage remains the 44-boot evidence from the previous increment; it was not
+rerun for this framing adapter.
+
+Next port lifecycle negotiation and the existing volatile two-ticket execution
+queue/live cancellation, then remaining native consumers (including old owner
+maintenance routing), safe fresh-volume provisioning, default
 terminal selection and the block-probe/host/native acceptance fixtures. The
 legacy Volume/Server still power the default terminal. Retain it until parity
 has evidence; do not claim a single format or delete its tests prematurely.

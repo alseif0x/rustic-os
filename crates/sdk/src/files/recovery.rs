@@ -10,7 +10,15 @@ impl<P: crate::rpc::Progress> Client<P> {
         let mut p = Packet::new(RECOVERY);
         p.id = id;
         let r = self.request(p)?;
-        if r.count != 24 || r.arg != 2 || r.id != 0 || r.version != 0 {
+        // Retention capacity belongs to the mounted service, not to this
+        // framing. Accept the same nonzero byte-sized bound as CAPABILITIES;
+        // callers retain their token without assuming how many peers fit.
+        if r.count != 24
+            || !(1..=u8::MAX as u32).contains(&r.arg)
+            || r.id != 0
+            || r.version != 0
+            || r.data[24..].iter().any(|byte| *byte != 0)
+        {
             return Err(Error::Protocol);
         }
         let mut bytes = [0; 32];

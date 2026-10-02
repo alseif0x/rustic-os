@@ -19,13 +19,16 @@
 //! [`Server7::handle`] settles them synchronously inside the request.
 mod admission;
 mod authority;
+mod capabilities;
 mod control;
 mod grants;
 mod lookup;
 mod namespace;
+mod negotiation;
 mod plain;
 mod profile;
 mod read;
+mod recovery;
 mod retention;
 mod scope;
 mod transfer;
@@ -164,6 +167,11 @@ impl<'a> Server7<'a> {
         crate::validation::envelope(&packet)?;
         let grant = self.grants.check(slot, peer, packet.context, now)?;
         match packet.op {
+            CAPABILITIES => {
+                crate::validation::request(&packet)?;
+                capabilities::request(self.volume, packet)
+            }
+            rustic_abi::files::negotiation::DESCRIBE => negotiation::request(self.volume, packet),
             LOOKUP | STAT | LIST => {
                 crate::validation::request(&packet)?;
                 namespace::request(self.volume, grant, packet)
@@ -171,6 +179,24 @@ impl<'a> Server7<'a> {
             READ | REFERENCES | READ_OPEN | READ_CHUNK => {
                 crate::validation::request(&packet)?;
                 read::request(self.volume, disk, grant, packet)
+            }
+            _ if recovery::selected(&packet, self.writes.transfer_open(slot)) => {
+                crate::validation::request(&packet)?;
+                if packet.op == COMMIT {
+                    return self.with_owner(disk, slot, grant, packet, control);
+                }
+                let profile_busy = self.writes.transfer_open(slot)
+                    || self.plain.transfer_open(slot)
+                    || self.plain.transfer_count() + self.writes.transfer_count() >= TRANSFER_LIMIT;
+                recovery::request(
+                    self.volume,
+                    disk,
+                    &mut self.writes,
+                    slot,
+                    grant,
+                    packet,
+                    profile_busy,
+                )
             }
             _ if plain::selected(&packet) => {
                 crate::validation::request(&packet)?;
@@ -218,7 +244,10 @@ impl<'a> Server7<'a> {
             }
         }
         let mut owner = control::Owner::new(&mut self.grants, caller, transfers, control);
-        let result = if packet.op == REPLACE_COMMIT {
+        let result = if packet.op == COMMIT {
+            self.writes
+                .commit_legacy_with(self.volume, disk, slot, grant, packet, &mut owner)
+        } else if packet.op == REPLACE_COMMIT {
             self.writes
                 .commit_with(self.volume, disk, slot, grant, packet, &mut owner)
         } else {

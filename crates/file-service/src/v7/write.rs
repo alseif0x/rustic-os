@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Profile-1 and profile-2 tracked replacement: open, streamed chunks, commit with a
-//! completed-operation receipt, abort, lookups of retained records and receipt
-//! parts for the receipt this slot last produced or looked up.
+//! Profile-1, profile-2 and legacy tracked replacement: open, streamed chunks,
+//! commit with the selected existing receipt framing, abort, retained lookups
+//! and receipt parts for profile-1/profile-2 operations.
 //!
 //! The per-slot transfer table is shared with staged admission: one slot holds
 //! at most one transfer of either stage kind, and each kind's requests can only
@@ -11,6 +11,7 @@
 //! service instance are persisted, and when transfer state is dropped. The
 //! volume enforces versions, retry scopes, the retained-record budget and
 //! publication barriers.
+mod legacy;
 mod publication;
 
 use super::lookup::{self, receipt};
@@ -23,6 +24,34 @@ use rustic_fs::{
     Disk, Stage7Kind, Volume7, WriteIdentity7,
     format7::{Record7, RecordState},
 };
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Framing {
+    Modern,
+    Legacy,
+}
+
+#[derive(Clone, Copy)]
+struct TransferBinding {
+    kind: Stage7Kind,
+    framing: Framing,
+}
+
+impl TransferBinding {
+    fn modern(kind: Stage7Kind) -> Self {
+        Self {
+            kind,
+            framing: Framing::Modern,
+        }
+    }
+
+    fn legacy() -> Self {
+        Self {
+            kind: Stage7Kind::Tracked,
+            framing: Framing::Legacy,
+        }
+    }
+}
 
 /// Whether `p` selects the tracked-write path. OPEN and lookup decoders enforce
 /// the exact profile-1 or profile-2 shape; chunk, commit and abort bind to the
@@ -78,7 +107,7 @@ impl Writes {
         self.transfers.iter().any(Option::is_some)
     }
 
-    /// Number of profile-1 or profile-2 transfers holding a V7 storage stage.
+    /// Number of streamed transfer profiles holding a V7 storage stage.
     pub(super) fn transfer_count(&self) -> usize {
         self.transfers.iter().flatten().count()
     }
@@ -142,16 +171,38 @@ impl Writes {
         opening: profile::Opening,
         kind: Stage7Kind,
     ) -> Result<(), Error> {
+        self.open_with_policy(volume, slot, grant, opening, kind, false)
+    }
+
+    fn open_with_policy(
+        &mut self,
+        volume: &mut Volume7,
+        slot: usize,
+        grant: Grant7,
+        opening: profile::Opening,
+        kind: Stage7Kind,
+        legacy_replay: bool,
+    ) -> Result<(), Error> {
         let profile = opening.profile;
         let request = opening.request;
         let size = opening.size;
-        grant.holds(WRITE_RIGHT | INSPECT_RIGHT)?;
+        grant.holds(if legacy_replay {
+            INSPECT_RIGHT
+        } else {
+            WRITE_RIGHT | INSPECT_RIGHT
+        })?;
         if grant.subject == 0 || slot >= CLIENTS7 {
             return Err(Error::Denied);
         }
         let workspace = request.workspace.root();
         let object = request.resource.object();
-        scope::authorized_resource(volume, grant, workspace, object)?;
+        if legacy_replay {
+            if !scope::retained_visible(volume, grant, workspace, object) {
+                return Err(Error::OutcomeUnknown);
+            }
+        } else {
+            scope::authorized_resource(volume, grant, workspace, object)?;
+        }
         let header = volume.header().map_err(reply::error)?;
         if header.lineage != request.workspace.lineage() {
             return Err(Error::Denied);
@@ -159,7 +210,7 @@ impl Writes {
         if self.transfers[slot].is_some() {
             return Err(Error::Busy);
         }
-        if self.instance == 0 {
+        if self.instance == 0 && !legacy_replay {
             return Err(Error::Uncertain);
         }
         let epoch = request.retry.epoch.value();
@@ -194,7 +245,14 @@ impl Writes {
         let stage = volume
             .open_stage(identity, request.expected_version.value(), size, kind)
             .map_err(reply::error)?;
-        self.transfers[slot] = Some(Transfer::new(stage, kind, profile, request, size));
+        self.transfers[slot] = Some(Transfer::new(
+            stage,
+            kind,
+            profile,
+            legacy_replay,
+            request,
+            size,
+        ));
         Ok(())
     }
 
@@ -209,10 +267,24 @@ impl Writes {
         p: Packet,
     ) -> Result<Packet, Error> {
         grant.holds(WRITE_RIGHT)?;
+        self.chunk_profile(volume, disk, slot, grant, p, TransferBinding::modern(kind))
+    }
+
+    fn chunk_profile(
+        &mut self,
+        volume: &mut Volume7,
+        disk: &mut impl Disk,
+        slot: usize,
+        grant: Grant7,
+        p: Packet,
+        binding: TransferBinding,
+    ) -> Result<Packet, Error> {
         if p.count == 0 || p.version != 0 {
             return Err(Error::Protocol);
         }
-        let transfer = self.transfer(slot, p.id, kind)?;
+        let transfer = self.transfer(slot, p.id, binding)?;
+        let rights = transfer_rights(transfer, binding.framing);
+        grant.holds(rights)?;
         match transfer.chunk(volume, disk, p.arg, p.payload()) {
             Ok(()) => Ok(ack(&p)),
             Err(Fault::Refused(error)) => Err(error),
@@ -233,8 +305,21 @@ impl Writes {
         p: &Packet,
     ) -> Result<Transfer, Error> {
         grant.holds(WRITE_RIGHT)?;
+        self.take_complete_profile(slot, grant, p, TransferBinding::modern(kind))
+    }
+
+    fn take_complete_profile(
+        &mut self,
+        slot: usize,
+        grant: Grant7,
+        p: &Packet,
+        binding: TransferBinding,
+    ) -> Result<Transfer, Error> {
         bare(p)?;
-        if !self.transfer(slot, p.id, kind)?.complete() {
+        let transfer = self.transfer(slot, p.id, binding)?;
+        let rights = transfer_rights(transfer, binding.framing);
+        grant.holds(rights)?;
+        if !transfer.complete() {
             return Err(Error::Offset);
         }
         self.transfers[slot].take().ok_or(Error::NoTransfer)
@@ -250,8 +335,24 @@ impl Writes {
         p: Packet,
     ) -> Result<Packet, Error> {
         grant.holds(WRITE_RIGHT)?;
+        self.abort_profile(volume, slot, grant, p, TransferBinding::modern(kind))
+    }
+
+    fn abort_profile(
+        &mut self,
+        volume: &mut Volume7,
+        slot: usize,
+        grant: Grant7,
+        p: Packet,
+        binding: TransferBinding,
+    ) -> Result<Packet, Error> {
         bare(&p)?;
-        self.transfer(slot, p.id, kind)?;
+        self.transfer(slot, p.id, binding)?;
+        grant.holds(if binding.framing == Framing::Legacy {
+            INSPECT_RIGHT
+        } else {
+            WRITE_RIGHT
+        })?;
         if let Some(transfer) = self.transfers[slot].take() {
             transfer.abort(volume);
         }
@@ -293,13 +394,21 @@ impl Writes {
         &mut self,
         slot: usize,
         object: u32,
-        kind: Stage7Kind,
+        binding: TransferBinding,
     ) -> Result<&mut Transfer, Error> {
-        self.transfers
+        let transfer = self
+            .transfers
             .get_mut(slot)
             .and_then(Option::as_mut)
-            .filter(|transfer| transfer.object() == object && transfer.kind() == kind)
-            .ok_or(Error::NoTransfer)
+            .filter(|transfer| transfer.object() == object && transfer.kind() == binding.kind)
+            .ok_or(Error::NoTransfer)?;
+        if match binding.framing {
+            Framing::Modern => transfer.profile() == profile::Profile::Legacy,
+            Framing::Legacy => transfer.profile() != profile::Profile::Legacy,
+        } {
+            return Err(Error::NoTransfer);
+        }
+        Ok(transfer)
     }
 }
 
@@ -308,6 +417,17 @@ fn ack(p: &Packet) -> Packet {
     let mut ack = Packet::new(p.op);
     ack.context = p.context;
     ack
+}
+
+fn transfer_rights(transfer: &Transfer, framing: Framing) -> u8 {
+    if framing == Framing::Modern {
+        return WRITE_RIGHT;
+    }
+    if transfer.legacy_replay() {
+        INSPECT_RIGHT
+    } else {
+        WRITE_RIGHT | INSPECT_RIGHT
+    }
 }
 
 /// Commit, accept and abort carry only the object identity.

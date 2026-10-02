@@ -98,3 +98,56 @@ fn poisoned_nonzero_binding_keeps_existing_errors_until_explicit_rebind() {
     let sent = transport::requests();
     assert_eq!((sent[1].0, sent[1].1), (10, 1));
 }
+
+#[test]
+fn recovery_tokens_accept_mounted_capacity_and_refuse_malformed_reports() {
+    use rustic_abi::files::{RECOVERY, recovery::Retry};
+    let expected = Retry {
+        lineage: [7; 16],
+        epoch: 3,
+        key: 99,
+    };
+    for capacity in [1, 2, 8, 255] {
+        transport::reset();
+        transport::respond(move |request| {
+            assert_eq!((request.op, request.id), (RECOVERY, 6));
+            let mut response = Packet::new(RECOVERY);
+            response.context = request.context;
+            response.count = 24;
+            response.arg = capacity;
+            response.data[..24].copy_from_slice(&expected.encode()[..24]);
+            response
+        });
+        let mut client = files::Client::new(9, 7, 33);
+        assert_eq!(client.retry_token(6, expected.key), Ok(expected));
+    }
+    for case in 0..7 {
+        transport::reset();
+        transport::respond(move |request| {
+            let mut response = Packet::new(RECOVERY);
+            response.context = request.context;
+            response.count = 24;
+            response.arg = 8;
+            response.data[..24].copy_from_slice(&expected.encode()[..24]);
+            match case {
+                0 => response.arg = 0,
+                1 => response.arg = 256,
+                2 => response.count = 23,
+                3 => response.id = 6,
+                4 => response.version = 1,
+                5 => response.data[24] = 1,
+                _ => response.data[39] = 1,
+            }
+            response
+        });
+        let mut client = files::Client::new(9, 7, 33);
+        assert_eq!(
+            client.retry_token(6, expected.key),
+            Err(FileError::Protocol)
+        );
+    }
+    transport::reset();
+    let mut client = files::Client::new(9, 7, 33);
+    assert_eq!(client.retry_token(6, 0), Err(FileError::Invalid));
+    assert_eq!(transport::counts(), (0, 0, 0));
+}

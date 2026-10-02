@@ -18,9 +18,9 @@ use rustic_sdk::{
 };
 
 const ADMIN_SLOT: usize = CLIENTS7;
-/// Word 5 bit 0: profile-2 tracked writes are served.
+/// Word 5 bit 0: tracked writes are served through both existing receipt profiles.
 const TRACKED_WRITES: u64 = 1;
-/// Word 5 bit 1: profile-2 staged admissions are served.
+/// Word 5 bit 1: staged admissions accept both existing OPEN profiles.
 const ADMISSIONS: u64 = 1 << 1;
 /// Ready report: status, profile, nodes, maximum file bytes, retained records,
 /// feature bits.
