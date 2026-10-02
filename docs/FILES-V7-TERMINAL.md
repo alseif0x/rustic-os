@@ -59,8 +59,28 @@ read calls report `Closed`; the SDK still classifies a failed COMMIT exchange
 as `Uncertain`. Only the owner's settled revocation and file observations
 establish whether an effect was prevented. New explicit grants do not restore
 the old bindings. Staged application launch retains its separate control-only
-policy. The default terminal and old owner maintenance selectors are still
-pending conversion; this increment does not establish full format parity.
+policy. The default terminal remains pending conversion; this increment does
+not establish full format parity.
+
+## Existing owner maintenance commands
+
+`enable-operations`, `enable-admissions` and `enable-prevention-reasons` confirm
+the mounted V7 capabilities without writing or changing the format. They retain
+the existing owner authority and active-work gates, reject pending candidates
+with `Busy`, and refuse a fenced volume. Their output reports mounted format v7.
+Legacy fixtures keep their original enable behavior and messages.
+
+`rotate-receipts` delegates to the same V7 retention maintenance as `maintain-v7`.
+It advances the shared epoch and expires terminal records for every subject,
+including the compatibility recovery history. Unresolved admissions and active
+candidates refuse rotation. Its original reply reports only the new epoch;
+the native harness independently checks reclaimed records/sectors and unchanged
+live bytes against `oracle7`.
+
+The existing `stall files` diagnostic is available only on the authenticated
+private owner channel while the service is idle. During a publication it remains
+`Busy`. Finite stalls allow a late group-revocation acknowledgment; indefinite
+stalls require explicit owner restart. Neither recovery path needs an AI service.
 
 `LIST` cursors are ordinals among returned children, rather than V7's physical
 node-table positions. The physical successor can be 256, which would wrap

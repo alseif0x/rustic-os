@@ -15,6 +15,31 @@ pub(super) fn request(
 ) -> [u64; 8] {
     let mut result = [0; 8];
     let parsed = (|| {
+        match words[0] {
+            36 => {
+                if words[1..].iter().any(|word| *word != 0) {
+                    return Err(files::Error::Protocol);
+                }
+                let done = server.maintain_retention(disk)?;
+                result[1] = done.epoch;
+                return Ok(());
+            }
+            41..=43 => {
+                if words[1..].iter().any(|word| *word != 0) {
+                    return Err(files::Error::Protocol);
+                }
+                if server.pending() != 0 {
+                    return Err(files::Error::Busy);
+                }
+                server
+                    .volume()
+                    .header()
+                    .map_err(|_| files::Error::Uncertain)?;
+                result[1] = 7;
+                return Ok(());
+            }
+            _ => {}
+        }
         let slot = usize::try_from(words[1]).map_err(|_| files::Error::Invalid)?;
         match words[0] {
             command if command == u64::from(files::GRANT) => {

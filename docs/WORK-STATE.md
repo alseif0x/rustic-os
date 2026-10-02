@@ -14,7 +14,8 @@ usable tasks on fresh volumes, external MCP over COM2. Do not introduce public
 features, protocols, formats, versions, migrations, upgrades or rollback paths.
 See [STORAGE-POLICY.md](STORAGE-POLICY.md).
 
-Branch `v7-single-format`; this checkpoint accompanies native consumers after
+Branch `v7-single-format`; native consumers are committed and pushed as
+`344b6d7`, after
 `38cc2ab`, `9b1e937`, `c693cea`, `58bfe10`, `b5f058d` and `5f9bc70`, based on
 `main` at `097b4df`. No final-head CI or merge is claimed. No open PR exists for
 this branch. #51 is closed; #52 remains open. Terminal parity traces to #22
@@ -125,13 +126,42 @@ submission guard is source-reviewed, not separately forced in a guest. Guest
 power cuts model owned QEMU termination, not physical media durability. Full
 final-head CI and complete default-terminal parity remain pending.
 
+## Owner-maintenance increment
+
+Existing owner selectors now work on V7: `rotate-receipts` runs shared retention;
+feature-enable commands confirm already available capabilities without writes
+and report format v7. Authenticated idle `stall files` reuses the original
+diagnostic; publication-time stall remains Busy. Existing readiness, takeover,
+admin-drain and work-capacity gates remain intact. Legacy fixture messages and
+behavior are preserved. No kernel, unsafe, dependency or format change.
+
+Validation: `cargo xtask check` passed (760 Rust tests, 100 suites, formatting,
+host/guest Clippy and builds); Python runner suite passed 335 tests.
+`v7_owner_test.py` passed two native boots on build `dfb1546aa3a69179`, 16.868
+seconds, with capability-confirmation/refusal hashes unchanged; unresolved
+admission/active candidate rotation refused; terminal records from subjects 1
+and 2 expired together; oracle-checked reclaimed sectors and unchanged live
+bytes; responsive owner control during finite stall, late settled revocation,
+old helper READ Closed, indefinite-stall restart and fresh grants; unchanged
+volume after reboot. Only the new epoch is command-reported; other rotation
+fields are independent oracle observations. Max measured owner command 0.800 s
+is a regression tripwire, not an SLO. Registered in the `v7` CI inventory.
+
+Evidence: `artifacts/boot/terminal-v7-owner/result.json` and
+`/tmp/rustic-v7-owner-{check,python,native}.log`. Explicit Astra low independent
+review found no material issue. Luna max completed the bounded Rust changes
+under the documented unavailable-provider fallback; root fixed the header error
+mapping, integrated the native harness and ran every check. A separate inherited
+model source inspection incorrectly suggested settlement cannot clear degraded;
+`poll_takeover` and the native pass establish that settled late replies do clear
+it. No model/quota savings claimed.
+
 ## Next acceptance target
 
-Commit/push this verified increment, then continue with
-existing owner maintenance selectors, fresh default-terminal provisioning and
-whole-volume manual policy while retaining explicit workspace-scope fixtures.
-Port remaining block-probe, host and native acceptance consumers; retire
-RUSTFS1 only after parity has evidence. The default terminal still uses the
+Continue with fresh default-terminal provisioning and whole-volume manual V7
+shell policy while retaining explicit workspace-scope and legacy acceptance
+fixtures. Port remaining block-probe, host and native acceptance consumers;
+retire RUSTFS1 only after parity has evidence. Default terminal still uses the
 legacy Volume/Server. Do not delete its tests or claim one format prematurely.
 After complete parity, open the PR and wait for every final-head CI job before
 merging to main. Tasks usability and COM2 follow the storage phase.

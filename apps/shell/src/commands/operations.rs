@@ -102,7 +102,14 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 0,
             ])?;
             rustic_sdk::files::Error::parse(r[1] as u8)?;
-            output::text("Workspace operations enabled; persistent format v3.\r\n");
+            if r[3..].iter().any(|word| *word != 0) || !matches!(r[2], 0 | 7) {
+                return Err(Error::Service(4));
+            }
+            output::text(if r[2] == 7 {
+                "Workspace operations enabled; mounted format v7.\r\n"
+            } else {
+                "Workspace operations enabled; persistent format v3.\r\n"
+            });
         }
         "operation" => {
             let lookup = if a.len() == 2 {

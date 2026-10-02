@@ -201,6 +201,14 @@ version and receipt, and an idle repeat writes nothing. Evidence, including the
 acceptance build identity, is in `artifacts/boot/terminal-v7-tasks-recovery/`.
 Both consumer harnesses run in the `v7` CI job.
 
+`python3 tools/v7_owner_test.py` exercises the original owner maintenance and
+stall commands on fresh V7 media over two boots. It checks read-only capability
+confirmation, Busy refusals, shared subject-1/subject-2 epoch expiry against
+`oracle7`, responsive owner control during a finite service stall, settled group
+revocation, indefinite-stall restart and fresh bindings. The reboot changes no
+volume bytes. Evidence is in `artifacts/boot/terminal-v7-owner/`; the harness runs
+in the `v7` CI job.
+
 `python3 tools/v7_launch_test.py` builds that image once, copies it aside and
 boots the same bytes twice. It builds two tagged utility variants
 (`RUSTIC_UTILITY_TAG=1` and `2`) in separate cargo invocations under

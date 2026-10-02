@@ -83,7 +83,12 @@ pub(crate) fn run(
                         return 3;
                     }
                     let output = match wire::decode(message.payload()) {
-                        Ok(words) => admin::request(server, disk, &mut replies, words),
+                        Ok(words) => {
+                            if crate::diagnostics::stall(&admin, message.correlation(), words) {
+                                continue;
+                            }
+                            admin::request(server, disk, &mut replies, words)
+                        }
                         Err(_) => [files::Error::Invalid as u64, 0, 0, 0, 0, 0, 0, 0],
                     };
                     replies[ADMIN_SLOT] =
