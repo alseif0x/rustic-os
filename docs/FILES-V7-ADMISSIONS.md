@@ -50,8 +50,9 @@ service stays the default and is unchanged. Tracked writes are described in
     another lineage is `Lineage`, and an unknown ID is `OutcomeUnknown`, all
     without I/O.
   - Read-only and out-of-scope grants cannot stage.
-  - Unmarked profile-1 OPEN (36 bytes) and RETRY (24 bytes), SCHEDULE,
-    ACTIVITY and REQUEST_CANCEL are `Unsupported`. A malformed ID is
+  - SCHEDULE, ACTIVITY and REQUEST_CANCEL are `Unsupported`. The unification
+    port accepts existing profile-1 OPEN (36 bytes) and RETRY (24 bytes), sharing
+    the same status and storage mechanisms. A malformed ID is
     `Protocol`.
   - Stage kinds never cross. REPLACE_CHUNK, COMMIT and ABORT cannot reach an
     admission transfer, and CHUNK, ACCEPT and ABORT cannot reach a tracked
@@ -199,7 +200,8 @@ observation codecs; version 1 is the coarse projection of version 2.
 | OBSERVE | 60 | 16-byte `AdmissionId`, `arg` = 1 or 2 | inspect |
 
 Every request also needs a nonzero retry subject. SCHEDULE, ACTIVITY,
-REQUEST_CANCEL and unmarked OPEN/RETRY stay `Unsupported`. The file-server's
+REQUEST_CANCEL stay `Unsupported`; unmarked profile-1 OPEN/RETRY now use the
+same V7 admission owner. The file-server's
 ready report sets word 5 bit 1 when admissions are served. The supervisor
 requires the exact report `[0, 2, 256, 524288, 8, 3, 0, 0]`.
 
@@ -317,9 +319,9 @@ Differences from v5, all deliberate:
   successful, unfenced settlement before issuing its new shell binding.
 - There is no REQUEST_CANCEL stop, so `Requested` is never a cause of a stopped
   V7 execution.
-- Tracked-write commits (`REPLACE_COMMIT`, `finish_tracked`) and retention
-  maintenance stay blocking with no owner control inside them: a revocation
-  that arrives meanwhile is served after they complete.
+- Retention maintenance stays blocking with no owner control inside it.
+  Tracked commits now use `finish_tracked_poll` with the same control driver;
+  their preheader stop discards a candidate without an admission cancellation.
 
 ## Authority
 
@@ -336,8 +338,8 @@ not cancel.
   sectors before its header, so only pre-header revocations are exercised in
   the guest. The post-header cases (settled execution, retired admission) are
   host tests only.
-- **Owner control inside tracked commits and maintenance.** They stay
-  blocking.
+- **Owner control inside maintenance.** It stays blocking; tracked commits
+  now provide owner-control opportunities between publication polls.
 - **No scheduling.** There is no queue, live activity, REQUEST_CANCEL or
   automatic `VersionConflict` cancellation.
 - **No guest fault injection yet** on admission, execution or cancellation

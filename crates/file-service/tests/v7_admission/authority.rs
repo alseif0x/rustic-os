@@ -87,23 +87,33 @@ fn read_only_and_out_of_scope_grants_cannot_stage_an_admission() {
 }
 
 #[test]
-fn unmarked_profile_one_and_live_scheduling_requests_are_unsupported() {
+fn unmarked_profile_one_admission_forms_work_but_live_scheduling_is_unsupported() {
     let mut f = fixture();
     let mut server = Server7::new(&mut f.volume);
     let (client, accepted) = admitted(&mut server, &mut f.disk, (f.workspace, f.file));
     let admission = request(server.volume(), f.workspace, f.file, 0x63);
+    let accepted_request = request(server.volume(), f.workspace, f.file, 0x61);
     let quiet = f.disk.mutations();
 
     let mut open = admission.packet(10, client.context).unwrap();
     open.op = a::OPEN;
+    status(client.send(&mut server, &mut f.disk, open)).unwrap();
+    assert_eq!(server.pending(), 1);
+    client
+        .bare(&mut server, &mut f.disk, a::ABORT, f.file)
+        .unwrap();
     let mut retry = operation::Lookup::Retry {
-        workspace: admission.workspace,
-        retry: admission.retry,
+        workspace: accepted_request.workspace,
+        retry: accepted_request.retry,
     }
     .packet(client.context);
     retry.op = a::RETRY;
     assert_eq!(retry.count, 24);
-    let mut requests = vec![open, retry];
+    assert_eq!(
+        Status::decode(&status(client.send(&mut server, &mut f.disk, retry)).unwrap()).unwrap(),
+        accepted
+    );
+    let mut requests = Vec::new();
     for op in [a::SCHEDULE, a::ACTIVITY, a::REQUEST_CANCEL] {
         requests.push(accepted.id.packet(op, client.context).unwrap());
     }

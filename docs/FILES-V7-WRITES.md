@@ -21,7 +21,9 @@ explicit execution and cancellation. On a [nearly full volume](#storage-exhausti
 with 200 objects, a write that the free payload sectors cannot hold is refused
 with `Full` without changing anything, and the time the single-loop service
 spends [blocked in a commit, a maintenance or a mount](#blocking-sections-commit-maintenance-and-mount)
-is measured. The v5 service stays the default and is unchanged.
+was measured before the terminal unification port. Tracked commits now poll
+owner control between disk completions; the measurements below retain their
+original build provenance. The v5 service stays the default.
 
 ## What is verified
 
@@ -49,7 +51,7 @@ is measured. The v5 service stays the default and is unchanged.
   written. They also cover a record whose file was removed (still visible
   through its workspace), an unknown ID or key (`OutcomeUnknown`), a key in
   another epoch (`ExpiredEpoch`), a foreign lineage (`Lineage`), unmarked
-  profile-1 lookups (`Unsupported`), another subject and scopes that contain
+  profile-1 lookups above their 1024-byte bound (`Size`), another subject and scopes that contain
   neither the workspace nor the object (`OutcomeUnknown`, with no snapshot
   read), a read-only grant (`Denied`), the workspaces root and the object as
   valid scopes, and revocation forgetting a looked-up receipt.
@@ -227,10 +229,11 @@ The packets are the existing 64-byte file packets with the profile-2 codecs in
 The receipt is the 104-byte completed-operation receipt with a 32-bit size at
 bytes 64 to 67 and the profile marker at 68 to 71. The operation ID and
 committed version are the record's commit sequence. The service instance is
-the one persisted in the record. The SHA-256 covers the file bytes. Profile-1
-(36-byte) opens, unmarked profile-1 lookups, every other mutation and the
-admission opcodes not listed in [V7 staged admissions](FILES-V7-ADMISSIONS.md#wire)
-are `Unsupported` on V7.
+the one persisted in the record. The SHA-256 covers the file bytes. The
+unification port also accepts the existing profile-1 opens and lookups,
+ordinary terminal mutations and shared admission requests; see
+[existing profiles](FILES-V7-TERMINAL.md#existing-tracked-and-admission-profiles).
+Scheduling and live admission requests remain unsupported.
 
 ## Service behavior
 
@@ -240,7 +243,7 @@ handling (`v7/read.rs`), the grant table (`v7/grants.rs`), scope walks
 (`v7/scope.rs`), write policy (`v7/write.rs`), retained-record lookups
 (`v7/lookup.rs`), the per-transfer accumulator (`v7/transfer.rs`), staged
 admission policy (`v7/admission.rs` with `v7/admission/records.rs`) and the
-admission publication driver with its owner control (`v7/control.rs`) are
+tracked/admission publication driver with its owner control (`v7/control.rs`) are
 separate modules, and
 `v7.rs` composes them. Tracked and admission transfers share the per-slot
 table; the stage kind fixed at open decides which requests may use it.
@@ -421,9 +424,8 @@ unchanged. So retention maintenance reclaims space here only where snapshots
 outlived the live file; files published by `add7` whose records alias the live
 payload free nothing.
 
-The object table cannot be exhausted from the guest: the V7 file service has no
-create request, so a guest create is impossible by construction, not refused.
-The harness shows the host limit instead, on a copy of the pre-boot image: 56
+The original capacity fixture predates the ordinary V7 create port.
+That harness shows the host limit, on a copy of the pre-boot image: 56
 more one-sector files through `add7` bring the table to 256 entries (44 payload
 sectors still free), and the next `add7` is refused (`v7 file creation
 refused: Full`) with the copy byte-identical.
@@ -431,7 +433,7 @@ refused: Full`) with the copy byte-identical.
 ## Interrupted publication
 
 The V7 file server's disk adapter (`apps/file-server/src/disk.rs`) issues one
-blocking copied-sector command at a time, so the device sees the owner's
+copied-sector command at a time, so the device sees the owner's
 commands in program order. A fresh tracked write of `n` sectors starts with
 `n` payload writes, one per completed sector, with no separate payload flush.
 The publication in `crates/fs/src/volume7/publication.rs` follows: 64 node,
@@ -556,13 +558,13 @@ that competes with a blocking disk command in flight.
 
 ### Blocking sections: commit, maintenance and mount
 
-The file server is one loop. While it publishes a commit or a maintenance, or
-mounts after `restart files`, it answers no other request, including the
-owner's administrative ones (`REVOKE_SHELL_V7`, `MAINTAIN_V7`); the supervisor
-itself keeps answering the owner console. These sections are blocking by
-design and stay so; the numbers below are the delay they impose on owner
-control of the file service. They are observed maxima at 10 ms resolution
-under QEMU TCG on the reference machine, not proven bounds.
+These measurements describe the earlier blocking tracked-commit implementation.
+The terminal unification port now polls tracked publication with owner control,
+using the same 103 disk commands and barriers. Maintenance and mount remain
+blocking in the single-loop service; the supervisor itself keeps answering the
+owner console. The old commit timings below do not measure the new control
+path. All samples are observed maxima at 10 ms resolution under QEMU TCG on
+the reference machine, not proven bounds.
 
 `replace-pattern-v7` now drives the stepwise SDK calls and prints
 `commit_ticks`, the ticks from sending `REPLACE_COMMIT` until the receipt has
@@ -600,10 +602,10 @@ budget if the device stalls.
 
 ### Stalled device
 
-V7 tracked-write I/O stays blocking in this increment, and there is no V7 I/O
-deadline. (Admission publications are now polled with owner control between
-commands; see
-[owner control during a publication](FILES-V7-ADMISSIONS.md#owner-control-during-a-publication).)
+V7 stage writes, cold snapshot reads, maintenance and mount remain blocking,
+and there is no V7 I/O deadline. Tracked commits and admission publications
+are polled with owner control between commands; see
+[owner control during a publication](FILES-V7-ADMISSIONS.md#owner-control-during-a-publication).
 While a blocking device command is stalled, the file server cannot answer
 anything:
 
@@ -674,16 +676,16 @@ and resource. Creating it uses no retained record.
   `tools/v7_admission_test.py` ([V7 staged admissions](FILES-V7-ADMISSIONS.md)).
 - The shell learns the new epoch only from the maintenance output. No state
   query reports the current epoch to a client.
-- Maintenance runs inside the single-loop service like a commit. Commit,
+- Maintenance runs synchronously inside the single-loop service. Commit,
   maintenance and mount durations are observed maxima, not bounds; the mount
   grows with allocated payload and a slower device or host can exceed the
   6,000-tick V7 restart budget on a full volume.
 - Storage exhaustion is shown for one layout: payload allocated contiguously by
   the host, free space in one run. A fragmented free map that fails the
   eight-largest-runs plan is host-tested only (`add7`).
-- The file server serves one request at a time. A chunk that completes a
-  sector issues one blocking write, and a commit runs the whole blocking
-  publication while other clients wait. Stage writes are not pollable, and
+- The file server serves one ordinary request at a time. A chunk that completes
+  a sector issues one blocking write; tracked commits poll owner control while
+  other client work waits. Stage writes are not pollable, and
   there is no V7 I/O deadline (see [stalled device](#stalled-device)).
 - The guest fault cases are fail-stop EIOs at one event of one 8 KiB write and
   of one maintenance, over QEMU's host page cache. The guest does not inject

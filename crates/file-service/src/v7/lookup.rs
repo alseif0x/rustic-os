@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Profile-2 lookups of retained records by operation ID or retry identity,
-//! answered with a completed-operation receipt whose SHA-256 is recomputed by
-//! streaming the retained snapshot one sector at a time.
+//! Profile-1 and profile-2 lookups of retained records by operation ID or retry
+//! identity, answered with a completed-operation receipt whose SHA-256 is
+//! recomputed by streaming the retained snapshot one sector at a time.
 //!
 //! Policy mirrors the v5 lookups: the caller needs `INSPECT` and a nonzero
 //! subject, only records of that subject exist for it, and a record outside
 //! the grant scope is indistinguishable from a missing one. The digest relies
 //! on the mount-time CRC verification of every retained snapshot; it is not a
 //! fresh integrity check of the medium.
+use super::profile::Profile;
 use super::{Grant7, scope};
 use crate::reply;
 use rustic_abi::files::{
     operation::{self, Instance, Key, OperationId, Retry},
     reference::{Epoch, Resource, Version, Workspace},
-    workspace::{Lookup, Operation},
+    workspace::Operation,
     *,
 };
 use rustic_fs::{
@@ -30,13 +31,13 @@ pub(super) fn retained(
     volume: &Volume7,
     disk: &mut impl Disk,
     grant: Grant7,
-    p: &Packet,
+    profile: Profile,
+    query: operation::Lookup,
 ) -> Result<Operation, Error> {
     if grant.subject == 0 {
         return Err(Error::Denied);
     }
     grant.holds(INSPECT_RIGHT)?;
-    let query = Lookup::decode(p)?.query;
     let header = volume.header().map_err(reply::error)?;
     let records = volume.retained_records().map_err(reply::error)?;
     let mine = || {
@@ -85,6 +86,12 @@ pub(super) fn retained(
         RecordState::Admitted => return Err(Error::Busy),
         // The completed-only receipt profile cannot describe a cancellation.
         RecordState::Cancelled => return Err(Error::Unsupported),
+    }
+    // Profile 1's receipt has a 1024-byte size bound. Apply it only after the
+    // subject, live scope and completed-record checks, and before reading the
+    // retained snapshot to calculate its digest.
+    if profile == Profile::One && record.length > 1024 {
+        return Err(Error::Size);
     }
     let sha256 = snapshot_sha256(volume, disk, record)?;
     receipt(header.lineage, record, sha256)

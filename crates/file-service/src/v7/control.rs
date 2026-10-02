@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Owner control between the polls of one V7 admission publication.
+//! Owner control between the polls of one V7 storage publication.
 //!
-//! An admission acceptance, execution or cancellation drives one pollable
+//! A tracked commit or admission acceptance, execution or cancellation drives one pollable
 //! `Volume7` publication. Between its polls the serving layer's callback gets
 //! a [`Control7`]: it may observe the publication and revoke or detach client
 //! slots, which is all the owner can do while the volume is borrowed. Issuing
@@ -30,7 +30,7 @@ use core::task::Poll;
 use rustic_abi::files::Error;
 use rustic_fs::{PollDisk7, PollPublication7, Publication7Phase, format7::Record7};
 
-/// What the owner may do while an admission publication is in flight.
+/// What the owner may do while a tracked or admission publication is in flight.
 pub struct Control7<'a> {
     grants: &'a mut Grants,
     lost: &'a mut u8,
@@ -140,7 +140,7 @@ impl<'a> Owner<'a> {
         self.lost
     }
 
-    /// Acceptance consumes its candidate before the first publication poll.
+    /// Commit or acceptance consumes its candidate before the first publication poll.
     pub(super) fn consumed(&mut self, slot: usize) {
         self.transfers &= !(1 << slot);
     }

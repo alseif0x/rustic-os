@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Private owner IPC and client progress between the polls of one V7
-//! admission publication; its settlement precedes a revocation's ACK.
+//! tracked or admission publication; settlement precedes a revocation's ACK.
 //!
 //! The service calls [`Owner::poll`] before every poll of the publication.
 //! It first gives the administrative channel its opportunity (a revocation

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! What the V7 service answers while one admission publication is in flight.
+//! What the V7 service answers while one tracked or admission publication is in flight.
 //!
 //! The publication borrows the volume, so the owner can only revoke or detach
 //! client slots meanwhile (the v5 owner-control rule). A revocation takes

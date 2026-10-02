@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use rustic_abi::files::{
-    Error, OPERATION_ID, Packet, READ, READ_CHUNK, READ_OPEN, REPLACE_OPEN, admission,
+    Error, Packet, READ, READ_CHUNK, READ_OPEN, admission, operation,
     read::{Header, Request},
-    reference::{References, Version},
+    reference::{self, References, Version},
 };
 use rustic_file_service::{CLIENTS7, Grant7, GrantRequest7, READ_ONLY7, Server7};
 use rustic_fs::{Disk, Error as FsError, Kind, Volume7, WriteIdentity7};
@@ -399,18 +399,28 @@ fn maximum_profile2_file_size_is_reported_while_range_stays_bounded() {
 }
 
 #[test]
-fn unsupported_profile_requests_are_not_dispatched() {
-    let (mut volume, mut disk, workspace, _, _) = setup(b"read only");
+fn read_only_grants_refuse_profile_requests_before_io() {
+    let (mut volume, mut disk, workspace, file, _) = setup(b"read only");
     let mut server = Server7::new(&mut volume);
     let authorization = grant(&mut server, 0, workspace, 11, 0);
     let io_before = disk.io_ops;
 
-    let mut replace = Packet::new(REPLACE_OPEN);
-    replace.count = 36;
-    let mut operation_id = Packet::new(OPERATION_ID);
-    operation_id.count = 16;
-    let mut admission_open = Packet::new(admission::OPEN);
-    admission_open.count = 36;
+    let refs = reference::References::new(LINEAGE, workspace, file).unwrap();
+    let request = operation::Replacement {
+        workspace: refs.workspace,
+        resource: refs.resource,
+        expected_version: reference::Version::new(server.volume().stat(file).unwrap().version)
+            .unwrap(),
+        retry: operation::Retry {
+            epoch: reference::Epoch::new(server.volume().header().unwrap().epoch).unwrap(),
+            key: operation::Key::new(1).unwrap(),
+        },
+    };
+    let replace = request.packet(1, authorization.context).unwrap();
+    let operation_id = operation::Lookup::Id(operation::OperationId::new(LINEAGE, 1).unwrap())
+        .packet(authorization.context);
+    let mut admission_open = replace;
+    admission_open.op = admission::OPEN;
     let mut admission_observe = Packet::new(admission::OBSERVE);
     admission_observe.arg = admission::OBSERVATION_VERSION;
     admission_observe.count = 16;
@@ -421,12 +431,7 @@ fn unsupported_profile_requests_are_not_dispatched() {
             ..packet
         };
         let response = server.handle(&mut disk, 0, 11, packet, 0);
-        assert_eq!(
-            response.status,
-            Error::Unsupported as u8,
-            "op {}",
-            packet.op
-        );
+        assert_eq!(response.status, Error::Denied as u8, "op {}", packet.op);
         assert_eq!(
             (response.id, response.arg, response.version, response.count),
             (0, 0, 0, 0)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Explicitly selected V7 native service over one exclusively borrowed mounted
-//! volume: bounded reads, plain replacement, profile-2 tracked replacement,
-//! profile-2 staged admission with explicit execution and cancellation,
+//! volume: bounded reads, plain replacement, existing profile-1 and profile-2
+//! tracked replacement and staged admission with explicit execution and cancellation,
 //! lookups of retained records and owner-requested retention maintenance.
 //!
 //! The composing [`Server7`] routes each request after the envelope and grant
@@ -11,7 +11,7 @@
 //! client packet: the serving layer calls [`Server7::maintain_retention`] only
 //! for its administrative channel. The v5 `Server` is unaffected.
 //!
-//! Admission publications (acceptance, execution, cancellation) are pollable.
+//! Tracked commits and admission publications are pollable.
 //! [`Server7::handle_with`] drives them over the caller's pollable disk and
 //! hands a [`Control7`] to the serving layer between polls, so the owner can
 //! revoke or detach clients while one is in flight, with the v5 consequences
@@ -24,6 +24,7 @@ mod grants;
 mod lookup;
 mod namespace;
 mod plain;
+mod profile;
 mod read;
 mod retention;
 mod scope;
@@ -102,7 +103,7 @@ impl<'a> Server7<'a> {
         result
     }
 
-    /// Serve one client request, settling any admission publication inside
+    /// Serve one client request, settling any controlled publication inside
     /// it with no owner control between its polls.
     pub fn handle(
         &mut self,
@@ -116,19 +117,19 @@ impl<'a> Server7<'a> {
         self.handle_with(&mut disk, slot, peer, request, now, |_| now)
     }
 
-    /// Serve one client request, driving an admission publication over the
+    /// Serve one client request, driving tracked and admission publication over the
     /// pollable `disk` and calling `control` before each of its polls. The
     /// callback returns the owner's clock and may revoke or detach slots
     /// through its [`Control7`]; it must not block indefinitely, and it is
     /// never called for requests without a publication.
     ///
     /// If the caller loses its authority before the publication's header is
-    /// submitted, nothing of it becomes durable: an execution is then
+    /// submitted, nothing of it becomes durable: an admission execution is then
     /// recorded cancelled with cause `AuthorityLost` by a second, unstoppable
     /// publication, and the reply is the authority error. Later losses let
     /// the publication settle: a new admission is then likewise cancelled
     /// with `AuthorityLost` before the authority error is returned, while a
-    /// settled execution or cancellation stands and is reported `Uncertain`.
+    /// settled tracked commit, execution or cancellation stands and is reported `Uncertain`.
     /// The caller's endpoint is normally gone by then, so the reply is only
     /// delivered when the binding survived.
     pub fn handle_with<D: Disk + PollDisk7>(
@@ -178,6 +179,7 @@ impl<'a> Server7<'a> {
                 self.plain
                     .request(self.volume, disk, slot, grant, packet, profile_busy)
             }
+            REPLACE_COMMIT => self.with_owner(disk, slot, grant, packet, control),
             _ if write::selected(&packet) => {
                 if packet.op == REPLACE_OPEN {
                     self.ensure_profile_open_available(slot, grant, &packet)?;
@@ -188,38 +190,55 @@ impl<'a> Server7<'a> {
                 if packet.op == rustic_abi::files::admission::OPEN {
                     self.ensure_profile_open_available(slot, grant, &packet)?;
                 }
-                let caller = control::Caller7 {
-                    slot,
-                    peer,
-                    context: packet.context,
-                };
-                let mut transfers = 0;
-                for index in 0..CLIENTS7 {
-                    if self.writes.transfer_open(index) || self.plain.transfer_open(index) {
-                        transfers |= 1 << index;
-                    }
-                }
-                let mut owner = control::Owner::new(&mut self.grants, caller, transfers, control);
-                let result = admission::request(
-                    &mut self.writes,
-                    self.volume,
-                    disk,
-                    slot,
-                    grant,
-                    packet,
-                    &mut owner,
-                );
-                // Slots that lost their grant during the publication drop
-                // their stages and receipts now that the volume is free.
-                let lost = owner.lost();
-                self.reset_lost(lost);
-                result
+                self.with_owner(disk, slot, grant, packet, control)
             }
             _ => Err(Error::Unsupported),
         }
     }
 
-    /// Check the plain/profile-2 shared transfer limit after decoding and
+    /// Coordinate the shared authority lifetime around tracked or admission
+    /// publication. Each operation's own module decides its durable outcome.
+    fn with_owner<D: Disk + PollDisk7>(
+        &mut self,
+        disk: &mut D,
+        slot: usize,
+        grant: Grant7,
+        packet: Packet,
+        control: &mut dyn FnMut(&mut Control7<'_>) -> u64,
+    ) -> Result<Packet, Error> {
+        let caller = control::Caller7 {
+            slot,
+            peer: grant.peer,
+            context: packet.context,
+        };
+        let mut transfers = 0;
+        for index in 0..CLIENTS7 {
+            if self.writes.transfer_open(index) || self.plain.transfer_open(index) {
+                transfers |= 1 << index;
+            }
+        }
+        let mut owner = control::Owner::new(&mut self.grants, caller, transfers, control);
+        let result = if packet.op == REPLACE_COMMIT {
+            self.writes
+                .commit_with(self.volume, disk, slot, grant, packet, &mut owner)
+        } else {
+            admission::request(
+                &mut self.writes,
+                self.volume,
+                disk,
+                slot,
+                grant,
+                packet,
+                &mut owner,
+            )
+        };
+        // The publication has released the volume; drop lost candidates now.
+        let lost = owner.lost();
+        self.reset_lost(lost);
+        result
+    }
+
+    /// Check the plain/tracked/admission shared transfer limit after decoding and
     /// validating the open request's authority, before its owner allocates a
     /// V7 stage.
     fn ensure_profile_open_available(
@@ -228,7 +247,7 @@ impl<'a> Server7<'a> {
         grant: Grant7,
         packet: &Packet,
     ) -> Result<(), Error> {
-        let request = rustic_abi::files::workspace::Replacement::decode(packet)?.request;
+        let request = profile::decode_open(packet)?.request;
         grant.holds(WRITE_RIGHT | INSPECT_RIGHT)?;
         if grant.subject == 0 || slot >= CLIENTS7 {
             return Err(Error::Denied);

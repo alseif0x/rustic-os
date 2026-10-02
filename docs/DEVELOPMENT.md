@@ -170,6 +170,13 @@ persisted content with the independent V7 reader. It uses fresh temporary
 media and writes evidence to `artifacts/boot/terminal-v7-plain/`; it runs in
 the same `v7` CI job as the other V7 harnesses.
 
+`python3 tools/v7_profile1_test.py` exercises the existing profile-1 tracked
+replacement and admission commands on that same V7 format. Two disposable
+boots check exact receipts, retries, cold lookups, execution and cancellation
+against the independent reader. A 1025-byte profile-2 receipt remains readable
+through profile 2 and is refused by profile 1's bounded codec. Evidence is in
+`artifacts/boot/terminal-v7-profile1/`; this also runs in the `v7` CI job.
+
 `python3 tools/v7_launch_test.py` builds that image once, copies it aside and
 boots the same bytes twice. It builds two tagged utility variants
 (`RUSTIC_UTILITY_TAG=1` and `2`) in separate cargo invocations under

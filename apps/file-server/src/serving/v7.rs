@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Explicit V7 dispatch: namespace operations, bounded reads and ordinary
-//! replacement, profile-2 tracked replacement and profile-2 staged admission.
+//! replacement, profile-1/profile-2 tracked replacement and staged admission.
 //! Requests are served one at a time; ordinary publication, a streamed chunk
-//! that fills a sector, a commit and retention maintenance use blocking I/O.
-//! An admission acceptance, execution or cancellation polls its publication
+//! that fills a sector and retention maintenance use blocking I/O.
+//! A tracked commit or admission acceptance, execution or cancellation polls its publication
 //! over the pollable disk and holds the client's reply until it settles; the
 //! owner may revoke or detach clients between polls ([`control`]).
 //! Maintenance is reachable only from the administrative channel.

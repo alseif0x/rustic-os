@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Profile-2 staged admission over the V7 service: a streamed admission stage
-//! (OPEN, CHUNK, ACCEPT, ABORT), status by admission ID or retry identity (GET,
+//! Profile-1 and profile-2 staged admission over the V7 service: a streamed
+//! admission stage (OPEN, CHUNK, ACCEPT, ABORT), status by admission ID or retry identity (GET,
 //! RETRY), retained observation (OBSERVE) and explicit durable execution or
 //! cancellation (EXECUTE, CANCEL).
 //!
@@ -37,31 +37,36 @@
 mod records;
 
 use super::control::{Driven, Owner, drive};
+use super::profile;
 use super::write::Writes;
 use super::{Grant7, scope};
 use crate::reply;
 use rustic_abi::files::{
     admission::{self as a, AdmissionId},
-    operation,
-    workspace::{Lookup, Replacement},
-    *,
+    operation, *,
 };
 use rustic_fs::{
     Disk, PollDisk7, PreventionReason, Stage7Kind, Volume7,
     format7::{Record7, RecordState},
 };
 
-/// Whether `p` selects the admission path. Profile-2 OPEN and RETRY carry the
-/// explicit profile marker, so unmarked profile-1 requests stay `Unsupported`;
-/// the other requests bind to an open admission transfer or name an admission
-/// ID. Live scheduling and activity requests are not served on V7.
+/// Whether `p` selects an existing admission path. OPEN and RETRY decoders
+/// enforce either profile's exact shape; other transfer requests bind to an
+/// open admission transfer or name an admission ID. Live scheduling and
+/// activity requests are not served on V7.
 pub(super) fn selected(p: &Packet) -> bool {
-    match p.op {
-        a::OPEN => p.count == 40,
-        a::RETRY => p.count == 28,
-        a::CHUNK | a::ACCEPT | a::ABORT | a::GET | a::EXECUTE | a::CANCEL | a::OBSERVE => true,
-        _ => false,
-    }
+    matches!(
+        p.op,
+        a::OPEN
+            | a::RETRY
+            | a::CHUNK
+            | a::ACCEPT
+            | a::ABORT
+            | a::GET
+            | a::EXECUTE
+            | a::CANCEL
+            | a::OBSERVE
+    )
 }
 
 pub(super) fn request<D: Disk + PollDisk7>(
@@ -79,8 +84,8 @@ pub(super) fn request<D: Disk + PollDisk7>(
     const KIND: Stage7Kind = Stage7Kind::Admission;
     match p.op {
         a::OPEN => {
-            let request = Replacement::decode(&p)?.request;
-            writes.open(volume, slot, grant, request, p.arg, KIND)?;
+            let opening = profile::decode_open(&p)?;
+            writes.open(volume, slot, grant, opening, KIND)?;
             let mut ack = Packet::new(p.op);
             ack.context = p.context;
             Ok(ack)
@@ -125,8 +130,8 @@ pub(super) fn request<D: Disk + PollDisk7>(
             grant.holds(INSPECT_RIGHT)?;
             let mut lookup = p;
             lookup.op = OPERATION_RETRY;
-            let operation::Lookup::Retry { workspace, retry } = Lookup::decode(&lookup)?.query
-            else {
+            let (_, query) = profile::decode_lookup(&lookup)?;
+            let operation::Lookup::Retry { workspace, retry } = query else {
                 return Err(Error::Protocol);
             };
             let record = records::by_retry(volume, grant, workspace, retry)?;

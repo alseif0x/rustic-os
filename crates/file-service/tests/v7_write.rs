@@ -3,6 +3,8 @@
 //! receipts, the retained-record budget, retry replay and authority loss, and
 //! lookups of retained records by operation ID or retry identity, and the
 //! owner's retention maintenance.
+#[path = "v7_write/control.rs"]
+mod control;
 #[path = "v7_write/lookup.rs"]
 mod lookup;
 #[path = "v7_write/retention.rs"]

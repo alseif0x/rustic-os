@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Profile-2 tracked replacement: open, streamed chunks, commit with a
+//! Profile-1 and profile-2 tracked replacement: open, streamed chunks, commit with a
 //! completed-operation receipt, abort, lookups of retained records and receipt
 //! parts for the receipt this slot last produced or looked up.
 //!
@@ -11,31 +11,33 @@
 //! service instance are persisted, and when transfer state is dropped. The
 //! volume enforces versions, retry scopes, the retained-record budget and
 //! publication barriers.
+mod publication;
+
 use super::lookup::{self, receipt};
+use super::profile;
 use super::transfer::{Fault, Transfer};
 use super::{CLIENTS7, Grant7, scope};
 use crate::reply;
-use rustic_abi::files::{
-    operation,
-    workspace::{Lookup, Operation, Replacement},
-    *,
-};
+use rustic_abi::files::{operation, workspace::Operation, *};
 use rustic_fs::{
     Disk, Stage7Kind, Volume7, WriteIdentity7,
     format7::{Record7, RecordState},
 };
 
-/// Whether `p` selects the profile-2 write path. Open and lookups carry an
-/// explicit profile marker, so profile-1 lookups stay `Unsupported`; chunk,
-/// commit and abort bind to an open transfer.
+/// Whether `p` selects the tracked-write path. OPEN and lookup decoders enforce
+/// the exact profile-1 or profile-2 shape; chunk, commit and abort bind to the
+/// profile and stage kind recorded by the open transfer.
 pub(super) fn selected(p: &Packet) -> bool {
-    match p.op {
-        REPLACE_OPEN => p.count == 40,
-        OPERATION_ID | OPERATION_PART => p.count == 20,
-        OPERATION_RETRY => p.count == 28,
-        REPLACE_CHUNK | REPLACE_COMMIT | REPLACE_ABORT => true,
-        _ => false,
-    }
+    matches!(
+        p.op,
+        REPLACE_OPEN
+            | OPERATION_ID
+            | OPERATION_PART
+            | OPERATION_RETRY
+            | REPLACE_CHUNK
+            | REPLACE_COMMIT
+            | REPLACE_ABORT
+    )
 }
 
 /// Per-slot transfers and the last receipt each slot produced or looked up.
@@ -76,12 +78,12 @@ impl Writes {
         self.transfers.iter().any(Option::is_some)
     }
 
-    /// Number of profile-2 transfers holding one of the V7 storage stages.
+    /// Number of profile-1 or profile-2 transfers holding a V7 storage stage.
     pub(super) fn transfer_count(&self) -> usize {
         self.transfers.iter().flatten().count()
     }
 
-    /// Whether this client slot already owns a profile-2 transfer.
+    /// Whether this client slot already owns a tracked or admission transfer.
     pub(super) fn transfer_open(&self, slot: usize) -> bool {
         self.transfers.get(slot).is_some_and(Option::is_some)
     }
@@ -106,33 +108,22 @@ impl Writes {
         match p.op {
             OPERATION_PART => self.part(volume, slot, grant, p),
             OPERATION_ID | OPERATION_RETRY => {
-                let receipt = lookup::retained(volume, disk, grant, &p)?;
-                let first = receipt.part(p.op, p.context, 0)?;
+                if grant.subject == 0 {
+                    return Err(Error::Denied);
+                }
+                grant.holds(INSPECT_RIGHT)?;
+                let (profile, query) = profile::decode_lookup(&p)?;
+                let receipt = lookup::retained(volume, disk, grant, profile, query)?;
+                let first = profile::receipt_part(profile, receipt, p.op, p.context, 0)?;
                 self.receipts[slot] = Some(receipt);
                 Ok(first)
             }
             REPLACE_OPEN => {
-                let request = Replacement::decode(&p)?.request;
-                self.open(volume, slot, grant, request, p.arg, Stage7Kind::Tracked)?;
+                let opening = profile::decode_open(&p)?;
+                self.open(volume, slot, grant, opening, Stage7Kind::Tracked)?;
                 Ok(ack(&p))
             }
             REPLACE_CHUNK => self.chunk(volume, disk, slot, grant, Stage7Kind::Tracked, p),
-            REPLACE_COMMIT => {
-                let transfer = self.take_complete(slot, grant, Stage7Kind::Tracked, &p)?;
-                let request = transfer.request();
-                let (record, sha256) = transfer.finish(volume, disk)?;
-                // The effect is committed from here on: any failure to describe
-                // it is `Uncertain`, never an error that implies no effect.
-                let receipt = volume
-                    .header()
-                    .map_err(|_| Error::Uncertain)
-                    .and_then(|header| committed(header.lineage, &record, sha256, request))?;
-                let first = receipt
-                    .part(REPLACE_COMMIT, p.context, 0)
-                    .map_err(|_| Error::Uncertain)?;
-                self.receipts[slot] = Some(receipt);
-                Ok(first)
-            }
             REPLACE_ABORT => self.abort(volume, slot, grant, Stage7Kind::Tracked, p),
             _ => Err(Error::Unsupported),
         }
@@ -148,10 +139,12 @@ impl Writes {
         volume: &mut Volume7,
         slot: usize,
         grant: Grant7,
-        request: operation::Replacement,
-        size: u32,
+        opening: profile::Opening,
         kind: Stage7Kind,
     ) -> Result<(), Error> {
+        let profile = opening.profile;
+        let request = opening.request;
+        let size = opening.size;
         grant.holds(WRITE_RIGHT | INSPECT_RIGHT)?;
         if grant.subject == 0 || slot >= CLIENTS7 {
             return Err(Error::Denied);
@@ -201,7 +194,7 @@ impl Writes {
         let stage = volume
             .open_stage(identity, request.expected_version.value(), size, kind)
             .map_err(reply::error)?;
-        self.transfers[slot] = Some(Transfer::new(stage, kind, request, size));
+        self.transfers[slot] = Some(Transfer::new(stage, kind, profile, request, size));
         Ok(())
     }
 
@@ -276,7 +269,8 @@ impl Writes {
         p: Packet,
     ) -> Result<Packet, Error> {
         grant.holds(INSPECT_RIGHT)?;
-        let operation::Lookup::Id(id) = Lookup::decode(&p)?.query else {
+        let (profile, query) = profile::decode_lookup(&p)?;
+        let operation::Lookup::Id(id) = query else {
             return Err(Error::Protocol);
         };
         let receipt = self.receipts[slot]
@@ -290,7 +284,7 @@ impl Writes {
         ) {
             return Err(Error::OutcomeUnknown);
         }
-        receipt.part(OPERATION_PART, p.context, p.arg as usize)
+        profile::receipt_part(profile, receipt, OPERATION_PART, p.context, p.arg as usize)
     }
 
     /// This slot's open transfer, when it targets `object` and finishes as

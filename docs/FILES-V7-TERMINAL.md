@@ -93,6 +93,35 @@ Companion-file history and cached receipt parts require that file to remain
 live. The existing primary exact scope can still inspect its removed identity.
 Endpoint closure and queued-reply cleanup belong to the serving transport.
 
+## Existing tracked and admission profiles
+
+Both existing wire profiles now use the same V7 stages, retained records and
+authority. Profile 1 accepts its original 36-byte OPEN, 16-byte ID/part lookup
+and 24-byte retry lookup; profile 2 retains its four-byte marker and larger
+file bound. These are existing API encodings over one storage format.
+
+An OPEN fixes its transfer's profile and stage kind. The markerless COMMIT
+therefore returns the receipt encoding selected by that OPEN. Both receipt
+layouts occupy 104 bytes. Profile 1 carries a 16-bit length with its original
+1,024-byte bound and zero reserved bytes; profile 2 carries a 32-bit length and
+marker 2. A profile-1 query of a larger retained file returns `Size` after
+subject/scope checks, before reading the snapshot; it never truncates the
+length. Cached parts recheck the live scope and the selected receipt bound.
+Admission status replies use the existing shared layout.
+
+Tracked commits now use the same owner-control driver as admission. Their
+storage candidate construction is shared with the blocking storage entry
+point, and their publication retains exactly 103 commands: 100 inactive
+metadata writes, a payload/metadata flush, header write and final flush.
+Before header submission, revocation drains outstanding I/O and discards the
+candidate without a retained operation. Once the header may have been
+submitted, settlement continues and a lost caller receives `Uncertain`;
+fresh authorized lookup can recover the committed receipt. Other revoked
+members lose their ordinary and streamed candidates after settlement.
+
+No new scheduling or live-cancellation interface is advertised by this port.
+Those existing legacy consumers remain the next integration boundary.
+
 ## Verification
 
 The focused host suites are:
@@ -100,6 +129,7 @@ The focused host suites are:
 ```sh
 cargo test -p rustic-file-service --test v7_namespace --test v7_read --test v7_plain --locked
 cargo test -p rustic-file-service --test v7_authority --test v7_admission --locked
+cargo test -p rustic-file-service --test v7_profile1 --test v7_write --locked
 cargo test -p rustic-fs --test volume7 untracked --locked
 ```
 
