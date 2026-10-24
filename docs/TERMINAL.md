@@ -108,7 +108,7 @@ Use the PID actually printed by `run`; 4 is only an example. `run read` receives
 
 Quotes preserve spaces; single quotes are literal and double quotes allow backslash escapes. Backslash escapes the following character; backslash-n/backslash-t encode newline/tab outside single quotes. At most 16 arguments and 1024 input bytes are accepted. Overflow, unsupported bytes or unmatched quotes discard the command rather than executing a truncated prefix. Commands and names are ASCII. File output escapes control bytes, including ANSI escapes; newline remains a line break.
 
-The shell is an interpreter for a fixed command set. There are no pipelines, redirection, background command syntax, history, dynamic executable loading, POSIX compatibility or GUI terminal. Utilities come from a trusted compiled catalog. Adding one requires an explicit build/catalog change; filenames never select host programs.
+The shell is an interpreter for a fixed command set. There are no pipelines, redirection, background command syntax, history, POSIX compatibility or GUI terminal. Ordinary utilities come from a trusted compiled catalog. V7 additionally permits owner-authorized staging and bounded launching of pinned ELF/manifest pairs through `stage-ref`, `start-staged` and `adopt-files`; this is not persistent installation, publisher authentication or general program selection. Filenames never select host programs.
 
 ## Files, authority and recovery
 

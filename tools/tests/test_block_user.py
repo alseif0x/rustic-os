@@ -6,9 +6,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from boot_support import admission_evidence, publication_evidence
 from boot_support.block_evidence import verified
-from boot_support.block_runner import SECTORS, pattern, run
+from boot_support.block_runner import SECTORS, SIZE, pattern, run
 from boot_support.scenarios import records
+from terminal_support import oracle7
 
 
 def marker(phase):
@@ -105,5 +107,26 @@ class BlockUserEvidence(unittest.TestCase):
                 (output / "serial.log").write_text(marker("write"))
                 (output / "qemu.log").write_text("")
                 return {"outcome": "success", "elapsed_seconds": 0}
-            with self.assertRaisesRegex(AssertionError, "no committed filesystem metadata"):
+            with self.assertRaisesRegex(RuntimeError, "native V7 publication files differ"):
                 run(image, 1, fake_boot)
+
+    def test_v7_provisioning_has_disjoint_regions_and_zero_guards(self):
+        regions = [(publication_evidence.OFFSET, publication_evidence.SIZE)]
+        regions += [(base, admission_evidence.SIZE) for base in admission_evidence.BASES]
+        self.assertEqual(publication_evidence.SIZE, oracle7.VOLUME_SECTORS)
+        for (base, sectors), (next_base, _) in zip(regions, regions[1:]):
+            self.assertEqual(base + sectors + 1, next_base)
+        self.assertTrue(all(base + sectors + 1 not in SECTORS for base, sectors in regions))
+        with tempfile.TemporaryDirectory() as temporary:
+            disk = Path(temporary) / "disk.raw"
+            with disk.open("xb") as output:
+                output.truncate(SIZE)
+            publication_evidence.provision(disk)
+            admission_evidence.provision(disk)
+            with disk.open("rb") as source:
+                for base, sectors in regions:
+                    source.seek(base * 512)
+                    state = oracle7.snapshot(source.read(sectors * 512))
+                    self.assertEqual(state["format"], 7)
+                    self.assertEqual(state["records"], [])
+                    self.assertEqual(source.read(512), bytes(512))

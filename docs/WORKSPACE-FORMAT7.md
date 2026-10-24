@@ -21,11 +21,12 @@ metadata are flushed before the alternate header, and owner state changes only
 after final flush settlement. Maintenance refuses open admissions and must only
 run after the service has resolved current-epoch outcomes. No converter,
 migration or rollback path into or out of V7 exists; a V7 image is always
-provisioned fresh ([storage policy](STORAGE-POLICY.md)). The explicit `mode=terminal-v7` fixture now selects a V7 service with
-bounded reads, [profile-2 tracked writes](FILES-V7-WRITES.md) and
-[profile-2 staged admissions](FILES-V7-ADMISSIONS.md) announced in its
-readiness report; production/default `mode=terminal` remains v5-backed, and
-no capability advertisement is wired.
+provisioned fresh ([storage policy](STORAGE-POLICY.md)). Both the default
+`mode=terminal` and the explicit `mode=terminal-v7` fixture select the V7 service,
+with bounded reads, [profile-2 tracked writes](FILES-V7-WRITES.md),
+[profile-2 staged admissions](FILES-V7-ADMISSIONS.md) and mounted capability
+advertisement. Explicitly selected legacy acceptance fixtures remain temporary
+until their V7 parity port is complete.
 
 ## Why a successor
 

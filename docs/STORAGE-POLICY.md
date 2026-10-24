@@ -11,11 +11,11 @@ depends on reading it again.
 - **Workspace format 7** (magic `RUSTFS3`) is the one supported workspace format.
   Its layout, validation and host tools are described in
   [WORKSPACE-FORMAT7.md](WORKSPACE-FORMAT7.md).
-- **The legacy `RUSTFS1` volume** is still used by the native terminal: the
-  default `mode=terminal` file service and the `block-user` publication and
-  admission fixtures run on it ([file service](FILES.md)). It keeps the in-layout
-  format-version upgrades it already has (versions 2 to 5 of that same layout);
-  those are existing behavior of the legacy volume, not a precedent for new ones.
+- **The legacy `RUSTFS1` volume** remains temporarily in explicitly selected
+  acceptance fixtures while their V7 parity port is completed ([file service](FILES.md)).
+  The default manual terminal uses V7. The legacy layout keeps its existing
+  in-layout format-version upgrades (versions 2 to 5) only until that retirement;
+  they are not a precedent for new ones.
 
 No other on-disk format is supported. An intermediate v6 extent layout and the
 host-only v5 to v7 converter were removed; no data was carried from either.

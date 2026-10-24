@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import hashlib
 import json
 
+from .v7_disk import PREFIX_BYTES
+
 
 @contextlib.contextmanager
 def preserve_failure(data, output, name, metadata):
@@ -28,7 +30,7 @@ def preserve_failure(data, output, name, metadata):
             # Save raw bytes even if no metadata bank can be parsed. This is an
             # observation after VM shutdown, not a claim about flush durability.
             with data.open("rb") as stream:
-                prefix = stream.read(174 * 512)
+                prefix = stream.read(PREFIX_BYTES)
                 stream.seek(-512, 2)
                 tail = stream.read(512)
             for suffix, payload in (("files.bin", prefix), ("last-sector.bin", tail)):

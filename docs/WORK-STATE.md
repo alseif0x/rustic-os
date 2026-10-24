@@ -131,11 +131,37 @@ claimed.
 Completed native-consumer (`344b6d7`) and owner-maintenance (`52fca7a`) evidence
 is preserved in [the port archive](WORK-STATE-V7-PORT-2026-10-02.md).
 
+## V7 host and block-probe increment
+
+The ordinary host disk path now provisions V7 through `v7_disk` and preserves
+failure captures with the full V7 prefix plus a separate physical guard. The
+native block probe uses `Volume7` and `Server7`, with 16 distributed cancellation
+cuts through `ReadyToPublish`, subject-negative admission lookup, exact replay
+and independent `oracle7` checks that reject unexpected live files. No legacy
+implementation has been removed yet.
+
+Validation on Ubuntu 26.04 with the reviewed OVMF security baseline
+`2025.11-3ubuntu7.3` and its recorded firmware hashes:
+
+- `cargo xtask check` and 344 Python runner tests pass. `fs7_test.py` agrees
+  with `report7` on four images and 180 resealed perturbations.
+- `python3 tools/boot.py run --mode block-user --timeout 90` passes two boots in
+  83.389 seconds. Publication and both admission volumes report format 7,
+  independent host verification, and byte-identical replay evidence.
+- Sol high independently reviewed the corrections and found no remaining
+  material defect. The 16 cuts are a distributed sample, not every cancelable
+  boundary. Replay write accounting starts after the mount's initial flush.
+
+Native Kimi orchestration now uses K3.1 Pro high for coordination, Luna fast max
+for bounded implementation and Sol high for escalation/review. No quota savings,
+CI on a final head or merge is claimed.
+
 ## Next acceptance target
 
-Default manual behavior is V7, but complete legacy-format retirement is pending.
-Port the remaining recovery, block-probe, host/measurement and native acceptance
-consumers with their existing behaviors, then retire RUSTFS1 after parity has
-native evidence. Do not delete tests or claim one format prematurely. After
-complete parity, open the PR and wait for every authoritative final-head CI job before merging to main. #22/#52
-remain open; tasks usability and COM2 follow the storage phase.
+Default manual behavior and the block probe are V7, but complete legacy-format
+retirement is pending. Port the remaining recovery, host/measurement and native
+acceptance consumers with their existing behaviors, then retire RUSTFS1 after
+parity has native evidence. Do not delete tests or claim one format prematurely.
+After complete parity, open the PR and wait for every authoritative final-head CI
+job before merging to main. #22/#52 remain open; tasks usability and COM2 follow
+the storage phase.
