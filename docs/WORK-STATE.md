@@ -2,23 +2,27 @@
 
 # Current work state
 
-Updated 2026-10-03. Replace this checkpoint rather than appending conversation history.
+Updated 2026-11-19. Replace this checkpoint rather than appending conversation history.
 
 ## Active order and authorization
 
 The owner selected **complete unification on V7** and autonomous continuation.
 The requested stop after queue/cancellation `38cc2ab` was fulfilled; the later
-“adelante” explicitly resumed work. Port existing terminal/application behavior,
-verify authority/recovery, then retire RUSTFS1. Order: storage unification,
-usable tasks on fresh volumes, external MCP over COM2. Do not introduce public
+“adelante” explicitly resumed work. On 2026-11-19 the owner revised the order
+and the parity rule: port only the legacy acceptance scenarios that test
+behavior (authority, recovery, lost replies, capacity, measurements), retire
+scenarios that only exercise the legacy layout together with RUSTFS1, then
+freeze storage. Order: storage unification, external MCP over COM2 (#39),
+usable tasks on fresh volumes. Do not introduce public
 features, protocols, formats, versions, migrations, upgrades or rollback paths.
 See [STORAGE-POLICY.md](STORAGE-POLICY.md).
 
 Branch `v7-single-format`; native consumers and owner maintenance were committed
 and pushed as `344b6d7` and `52fca7a`; this default-manual increment follows them.
 Earlier commits: `38cc2ab`, `9b1e937`, `c693cea`, `58bfe10`, `b5f058d` and `5f9bc70`, based on
-`main` at `097b4df`. No final-head CI or merge is claimed. No open PR exists for
-this branch. #51 is closed; #52 remains open. Terminal parity traces to #22
+`main` at `097b4df`. The block-probe increment is `72bb0d7`. Draft PR #121 was
+opened early so CI runs on this branch; no final-head CI or merge is claimed.
+#51 is closed; #52 remains open. Terminal parity traces to #22
 and requirement R02; this increment does not close that broader issue.
 
 Implementation decisions, commits, pushes, PRs and merges are authorized.
@@ -159,9 +163,13 @@ CI on a final head or merge is claimed.
 ## Next acceptance target
 
 Default manual behavior and the block probe are V7, but complete legacy-format
-retirement is pending. Port the remaining recovery, host/measurement and native
-acceptance consumers with their existing behaviors, then retire RUSTFS1 after
-parity has native evidence. Do not delete tests or claim one format prematurely.
-After complete parity, open the PR and wait for every authoritative final-head CI
-job before merging to main. #22/#52 remain open; tasks usability and COM2 follow
-the storage phase.
+retirement is pending. Classify each remaining legacy consumer (recovery,
+host/measurement and native acceptance) as behavior or legacy-layout only. Port
+the behavior scenarios to V7 with native evidence; record each layout-only
+scenario that is retired and why, instead of porting it. Then remove RUSTFS1.
+Do not claim one format before the implementation is gone, and do not drop a
+behavior scenario without a V7 counterpart. Draft PR #121 carries the branch;
+wait for every authoritative final-head CI job before merging to main. After
+the merge, storage is frozen except for reproduced defects. #22/#52 remain
+open; the COM2 MCP adapter (#39) follows the storage phase, then tasks
+usability on fresh volumes.
