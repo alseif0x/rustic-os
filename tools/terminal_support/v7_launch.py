@@ -290,9 +290,9 @@ def _killed_case(uart, pair):
 def _occupy_utility_slots(uart, before):
     """Fill all six child slots with control-only utilities in the V7 profile.
 
-    A file-access utility cannot be launched in this profile: the shell cannot
-    name a file (V7 path resolution is `Unsupported`), and the supervisor refuses
-    file-access roles outside the V5 profile anyway. So the channel peak here is
+    A file-access utility cannot be launched from this fixture: it carries no
+    owner policy, so the supervisor denies the file-access role before child
+    admission. So the channel peak here is
     four resident channels, six utility control channels and one staged-child
     control channel. Real channel exhaustion remains unreachable because the
     supervisor child pool fills first and keeps three recovery channels free.
@@ -301,11 +301,11 @@ def _occupy_utility_slots(uart, before):
     for _ in range(6):
         spins.append(int(re.search(r"started pid=(\d+)", uart.command("run spin", "started pid="))[1]))
     uart.command("run spin", "child slot capacity exhausted")
-    unsupported = uart.command(f"run read {LAUNCH_PROBE_FILE}", "error: Unsupported")
+    denied = uart.command(f"run read {LAUNCH_PROBE_FILE}", "error: service denied")
     occupied = counters(uart.command("mem"))
     if occupied != {"processes": before["processes"] + 6, "channels": before["channels"] + 6}:
         raise AssertionError(f"six control-only utilities did not add six channels: {before} -> {occupied}")
-    return spins, occupied, "run read" in unsupported
+    return spins, occupied, "run read" in denied
 
 
 def _fault_case(uart, pair):
@@ -349,7 +349,7 @@ def _fault_case(uart, pair):
         raise AssertionError(f"faulted staged child left state behind: {before} -> {after}")
     return {"pid": pid, "exit": {"kind": row["kind"], "code": row["code"]},
             "reaped": {"kind": reaped[0], "code": reaped[1]},
-            "utility_slots_occupied_by": spins, "file_access_utility_refused_unsupported": file_access_refused,
+            "utility_slots_occupied_by": spins, "file_access_utility_denied_without_policy": file_access_refused,
             "counters_with_utilities": occupied, "counters_after_start": peak, "counters_after": after}
 
 
