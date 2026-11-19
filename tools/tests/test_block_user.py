@@ -11,6 +11,7 @@ from boot_support.block_evidence import verified
 from boot_support.block_runner import SECTORS, SIZE, pattern, run
 from boot_support.scenarios import records
 from terminal_support import oracle7
+from v7_provision_fixture import provision
 
 
 def marker(phase):
@@ -27,6 +28,13 @@ def marker(phase):
 
 
 class BlockUserEvidence(unittest.TestCase):
+    def setUp(self):
+        # Host tests own evidence handling, not the Rust volume tool: provision
+        # through the independent genesis double instead of a built binary.
+        patcher = patch.object(publication_evidence.subprocess, "run", side_effect=provision)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_requires_distinct_native_boots_and_resource_recovery(self):
         good = marker("write") + "\n" + marker("read")
         self.assertTrue(verified("block-user", good, records))
