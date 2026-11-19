@@ -9,7 +9,8 @@ import time
 from .cases import pid
 from .connection import Connection
 from .failure import preserve_failure
-from .machine import disk, machine
+from .legacy_disk import disk as legacy_disk
+from .machine import machine
 
 
 def _mem(uart):
@@ -107,7 +108,7 @@ def verify(image, initialize_image=None, output=None, timeout=60):
     try:
         with tempfile.TemporaryDirectory(prefix="rustic-capacity-topology-") as temporary:
             temporary = Path(temporary)
-            with disk(temporary / "capacity-volume.raw", True) as data, preserve_failure(data, output, "capacity-topology", metadata):
+            with legacy_disk(temporary / "capacity-volume.raw", True) as data, preserve_failure(data, output, "capacity-topology", metadata):
                 boots = []
                 if initialize_image is not None:
                     boots.append((initialize_image, "initialize"))

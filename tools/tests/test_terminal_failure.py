@@ -58,7 +58,7 @@ class TerminalFailureTests(unittest.TestCase):
                 return write_bytes(path, payload)
 
             with (
-                patch.object(recovery_acceptance, "disk", owned_disk),
+                patch.object(recovery_acceptance, "legacy_disk", owned_disk),
                 patch.object(recovery_acceptance, "machine", machine),
                 patch.object(recovery_acceptance, "Connection"),
                 patch.object(recovery_acceptance, "exercise", return_value={}),

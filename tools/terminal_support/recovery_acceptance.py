@@ -7,7 +7,8 @@ import struct
 import tempfile
 import time
 import zlib
-from .machine import machine, disk, SIZE
+from .machine import machine, SIZE
+from .legacy_disk import disk as legacy_disk
 from .connection import Connection
 from .failure import preserve_failure
 from .oracle import snapshot
@@ -29,7 +30,7 @@ def verify(image, timeout=60, output=None):
     def owned_disk(path, initialize=False, upgrade_recovery=False, *, evidence_name):
         # The independent oracle also runs inside the disk lifetime. Sessions
         # stop their VMs before this outer scope captures a failed oracle.
-        with disk(path, initialize, upgrade_recovery) as data:
+        with legacy_disk(path, initialize, upgrade_recovery) as data:
             with preserve_failure(data, output, evidence_name, metadata):
                 yield data
     @contextlib.contextmanager

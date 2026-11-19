@@ -24,7 +24,8 @@ from .authority_cases import actor_result, cleanup, fence
 from .cases import counters, exited, pid
 from .connection import Connection
 from .failure import preserve_failure
-from .machine import disk, machine
+from .machine import machine
+from .legacy_disk import disk as legacy_disk
 from .oracle import snapshot
 
 DOC = 'tasks-owner-doc'
@@ -937,7 +938,7 @@ def verify_normal(image, output):
         raise ValueError('the normal-image run requires an image without the acceptance profile')
     with tempfile.TemporaryDirectory(prefix='rustic-tasks-owner-normal-') as directory:
         directory = Path(directory)
-        with disk(directory / 'data.raw', True) as data, \
+        with legacy_disk(directory / 'data.raw', True) as data, \
                 preserve_failure(data, output, 'tasks-owner-normal', metadata):
             sock = directory / 'uart.sock'
             with machine(image, data, f'unix:{sock},server=on,wait=off', output / 'qemu.log') as vm:
@@ -978,7 +979,7 @@ def verify(image, output):
     mount = image  # Legacy fixture mounts first and initializes only empty media.
     with tempfile.TemporaryDirectory(prefix='rustic-tasks-owner-') as directory:
         directory = Path(directory)
-        with disk(directory / 'data.raw', True) as data, \
+        with legacy_disk(directory / 'data.raw', True) as data, \
                 preserve_failure(data, output, 'tasks-owner', metadata):
             for phase, boot in enumerate((image, mount), 1):
                 sock = directory / f'uart-{phase}.sock'

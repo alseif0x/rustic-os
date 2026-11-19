@@ -11,7 +11,7 @@ import time
 
 import environment
 from ..connection import Connection
-from ..machine import disk
+from ..legacy_disk import disk as legacy_disk
 from ..oracle import snapshot
 from . import lab
 from .evidence import CASES, SUSPENDED, require, stat, validate
@@ -107,7 +107,7 @@ def _case(image, output, case, timeout, metadata):
     try:
         with tempfile.TemporaryDirectory(prefix="rustic-latency-") as temporary:
             temporary = Path(temporary)
-            with disk(temporary / "data.raw", True) as data:
+            with legacy_disk(temporary / "data.raw", True) as data:
                 try:
                     with lab.running(image, data, temporary, output, result) as (vm, monitor, uart_path):
                         uart = Connection(uart_path, vm, output / "serial.log", timeout,

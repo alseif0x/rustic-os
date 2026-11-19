@@ -67,7 +67,7 @@ class LatencyOwnership(unittest.TestCase):
             yield  # Context manager must fail before yielding.
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "failed"
-            with patch.object(runner, "disk", side_effect=lambda *args: contextlib.nullcontext(Path(temporary) / "data")), \
+            with patch.object(runner, "legacy_disk", side_effect=lambda *args: contextlib.nullcontext(Path(temporary) / "data")), \
                     patch.object(runner.lab, "running", failed), patch.object(runner, "_capture") as capture:
                 with self.assertRaisesRegex(RuntimeError, "cleanup failed"):
                     runner._case(Path("image"), output, "delayed-completion", 1,
@@ -87,7 +87,7 @@ class LatencyOwnership(unittest.TestCase):
                 state["process_cleanup_confirmed"] = True
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "failed"
-            with patch.object(runner, "disk", side_effect=lambda *args: contextlib.nullcontext(Path(temporary) / "data")), \
+            with patch.object(runner, "legacy_disk", side_effect=lambda *args: contextlib.nullcontext(Path(temporary) / "data")), \
                     patch.object(runner.lab, "running", stopped), patch.object(runner, "Connection"), \
                     patch.object(runner, "_exercise", side_effect=RuntimeError("original UART failure")), \
                     patch.object(runner, "_capture", side_effect=OSError("capture failed")):
