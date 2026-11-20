@@ -80,9 +80,13 @@ def digest(path):
 
 def install():
     packages = [f"{name}={version}" for name, version in CONFIG["packages"].items()]
-    subprocess.run(["sudo", "apt-get", "update"], check=True)
+    # Retry transient transfer failures. A host may carry unrelated package
+    # sources, so one failing index is not made fatal here; a missing pin still
+    # fails the exact-version install below.
+    retries = ["-o", "Acquire::Retries=3"]
+    subprocess.run(["sudo", "apt-get", *retries, "update"], check=True)
     subprocess.run(
-        ["sudo", "apt-get", "install", "-y", "--no-install-recommends", *packages],
+        ["sudo", "apt-get", *retries, "install", "-y", "--no-install-recommends", *packages],
         check=True,
     )
 

@@ -109,10 +109,15 @@ class BaselineApplication(unittest.TestCase):
                     patch("environment.subprocess.run") as run:
                 environment.install()
             update, install = run.call_args_list
-            self.assertEqual(update.args[0], ["sudo", "apt-get", "update"])
-            self.assertEqual(install.args[0][:5],
-                             ["sudo", "apt-get", "install", "-y", "--no-install-recommends"])
-            self.assertEqual(install.args[0][5:],
+            # Both steps must be checked and retry transient transfers.
+            self.assertEqual(update.args[0][-1], "update")
+            pins = len(DOCUMENT["baselines"][release]["packages"])
+            for call in (update, install):
+                self.assertIn("Acquire::Retries=3", call.args[0])
+                self.assertTrue(call.kwargs["check"])
+            self.assertEqual(install.args[0][-pins - 3:-pins],
+                             ["install", "-y", "--no-install-recommends"])
+            self.assertEqual(install.args[0][-pins:],
                              [f"{name}={version}" for name, version in
                               DOCUMENT["baselines"][release]["packages"].items()])
 

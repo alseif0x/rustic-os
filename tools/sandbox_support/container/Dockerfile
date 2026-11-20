@@ -7,7 +7,9 @@ RUN if [ -n "$UBUNTU_MIRROR" ]; then sed -i -e "s|http://archive.ubuntu.com/ubun
 # apt needs the pins before Python exists, so the 24.04 baseline versions are
 # spelled out here; the verify step below confirms the pinned base image's own
 # release selects that same baseline.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl python3 git build-essential qemu-system-x86=1:8.2.2+ds-0ubuntu1.18 ovmf=2024.02-2ubuntu0.10 mtools=4.0.43-1build1 dosfstools=4.2-1.1build1 xorriso=1:1.5.6-1.1ubuntu3 && rm -rf /var/lib/apt/lists/*
+# A mirror that cannot be reached must fail here, after bounded retries, instead
+# of leaving stale indexes that surface later as missing pinned packages.
+RUN for attempt in 1 2 3; do apt-get -o Acquire::Retries=3 -o APT::Update::Error-Mode=any update && break; [ "$attempt" = 3 ] && exit 1; sleep 15; done && apt-get -o Acquire::Retries=3 install -y --no-install-recommends ca-certificates curl python3 git build-essential qemu-system-x86=1:8.2.2+ds-0ubuntu1.18 ovmf=2024.02-2ubuntu0.10 mtools=4.0.43-1build1 dosfstools=4.2-1.1build1 xorriso=1:1.5.6-1.1ubuntu3 && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://static.rust-lang.org/rustup/archive/1.29.1/x86_64-unknown-linux-gnu/rustup-init -o /tmp/rustup-init && echo "dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71 /tmp/rustup-init" | sha256sum -c - && chmod +x /tmp/rustup-init && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain 1.98.1 --component rustfmt --component clippy --target x86_64-unknown-none && rm /tmp/rustup-init
 COPY reference /opt/reference
 RUN cd /opt/reference && cargo fetch --locked && python3 tools/environment.py verify && python3 tools/environment.py fetch-bootloader
