@@ -11,6 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 RUN curl -fsSL https://static.rust-lang.org/rustup/archive/1.29.1/x86_64-unknown-linux-gnu/rustup-init -o /tmp/rustup-init && echo "dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71 /tmp/rustup-init" | sha256sum -c - && chmod +x /tmp/rustup-init && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain 1.98.1 --component rustfmt --component clippy --target x86_64-unknown-none && rm /tmp/rustup-init
 COPY reference /opt/reference
 RUN cd /opt/reference && cargo fetch --locked && python3 tools/environment.py verify && python3 tools/environment.py fetch-bootloader
+# The block-user runner provisions V7 fixture volumes on the host side of the
+# boot container. Build that tool here, from the reviewed tree and offline, so
+# candidate code never produces a binary executed outside the guest. Only the
+# executable is kept; worker.py exposes it as RUSTIC_VOLUME_TOOL.
+RUN cd /opt/reference && CARGO_TARGET_DIR=/tmp/volume-target cargo build -p rustic-volume --bin rustic-volume --locked --offline && install -D -m 0755 /tmp/volume-target/debug/rustic-volume /opt/volume-tool/rustic-volume && rm -rf /tmp/volume-target
 COPY controller /opt/controller
 RUN chmod -R a+rX /opt && mkdir -p /work
 USER 1000:1000

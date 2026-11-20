@@ -5,7 +5,9 @@ from datetime import datetime, timezone
 import hashlib
 import json
 
-from .v7_disk import PREFIX_BYTES
+# Every caller is a legacy-fixture harness (`legacy_disk`): capture that
+# layout's 174-sector prefix, the size the isolated exporter bounds.
+PREFIX_BYTES = 174 * 512
 
 
 @contextlib.contextmanager
