@@ -7,7 +7,7 @@ zero apart from a valid R0 `RUSTVOL1` lineage envelope. Without that envelope
 the fresh volume has no recovery state and retry keys, receipts and epochs
 answer `Unsupported`, so a fresh fixture still needs host lineage provisioning.
 
-V7 launchers use `machine.disk`/`v7_disk`; never route them here. Delete this
+V7 launchers use `v7_disk`; never route them here. Delete this
 module with the legacy file service when RUSTFS1 is retired.
 """
 import contextlib

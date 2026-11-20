@@ -42,7 +42,7 @@ FINISH_CODE = 7  # apps/utility/src/actions.rs, role FINISH
 INVALID_OPCODE = 6  # x86 #UD raised by role FAULT
 ROLE_REFUSAL = "role needs authority the control-only topology does not issue"
 STARTED_REFUSAL = "already started"
-# Any file name: V7 cannot resolve paths, so a file-access utility is never launched.
+# Any file name: the fixture has no owner policy, so the file-access launch is denied.
 LAUNCH_PROBE_FILE = "application/utility.manifest"
 PROCESS_ROW = re.compile(r"(?m)^(\d+) (\w+) (\d+) (\d+) (\d+) (\d+) (\S+)\r?$")
 
@@ -349,7 +349,7 @@ def _fault_case(uart, pair):
         raise AssertionError(f"faulted staged child left state behind: {before} -> {after}")
     return {"pid": pid, "exit": {"kind": row["kind"], "code": row["code"]},
             "reaped": {"kind": reaped[0], "code": reaped[1]},
-            "utility_slots_occupied_by": spins, "file_access_utility_denied_without_policy": file_access_refused,
+            "utility_slots_occupied_by": spins, "file_access_utility_denied": file_access_refused,
             "counters_with_utilities": occupied, "counters_after_start": peak, "counters_after": after}
 
 
