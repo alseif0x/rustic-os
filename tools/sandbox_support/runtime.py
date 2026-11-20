@@ -2,11 +2,13 @@
 """Fixed Docker policy. No caller-supplied mounts, devices, flags, or commands."""
 import json
 import subprocess
+import time
 from .process import command
 
 LIMITS = {"cpus": 2, "memory_bytes": 2147483648, "swap_bytes": 0,
           "work_bytes": 1073741824, "tmp_bytes": 134217728, "pids": 128,
           "network": "none", "attempts": 1, "source_bytes": 33554432}
+REMOVAL_WAIT_SECONDS = 10
 
 
 def name(job_id, phase):
@@ -51,5 +53,11 @@ def remove_owned(job_id, phase, directory):
     if info["Config"].get("Labels", {}).get("rusticos.job") != job_id:
         raise RuntimeError("refusing to remove container with different owner label")
     if command(["docker", "rm", "-f", container], directory / (phase + "-cleanup.log")):
-        if inspect(container) is not None:
-            raise RuntimeError("container cleanup failed")
+        # A concurrent cancel and job cleanup both remove the same owned
+        # container; the loser is refused while the removal is still in
+        # progress. Wait a bounded time for it to finish before failing.
+        deadline = time.monotonic() + REMOVAL_WAIT_SECONDS
+        while inspect(container) is not None:
+            if time.monotonic() >= deadline:
+                raise RuntimeError("container cleanup failed")
+            time.sleep(0.2)

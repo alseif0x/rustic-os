@@ -1,15 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 """Trusted worker installed read-only. Build and boot always use separate containers."""
+import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
+import tempfile
 
 REFERENCE = Path("/opt/reference")
 WORK = Path("/work")
+# Built from the reviewed tree at `prepare` (see Dockerfile), never from the
+# candidate: the boot runner executes it outside the guest.
+VOLUME_TOOL = Path("/opt/volume-tool/rustic-volume")
+# Modes whose reviewed runner provisions V7 fixture volumes on the host side.
+VOLUME_MODES = ("block-user",)
 
 
 def receive():
@@ -45,6 +53,30 @@ def build(revision, mode):
     return subprocess.call(command, cwd=source, env=env)
 
 
+def volume_fixtures(mode, environ, work=WORK):
+    """Expose only the reviewed volume tool and size scratch space for its fixtures.
+
+    The runner writes three dense 64 MiB V7 regions into its disposable disk,
+    which exceeds the 128 MiB /tmp tmpfs; the 1 GiB /work tmpfs holds them.
+    A missing tool is refused here instead of falling back to another path.
+    """
+    environ["RUSTIC_VOLUME_TOOL"] = str(VOLUME_TOOL)
+    if mode not in VOLUME_MODES:
+        return {}
+    try:
+        info = os.stat(VOLUME_TOOL, follow_symlinks=False)
+    except FileNotFoundError:
+        raise RuntimeError(f"reviewed volume tool {VOLUME_TOOL} is missing; rerun prepare") from None
+    if not stat.S_ISREG(info.st_mode) or not os.access(VOLUME_TOOL, os.X_OK):
+        raise RuntimeError(f"reviewed volume tool {VOLUME_TOOL} is not an executable regular file")
+    with VOLUME_TOOL.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    scratch = Path(work) / "tmp"
+    scratch.mkdir(mode=0o700)
+    environ["TMPDIR"] = str(scratch)
+    return {"volume_tool_sha256": digest}
+
+
 def boot(revision, mode, timeout):
     kernel = WORK / "kernel.elf"
     with kernel.open("wb") as output:
@@ -54,6 +86,8 @@ def boot(revision, mode, timeout):
             if total > 16 * 1024 * 1024:
                 raise RuntimeError("kernel size limit")
             output.write(chunk)
+    fixtures = volume_fixtures(mode, os.environ)
+    tempfile.tempdir = os.environ.get("TMPDIR")
     sys.path.insert(0, str(REFERENCE / "tools"))
     from boot_support import image, runner
     image.OUTPUT = WORK / "out"
@@ -61,6 +95,7 @@ def boot(revision, mode, timeout):
         "source_commit": revision, "source_status": "",
         "tasks_acceptance": mode == "terminal-test",
         "rustc": subprocess.check_output(["rustc", "--version", "--verbose"], text=True),
+        **fixtures,
     })
     result = runner.run(path, timeout)
     print(json.dumps(result), flush=True)

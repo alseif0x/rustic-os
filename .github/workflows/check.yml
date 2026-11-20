@@ -9,6 +9,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# A newer push to the same pull request supersedes the run still in progress;
+# trunk runs are never cancelled, so every merged revision keeps its evidence.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   check:
     runs-on: ubuntu-24.04
@@ -26,8 +31,6 @@ jobs:
           mkdir -p artifacts
           rustc --version --verbose > artifacts/toolchain.txt
           cargo xtask check 2>&1 | tee artifacts/check.log
-      - name: Verify v6 volume images with the independent reader
-        run: python3 tools/fs6_test.py
       - name: Verify v7 volume images and damage refusal with the independent reader
         run: python3 tools/fs7_test.py
       - name: Verify failure detection

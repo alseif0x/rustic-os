@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from terminal_support.connection import Connection
-from terminal_support.failure import preserve_failure
+from terminal_support.failure import PREFIX_BYTES, preserve_failure
 
 
 class TerminalFailureTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class TerminalFailureTests(unittest.TestCase):
             metadata = {"kernel_sha256": "a", "build_id": "b"}
             (root / "image.json").write_text(json.dumps(metadata))
             events, paths = [], []
-            prefix, tail = b"x" * (174 * 512), b"z" * 512
+            prefix, tail = b"x" * (PREFIX_BYTES), b"z" * 512
             original = AssertionError("independent oracle rejected persisted content")
 
             @contextlib.contextmanager
@@ -58,8 +58,7 @@ class TerminalFailureTests(unittest.TestCase):
                 return write_bytes(path, payload)
 
             with (
-                patch.object(recovery_acceptance, "package", return_value=root / "mount.img"),
-                patch.object(recovery_acceptance, "disk", owned_disk),
+                patch.object(recovery_acceptance, "legacy_disk", owned_disk),
                 patch.object(recovery_acceptance, "machine", machine),
                 patch.object(recovery_acceptance, "Connection"),
                 patch.object(recovery_acceptance, "exercise", return_value={}),
@@ -87,7 +86,7 @@ class TerminalFailureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as output, tempfile.TemporaryDirectory() as temporary:
             output = Path(output)
             data = Path(temporary) / "data.raw"
-            prefix, tail = b"x" * (174 * 512), b"z" * 512
+            prefix, tail = b"x" * (PREFIX_BYTES), b"z" * 512
             data.write_bytes(prefix + tail)
             failure = AssertionError("original failed command")
             with self.assertRaises(AssertionError) as caught:
@@ -100,7 +99,7 @@ class TerminalFailureTests(unittest.TestCase):
             evidence = json.loads((output / "failure-initial.json").read_text())
             self.assertFalse(evidence["verified"])
             self.assertEqual(evidence["error_type"], "AssertionError")
-            self.assertEqual(evidence["files.bin"]["bytes"], 174 * 512)
+            self.assertEqual(evidence["files.bin"]["bytes"], PREFIX_BYTES)
 
     def test_capture_failure_does_not_hide_original(self):
         with tempfile.TemporaryDirectory() as output:

@@ -3,7 +3,7 @@
 //!
 //! Every command settles inside the call, so a publication driven through it
 //! never observes `Pending`. [`crate::Server7::handle`] serves requests through
-//! this adapter, so its admission publications settle inside one request with
+//! this adapter, so its controlled publications settle inside one request with
 //! no owner control between their polls; the native service drives them over
 //! its pollable disk instead ([`crate::Server7::handle_with`]).
 use core::task::Poll;

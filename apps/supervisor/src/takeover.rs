@@ -143,8 +143,7 @@ impl State {
         }
     }
     pub(super) fn administrative_ready(&self) -> bool {
-        self.profile == super::services::FileProfile::V5
-            && !self.work.pending()
+        !self.work.pending()
             && !self.degraded
             && !self.stopping
             && !self.takeover.pending()

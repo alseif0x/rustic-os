@@ -5,12 +5,17 @@ static mut VOLUME7: rustic_fs::Volume7 = rustic_fs::Volume7::EMPTY;
 #[inline(never)]
 pub fn load(
     disk: &mut super::disk::Disk,
-    initialize: bool,
+    initialize_if_empty: bool,
 ) -> Result<rustic_fs::Volume, rustic_fs::Error> {
-    if initialize {
-        rustic_fs::Volume::initialize(disk)
-    } else {
-        rustic_fs::Volume::mount(disk)
+    if !initialize_if_empty {
+        return rustic_fs::Volume::mount(disk);
+    }
+    // Legacy terminal fixtures may create a V5 volume, but only after mount
+    // proves the volume is empty. Corrupt or populated media is never formatted.
+    match rustic_fs::Volume::mount(disk) {
+        Ok(volume) => Ok(volume),
+        Err(rustic_fs::Error::Empty) => rustic_fs::Volume::initialize(disk),
+        Err(error) => Err(error),
     }
 }
 

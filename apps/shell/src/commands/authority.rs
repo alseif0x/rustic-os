@@ -27,7 +27,7 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
             // record is refused for the same reason one client owns one record:
             // two clients sharing it would each treat the other's unresolved
             // intent as their own.
-            if id == journal || super::tasks::record_object(s)? == Some(journal) {
+            if id == journal || super::tasks::is_record(&s.files.stat(journal)?) {
                 return Err(Error::Usage);
             }
             let lease = if a.len() == 4 { number(a, 3)? } else { 0 };

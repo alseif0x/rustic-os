@@ -104,8 +104,8 @@ pub(super) fn status(lineage: [u8; 16], record: &Record7) -> Result<Status, Erro
     })
 }
 
-/// Retained observation: V7 has no live execution, so every admission is
-/// observed as its durable record, with the retained cause when cancelled.
+/// Retained observation is used only when no incarnation-local queued or
+/// active lifecycle state takes precedence; cancelled records keep their cause.
 pub(super) fn observation(lineage: [u8; 16], record: &Record7) -> Result<ObservationV2, Error> {
     Ok(ObservationV2::Retained {
         status: status(lineage, record)?,
@@ -114,5 +114,5 @@ pub(super) fn observation(lineage: [u8; 16], record: &Record7) -> Result<Observa
 }
 
 fn visible(volume: &Volume7, grant: Grant7, record: &Record7) -> bool {
-    scope::retained_visible(volume, grant.scope, record.workspace, record.object)
+    scope::retained_visible(volume, grant, record.workspace, record.object)
 }

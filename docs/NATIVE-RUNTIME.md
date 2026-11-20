@@ -49,7 +49,7 @@ An invalid current transaction, incomplete transfer, bad source range, policy re
 
 ### Storage-sourced dormant images (`mode=terminal-v7`)
 
-In the explicitly selected read-only V7 profile the owner can ask the supervisor to feed one stored ELF and its manifest into this transaction: `stage-ref WORKSPACE ELF MANIFEST ELF_VERSION MANIFEST_VERSION` sends the additive owner request `STAGE_V7=36` (`crates/abi/src/supervisor.rs`) and returns a job. The kernel ABI is unchanged. The supervisor reads with its own read-only owner client (scope: the whole workspaces tree), never with shell authority, and polls the reads without blocking owner control.
+In a V7 profile the owner can ask the supervisor to feed one stored ELF and its manifest into this transaction: `stage-ref WORKSPACE ELF MANIFEST ELF_VERSION MANIFEST_VERSION` sends the additive owner request `STAGE_V7=36` (`crates/abi/src/supervisor.rs`) and returns a job. The kernel ABI is unchanged. The supervisor reads with its own read-only owner client (scope zero: the whole mounted volume), never with shell authority, and polls the reads without blocking owner control. This client is read-only even though the V7 service also supports writes and admissions for other authorized clients.
 
 The pair is pinned by the owner, not discovered. The supervisor first reads the manifest as one range at the owner's manifest version and requires exactly 128 bytes ending at EOF. It then reads the ELF in 1,024-byte ranges at the owner's ELF version, opens the kernel transaction with the size learned from the first range, and copies each verified range in order before committing. Every range must name the same lineage and workspace, carry its pinned version and repeat the retry epoch observed with the manifest; ELF ranges must be contiguous, keep one size and end exactly at EOF. These checks live in the host-tested `rustic_supervisor::image_pair` module; the job in `apps/supervisor/src/work/stage.rs` owns the reader, the transaction generation and cleanup. Any refusal aborts an open transaction and drains an abandoned read before the job reports it. While pending, `job-status` shows phase `1` until the kernel transaction is open and phase `2` while ELF ranges are copied. A completed job reports `[0, pid, elf_version, manifest_version]`; a refusal reports a `stage` status: `9` pair mismatch, `10` image size, `32 + e` a file-service error (a stale pin is `45`, `Version`), `64 + e` a kernel staging error, or `6` when `restart files` superseded the job (its transaction is aborted and the old owner client is replaced). `job-status` renders both. A commit reply without a child, or for another generation, is a service failure; a child returned with a mismatched generation is killed and reaped rather than tracked.
 
@@ -68,48 +68,6 @@ The only topology is control-only, the policy described in [authority](AUTHORITY
 The utility reports its compile-time build tag (`RUSTIC_UTILITY_TAG`, default `0`, decoded by `rustic_utility::build_tag`) in word 1 of its FINISH report, and in nothing else. `python3 tools/v7_launch_test.py` builds the `terminal-v7` image once and copies it aside, builds two utility variants with tags `1` and `2` in separate cargo invocations and target directories (`target/v7-launch/utility-tag-N`, never `target/native`, whose utility is the one embedded in the kernel), seeds each into its own fresh V7 volume and boots the same frozen image once per volume. Each boot stages the pair, is refused `read` and `session` with status `12` and a non-staged PID with `2` while the child stays dormant, starts it with `exit`, is refused a second start with `14`, observes exit `1`/`7`, reads `report=7 bytes=TAG` and reaps code `7`, with process and channel counts back at their baseline. The first boot also kills a freshly staged child before starting it, which the kernel refuses as `Full` without leaking a channel, and still reaps it as killed; the second fills both utility slots with `run spin` (a third is busy and `run read` fails with `Unsupported`), then starts a staged child with `fault` as the seventh of eight channels and reaps vector `6`, and channel counts return to their baseline after the utilities are reaped. The harness checks that the image digest and the kernel inside it (extracted with `mcopy`) match the image metadata in both boots, that the variant ELF digests differ from each other and from the embedded utility, that the embedded utility artifact is unchanged by the variant builds, and that both volumes are unchanged; evidence is `artifacts/boot/terminal-v7-launch/terminal-v7-launch.json`. Staging the 131,360-byte variant (129 ranges) took 1,037-1,698 ticks in four recorded FINISH-case stages across two harness runs.
 
 "Independently built" here means separate build invocations from the same source, differing only in the tag, with distinct ELF digests and distinct observable behaviour; it does not mean separate source trees, toolchains or publishers. `python3 tools/v7_read_test.py` also asks to start its staged `file-server` child and checks the identity refusal (`11`) leaves it dormant. Not exercised in the guest: real channel-table exhaustion, which the V7 profile cannot reach. The shell cannot name a file there (V7 path resolution is `Unsupported`), and the supervisor launches file-access utility roles, the only ones with a second (data) channel, only in the V5 profile (`administrative_ready`), so the peak is four resident channels, two control-only utilities and this start: seven of eight. Also not exercised: the features refusal (`13`), which no shipped utility manifest triggers; the host tests cover it.
-
-#### Executable rollback on one migrated volume
-
-Here "executable rollback" means only this: on unchanged data and an unchanged
-kernel image, the owner stages and starts an older, already published
-executable pair after a newer one. It is a selection, not a write, and it is a
-separate operation from data migration:
-
-| Step | Where | What changes |
-| --- | --- | --- |
-| Data migration: `seed5-history` source, then `migrate7` into a new V7 image | host, once | a new V7 image; the v5 source is only read and never booted, and its SHA-256 is checked unchanged |
-| Publishing executables: `add7` the tag-1 pair, then the tag-2 pair into `/workspaces/migrated` | host | the V7 image gains four files and four retained records beside the migrated ones, which stay unchanged |
-| Rollback: stage and start tag 2, then stage and start tag 1 | guest, one boot | nothing: the volume digest, `report7` and the `oracle7` view are identical before and after |
-
-`python3 tools/v7_launch_test.py`, after its two launch boots, runs this on the
-same built `terminal-v7` image (`tools/terminal_support/v7_rollback.py`). It
-freezes the image again and requires its digest and that of the kernel inside it
-to match the image metadata, and the launch and rollback runs to report the same
-image and kernel digests. Tag 1 is published first, so every tag-1 file has a
-lower V7 version than every tag-2 file. In one boot the owner runs the FINISH
-case above for tag 2 (report `bytes=2`, exit `1`/`7`, reap), then for tag 1 by its
-older pins (report `bytes=1`), each time with the refusals, the second-start
-refusal and process/channel counts back at their baseline. The stage job's
-completion echoes the pinned ELF and manifest versions, and the harness checks
-that echo, but the echo is not the enforcement: the supervisor refuses any range
-whose observed version differs from the pin (`image_pair`). The rollback claim
-therefore rests on four checks: each `add7` answer's SHA-256 equals the digest of
-the variant build it published; every tag-1 file has a lower V7 version than
-every tag-2 file; the tag in each FINISH report comes from the ELF that is
-running; and the volume is unchanged by the boot. Evidence is
-`artifacts/boot/terminal-v7-rollback/terminal-v7-rollback.json`; in the first
-recorded run the two 131,360-byte stages took 1,455 and 1,635 ticks.
-
-Limits. Selection is owner-pinned for every stage: there is no persistent
-"current version" pointer, no install or activation record, and nothing that
-survives a reboot to say which pair is selected. Both variants declare the same
-manifest identity and semantic version; "older" is publication order on the
-volume. Pins and SHA-256 bind the ELF to its manifest and to what the owner
-asked for; they do not authenticate a publisher. Only control-only roles of the
-`rustic.utility` identity can run from storage, so this does not show rollback of
-a service with file or device authority, and it does not show rollback of data:
-data migration is one-way and needs a caller-owned copy of its source.
 
 ## Accounting and limitations
 

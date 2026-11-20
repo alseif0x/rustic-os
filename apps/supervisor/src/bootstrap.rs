@@ -2,11 +2,24 @@
 //! Make owner control available before mounting files. Catalog processes start explicitly.
 use super::services::*;
 use rustic_sdk::{files::Client, ipc::Endpoint, process, rpc::Rpc, runtime::abi as k};
+/// Internal startup discriminator: default V7/manual, V5 fixture, or V7/workspace.
 pub fn start(startup: u64) -> Result<State, ()> {
-    let (profile, initialize) = match startup {
-        0 => (FileProfile::V5, false),
-        1 => (FileProfile::V5, true),
-        2 => (FileProfile::V7, false),
+    let (profile, shell_policy, initialize) = match startup {
+        0 => (
+            FileProfile::V7,
+            rustic_supervisor::shell_binding::ShellPolicy::Manual,
+            false,
+        ),
+        1 => (
+            FileProfile::V5,
+            rustic_supervisor::shell_binding::ShellPolicy::Manual,
+            true,
+        ),
+        2 => (
+            FileProfile::V7,
+            rustic_supervisor::shell_binding::ShellPolicy::Workspace,
+            false,
+        ),
         _ => return Err(()),
     };
     let me = process::id().map_err(|_| ())?;
@@ -14,6 +27,7 @@ pub fn start(startup: u64) -> Result<State, ()> {
     let control = connect(me, shell)?;
     let mut state = State {
         profile,
+        shell_policy,
         files: 0,
         files_source: FileSource::Embedded,
         deferred_adopted: 0,

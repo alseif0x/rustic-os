@@ -43,7 +43,7 @@ def write(path, value):
 
 
 def prepare(output):
-    original = image.build("terminal-init")
+    original = image.build("recovery-test")
     source = json.loads((original.parent / "image.json").read_text())
     kernel = output / "input-kernel.elf"
     shutil.copyfile(original.parent / "kernel.elf", kernel)
@@ -51,7 +51,7 @@ def prepare(output):
     try:
         image.OUTPUT = output / "images"
         provenance = {key: source[key] for key in ("source_commit", "source_status", "rustc") if key in source}
-        images = {"terminal": image.package(kernel, "terminal-init", source["build_id"], provenance),
+        images = {"terminal": image.package(kernel, "recovery-test", source["build_id"], provenance),
                   "ok": image.package(kernel, "ok", source["build_id"], provenance)}
     finally:
         image.OUTPUT = previous

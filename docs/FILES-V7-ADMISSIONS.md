@@ -12,8 +12,9 @@ mirror the v5 direct (unscheduled) admission path, including owner control
 while an admission publication is in flight: a revocation before the header
 stops it, and an execution stopped that way is recorded cancelled with cause
 `AuthorityLost` ([owner control during a publication](#owner-control-during-a-publication)).
-Scheduling, live activity and REQUEST_CANCEL are not served on V7. The v5
-service stays the default and is unchanged. Tracked writes are described in
+The existing scheduler, live activity and REQUEST_CANCEL are also served on V7
+([scheduling](#scheduled-execution-and-live-cancellation)). The v5 service stays
+the default pending the remaining consumer ports. Tracked writes are described in
 [V7 tracked writes](FILES-V7-WRITES.md).
 
 ## What is verified
@@ -50,8 +51,9 @@ service stays the default and is unchanged. Tracked writes are described in
     another lineage is `Lineage`, and an unknown ID is `OutcomeUnknown`, all
     without I/O.
   - Read-only and out-of-scope grants cannot stage.
-  - Unmarked profile-1 OPEN (36 bytes) and RETRY (24 bytes), SCHEDULE,
-    ACTIVITY and REQUEST_CANCEL are `Unsupported`. A malformed ID is
+  - SCHEDULE, ACTIVITY and REQUEST_CANCEL are `Unsupported`. The unification
+    port accepts existing profile-1 OPEN (36 bytes) and RETRY (24 bytes), sharing
+    the same status and storage mechanisms. A malformed ID is
     `Protocol`.
   - Stage kinds never cross. REPLACE_CHUNK, COMMIT and ABORT cannot reach an
     admission transfer, and CHUNK, ACCEPT and ABORT cannot reach a tracked
@@ -100,8 +102,9 @@ service stays the default and is unchanged. Tracked writes are described in
   (`cargo test -p rustic-file-server`, `publication.rs`, 4 tests): revocation,
   detach and the readiness probe are served; grants, retention maintenance
   and every other owner request are `Busy`; malformed owner requests keep the
-  idle service's refusals; and another client's request is answered `Busy`
-  without consuming it.
+  idle service's refusals; and unrelated client requests are answered `Busy`
+  without consuming a transfer. The V7 scheduling tests additionally cover
+  restricted live requests during publication.
 
   The SDK's stepwise client has host tests in `crates/sdk/tests/file_workspace.rs`:
   admission requests only, source failure → ABORT, a foreign-lineage status →
@@ -179,55 +182,6 @@ service stays the default and is unchanged. Tracked writes are described in
   above; single observations under varying host load). `file-server.elf` is
   406,096 bytes.
 
-## Migrated history in the guest
-
-`python3 tools/v7_migration_test.py` (also run by `python3 tools/boot.py test`)
-evidences deliberate v5 -> v7 data migration separately from executable
-rollback. Under one fresh lineage, `rustic-volume seed5-history` builds three
-disposable v5 sources and `migrate7` converts each into a new V7 image
-([deliberate data migration](WORKSPACE-FORMAT7.md#deliberate-data-migration-of-a-disposable-image));
-the harness requires each migrated record to match the seed in `oracle7`, each
-migrated image to hold only its generation-0 header (reported `recovered`), and
-the sources, which are never given to QEMU, to keep their SHA-256 through the
-whole run. The migrated images carry no application pair: `mode=terminal-v7`
-mounts them and serves them without one. Evidence is in
-`artifacts/boot/terminal-v7-migration/result.json`, with `serial.log` and
-`commands-*.jsonl`.
-
-- `receipts` (one boot): the migrated subject-2 direct commit is found by
-  `operation-v7 op_...` and by `operation-v7 WS EPOCH KEY` with identical
-  lines, the seeded version, the v5 service instance and the pattern's
-  SHA-256. The exact `replace-pattern-v7` replay prints the identical receipt;
-  the same key with another seed is `error: IdempotencyConflict`. The
-  subject-1 record is `error: OutcomeUnknown` by ID and by retry key. The
-  image digest is unchanged.
-- `admissions` (two boots): the migrated admission prints `state=admitted` by
-  `admission ID`, by `admission-v7` and on an exact `admit-pattern-v7` retry
-  (identical lines); its receipt lookup is `error: Busy`, observation v2 shows
-  `prevention=none` and `maintain-v7` is `error: Busy`. The migrated
-  cancellation prints `state=cancelled` with its seeded terminal, observation
-  v2 shows `prevention=requested`, and its receipt lookup is
-  `error: Unsupported`. The image digest is unchanged up to here.
-  `execute-admission` then commits it: `oracle7` finds exactly one new
-  publication (sequence + 1) in the other header slot, which ends the migrated
-  image's `recovered` report, an `admitted_committed` record and the pattern as
-  the live file,
-  and the completion receipt matches by ID and retry key. Execute and cancel
-  replays are identical with an unchanged image. After a reboot every status,
-  the cause and both receipts are identical, the image digest does not change,
-  and after shutdown `oracle7` finds the same generation.
-- `completed` (one boot): the migrated executed admission prints
-  `state=committed` with its completion; the receipt matches by ID and retry
-  key; exact admission, `admission-v7`, execute and cancel replays print the
-  same status without changing the image.
-
-The recorded run on 2026-09-24 (Ubuntu 26.04, QEMU 10.2.1, build
-`f04c38d57527c852`, the unchanged guest image) took 24.9 s for four boots,
-including seeding and migration; the migrated execution took 0.034 s host
-time, including the UART round trip. The seeded records use subject 2 because the V7 shell holds it;
-records migrated from a real v5 terminal volume carry subject 1 and remain
-invisible to the V7 shell until a separate subject-remapping decision exists.
-
 ## Wire
 
 All requests use the profile-2 marker where the shape carries one. Status
@@ -248,7 +202,8 @@ observation codecs; version 1 is the coarse projection of version 2.
 | OBSERVE | 60 | 16-byte `AdmissionId`, `arg` = 1 or 2 | inspect |
 
 Every request also needs a nonzero retry subject. SCHEDULE, ACTIVITY,
-REQUEST_CANCEL and unmarked OPEN/RETRY stay `Unsupported`. The file-server's
+REQUEST_CANCEL stay `Unsupported`; unmarked profile-1 OPEN/RETRY now use the
+same V7 admission owner. The file-server's
 ready report sets word 5 bit 1 when admissions are served. The supervisor
 requires the exact report `[0, 2, 256, 524288, 8, 3, 0, 0]`.
 
@@ -272,8 +227,8 @@ requires the exact report `[0, 2, 256, 524288, 8, 3, 0, 0]`.
   the authority the caller holds when it asks, which must include write access
   to the file within its scope. A file version that changed since admission is
   refused with `Version` before any I/O, and the record stays `Admitted`. This
-  is the v5 direct path. Without a scheduler there is no automatic
-  `VersionConflict` prevention; the client decides whether to CANCEL. A
+  is the v5 direct path. For direct execution the client decides whether to
+  CANCEL; queued execution instead retains `VersionConflict` prevention. A
   committed execution's receipt is the ordinary profile-2 receipt, looked up
   by the completion ID (`op_…_TERMINAL`) or the retry key. If the target file was
   removed after admission, EXECUTE is `Denied` without I/O (there is no live
@@ -307,8 +262,9 @@ opportunity, then keeps the other clients' transport moving
 (`apps/file-server/src/serving/v7/control.rs`, policy in
 `apps/file-server/src/publication.rs`):
 
-- **Owner requests.** `REVOKE` takes effect at once: the slot is revoked, its
-  endpoint closed and the slot forgotten. Its all-zero acknowledgement is
+- **Owner requests.** `REVOKE` and root-generation revocation take effect at
+  once: every member is fenced, its endpoint closed and queued reply dropped.
+  Revoked bindings remain available for owner bookkeeping. The acknowledgement is
   queued only after the whole request has settled, including any
   `AuthorityLost` prevention, so the supervisor's `REVOKE_SHELL_V7` job never
   re-grants the shell under an unsettled effect. If that job is cancelled
@@ -320,9 +276,11 @@ opportunity, then keeps the other clients' transport moving
   request are `Busy` with nothing changed. A lost administrative channel
   detaches every client (which stops an unsettled publication like a
   revocation) and ends the service after settlement.
-- **Other clients.** Every request from a client other than the publishing
-  one is answered `Busy`; nothing is consumed or replaced. Queued replies are
-  still retried, and expired slots are closed.
+- **Other clients.** Existing live inspection, scheduling and cancellation
+  requests reach a restricted controller with fresh authority checks.
+  Other requests are answered `Busy`. Queued replies are retried and expired
+  slots are closed. Synchronous publication excludes its initiating client;
+  scheduled execution keeps every client endpoint available.
 - **Replays.** A publication that is already settled when it starts (an
   exact-retry ACCEPT) has nothing in flight: it is returned without an owner
   opportunity or authority recheck.
@@ -349,22 +307,56 @@ opportunity, then keeps the other clients' transport moving
 
 Differences from v5, all deliberate:
 
-- The v5 service answers other clients `Busy` (and serves live requests) only
-  during an execution, leaving their requests queued during other
-  publications. V7 has no live requests and answers `Busy` during every
-  admission publication.
+- The v5 service serves other clients during execution and leaves their
+  requests queued during other publications. V7 polls their transport during
+  every admission publication; restricted lifecycle requests can proceed,
+  while unrelated operations receive `Busy`.
 - A v5 revocation keeps the slot and rewrites queued replies to `Revoked`; a
-  V7 revocation closes and forgets the slot at once, as it always did, so the
+  V7 revocation closes its endpoint at once, so the
   revoked caller's reply is dropped and its old endpoint reports `Closed`
   (`Uncertain` in the SDK for a durable request). The outcome is read on the
   new binding.
-- The v5 deferred acknowledgement carries a settlement summary; the V7 one
-  stays all-zero, which the supervisor requires, and carries no result.
-- There is no REQUEST_CANCEL stop, so `Requested` is never a cause of a stopped
-  V7 execution.
-- Tracked-write commits (`REPLACE_COMMIT`, `finish_tracked`) and retention
-  maintenance stay blocking with no owner control inside them: a revocation
-  that arrives meanwhile is served after they complete.
+- Both deferred acknowledgements carry the affected slot mask, number of
+  released candidates, fenced flag and sequence. A fenced V7 volume has erased
+  its header and reports sequence zero as unavailable; this is not a claim
+  about which generation is durable. The workspace supervisor requires a
+  successful, unfenced settlement before issuing its new shell binding.
+- Retention maintenance stays blocking with no owner control inside it.
+  Tracked commits now use `finish_tracked_poll` with the same control driver;
+  their preheader stop discards a candidate without an admission cancellation.
+
+## Scheduled execution and live cancellation
+
+`Server7` owns a volatile FIFO with two tickets and an inventory of up to eight
+retained admissions. SCHEDULE acknowledges queueing separately from execution;
+repeating it keeps the original executor binding. The native loop runs at most
+one ticket per pass and does not sleep while tickets remain. No disk-format or
+packet-version change is involved.
+
+A direct EXECUTE of an admission that already owns a ticket is `Busy`, after
+the caller's authority checks. It cannot bypass a queued stop or replace the
+executor's saved grant generation.
+
+ACTIVITY and both OBSERVE profiles expose queued or active state. REQUEST_CANCEL
+and the existing lifecycle cancellation API latch a stop. Before execution the
+service rechecks the original executor's grant, scope and target version.
+An authority loss or version conflict produces a durable no-effect cancellation
+with the corresponding cause. A requested stop before header submission drains
+any outstanding I/O and then retains `Requested`; simultaneous executor authority
+loss takes precedence. After header submission settlement continues. Prevention
+publication is service-owned and cannot itself be cancelled.
+
+During publication, the restricted controller checks live peer, context, expiry
+and rights against captured scope proofs, including the optional companion file.
+Cancellation-only grants can request prevention without obtaining inspection or
+write authority. Unrelated namespace mutations and new grants remain outside
+that controller. Queue state is discarded on service restart or uncertain
+publication; retained admissions do not resume automatically.
+
+DESCRIBE now reports the existing reviewed lifecycle contract with eight retained
+records, two execution tickets and one active publication. This specific
+negotiation API does not advertise the full service-v1 capability catalogue.
+Validation and its limits are recorded in [WORK-STATE.md](WORK-STATE.md).
 
 ## Authority
 
@@ -381,13 +373,9 @@ not cancel.
   sectors before its header, so only pre-header revocations are exercised in
   the guest. The post-header cases (settled execution, retired admission) are
   host tests only.
-- **Owner control inside tracked commits and maintenance.** They stay
-  blocking.
-- **No scheduling.** There is no queue, live activity, REQUEST_CANCEL or
-  automatic `VersionConflict` cancellation.
+- **Owner control inside maintenance.** It stays blocking; tracked commits
+  now provide owner-control opportunities between publication polls.
 - **No guest fault injection yet** on admission, execution or cancellation
-  publications. The host tests cover only successful publications and
-  refusals before I/O.
-- **Migrated subject-1 history.** Records migrated from a real v5 terminal
-  volume carry subject 1 and stay invisible to the V7 shell (subject 2); no
-  subject remapping exists.
+  publications. Host fixtures cover publication failures and fencing; the
+  scheduling guest harness separately tests termination of the owned QEMU
+  process before header submission. Neither establishes physical durability.

@@ -66,7 +66,7 @@ impl State {
         kind: u64,
         words: [u64; 8],
     ) -> Result<[u64; 8], u64> {
-        if self.profile != super::super::services::FileProfile::V5 || !self.administrative_ready() {
+        if !self.administrative_ready() {
             return Err(3);
         }
         if !self.work.can_start() {

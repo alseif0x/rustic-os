@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
-//! One client's streamed profile-2 replacement or admission: 40-byte packets
+//! One client's streamed replacement or admission: profile-1 and profile-2
+//! OPEN forms share the same sector-bounded transfer after decoding. Bytes
 //! accumulate into one 512-byte sector that is handed to the volume's stage as
 //! soon as it is full, so a transfer never holds more than one sector of the
-//! file. The stage kind fixed at open decides which requests may continue and
-//! finish it.
+//! file. The stage kind and wire profile fixed at open decide which requests
+//! may continue and finish it.
 //!
 //! The SHA-256 covers the bytes the client supplied. A fresh stage writes
 //! exactly those bytes, and an exact retry only finishes when every supplied
 //! byte equals the retained snapshot, so the digest is the stored content's in
 //! both cases.
+use super::profile::Profile;
 use crate::reply;
 use rustic_abi::files::{Error, operation::Replacement};
-use rustic_fs::{Disk, PollDisk7, PollPublication7, Stage7, Stage7Kind, Volume7, format7::Record7};
+use rustic_fs::{Disk, PollDisk7, PollPublication7, Stage7, Stage7Kind, Volume7};
 use sha2::{Digest, Sha256};
 
 const SECTOR: usize = 512;
@@ -27,6 +29,10 @@ pub(super) enum Fault {
 pub(super) struct Transfer {
     stage: Stage7,
     kind: Stage7Kind,
+    profile: Profile,
+    /// Legacy exact retries may be replayed by inspection-only grants. The
+    /// open policy has already matched a unique retained direct record.
+    legacy_replay: bool,
     request: Replacement,
     size: u32,
     received: u32,
@@ -36,10 +42,19 @@ pub(super) struct Transfer {
 }
 
 impl Transfer {
-    pub(super) fn new(stage: Stage7, kind: Stage7Kind, request: Replacement, size: u32) -> Self {
+    pub(super) fn new(
+        stage: Stage7,
+        kind: Stage7Kind,
+        profile: Profile,
+        legacy_replay: bool,
+        request: Replacement,
+        size: u32,
+    ) -> Self {
         Self {
             stage,
             kind,
+            profile,
+            legacy_replay,
             request,
             size,
             received: 0,
@@ -57,12 +72,24 @@ impl Transfer {
         self.kind
     }
 
+    pub(super) fn profile(&self) -> Profile {
+        self.profile
+    }
+
+    pub(super) fn legacy_replay(&self) -> bool {
+        self.profile == Profile::Legacy && self.legacy_replay
+    }
+
     pub(super) fn request(&self) -> Replacement {
         self.request
     }
 
     pub(super) fn complete(&self) -> bool {
         self.received == self.size
+    }
+
+    pub(super) fn size(&self) -> u32 {
+        self.size
     }
 
     /// Accept the client bytes at `offset`, staging every sector that fills.
@@ -97,21 +124,24 @@ impl Transfer {
         Ok(())
     }
 
-    /// Finish the complete stage and return the committed or replayed record
-    /// with the SHA-256 of its bytes. Any failure leaves no stage open.
-    pub(super) fn finish(
+    /// Finish the complete tracked stage through the caller's publication
+    /// driver. Return its outcome with the SHA-256 of the supplied bytes;
+    /// refusal before publication releases any stage that remains open.
+    pub(super) fn finish_with<D: PollDisk7, T>(
         mut self,
         volume: &mut Volume7,
-        disk: &mut impl Disk,
-    ) -> Result<(Record7, [u8; 32]), Error> {
-        match volume.finish_tracked(disk, &mut self.stage) {
-            Ok(record) => Ok((record, self.digest.finalize().into())),
-            Err(error) => {
-                // Only an `Invalid` refusal leaves a stage open; release it.
-                let _ = volume.abort_stage(self.stage);
-                Err(reply::error(error))
+        disk: &mut D,
+        settle: impl FnOnce(PollPublication7<'_, D>) -> Result<T, Error>,
+    ) -> Result<(T, [u8; 32]), Error> {
+        let refused = match volume.finish_tracked_poll(disk, &mut self.stage) {
+            Ok(publication) => {
+                let result = settle(publication)?;
+                return Ok((result, self.digest.finalize().into()));
             }
-        }
+            Err(error) => error,
+        };
+        let _ = volume.abort_stage(self.stage);
+        Err(reply::error(refused))
     }
 
     /// Finish the complete admission stage and hand its publication to

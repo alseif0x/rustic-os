@@ -2,17 +2,19 @@
 
 # Development orchestration
 
-The Codex project profile uses Opus for coordination and DeepSeek for implementation through the operator's installed Codex Router. At most two child agents run concurrently. The owner selected this profile; it is not a measured cost or quality guarantee. Native Claude Code retains its separate profile.
+The native Kimi Code profile keeps its main agent as coordinator and delegates complete bounded implementation blocks to native `coder` subagents in the same session. Each subagent has an isolated context and returns a compact handoff. Subagents inherit the main model unless the owner selects another for new spawns through `/secondary-model`; do not claim a different model without runtime evidence. This profile does not change the Codex or Claude Code routes below.
 
-| Role | Codex | Claude Code |
-| --- | --- | --- |
-| Root / orchestrator | Opus 5 — high | Fable — medium |
-| Worker / implementer | DeepSeek V4.1 Flash — high | Opus — high |
-| Explorer, tester, researcher | Luna — max | Opus — high |
-| Independent reviewer | Astra — low | Fable — low |
-| Concurrent children | 2 | 2 |
+At most two child agents run concurrently in every profile. The owner selected these profiles; they are not a measured cost or quality guarantee. Context isolation can reduce main-agent context growth, but every subagent consumes tokens and does not by itself establish total token, cost or quota savings.
 
-Codex configuration is in [.codex/config.toml](../.codex/config.toml), with explicit models/efforts in [.codex/agents](../.codex/agents), and the [Codex rustic-orchestrator skill](../.agents/skills/rustic-orchestrator/SKILL.md). Claude Code configuration is in [.claude/settings.json](../.claude/settings.json) and [.claude/agents](../.claude/agents), with the [Claude rustic-orchestrator skill](../.claude/skills/rustic-orchestrator/SKILL.md). Both define bounded delegation, file ownership and verification. [WORK-STATE.md](WORK-STATE.md) is the compact continuation entry point. Preserve the repository's modularity and authority rules.
+| Role | Kimi Code | Codex | Claude Code |
+| --- | --- | --- | --- |
+| Root / orchestrator | Main agent | Opus 5 — high | Fable — medium |
+| Worker / implementer | Native `coder`; inherited or owner-selected model | DeepSeek V4.1 Flash — high | Opus — high |
+| Explorer, tester, researcher | Native agents as useful | Luna — max | Opus — high |
+| Independent reviewer | Native agent as useful | Astra — low | Fable — low |
+| Concurrent children | 2 | 2 | 2 |
+
+Codex configuration is in [.codex/config.toml](../.codex/config.toml), with explicit models/efforts in [.codex/agents](../.codex/agents), and the [shared rustic-orchestrator skill](../.agents/skills/rustic-orchestrator/SKILL.md). Claude Code configuration is in [.claude/settings.json](../.claude/settings.json) and [.claude/agents](../.claude/agents), with the [Claude rustic-orchestrator skill](../.claude/skills/rustic-orchestrator/SKILL.md). Kimi native delegation needs no repository model configuration and does not modify user-level settings. These profiles define bounded delegation, file ownership and verification. [WORK-STATE.md](WORK-STATE.md) is the compact continuation entry point. Preserve the repository's modularity and authority rules.
 
 ## Codex profile
 

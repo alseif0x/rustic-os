@@ -29,6 +29,13 @@ impl Transfers {
             }
         }
     }
+    /// Whether this client owns an entry in this pool.
+    pub(super) fn open(&self, client: usize) -> bool {
+        self.slots
+            .iter()
+            .flatten()
+            .any(|slot| slot.client == client)
+    }
     fn index(&self, client: usize, id: u32, context: u32) -> Result<usize, Error> {
         self.slots
             .iter()
@@ -117,6 +124,21 @@ impl Transfers {
             return Err(Error::Protocol);
         }
         Ok(self.slots[index].take().unwrap())
+    }
+    /// Release only a generic BEGIN/CHUNK candidate, preserving profile
+    /// transfers even if a caller uses the generic ABORT opcode.
+    pub(super) fn abort_plain(&mut self, client: usize, request: &Packet) -> Result<(), Error> {
+        let index = self.index(client, request.id, request.context)?;
+        let transfer = self.slots[index].as_ref().ok_or(Error::NoTransfer)?;
+        if request.op != rustic_abi::files::ABORT
+            || transfer.admission
+            || transfer.logical.is_some()
+            || transfer.retry.is_some()
+        {
+            return Err(Error::Protocol);
+        }
+        self.slots[index] = None;
+        Ok(())
     }
     pub(super) fn logical(
         &self,

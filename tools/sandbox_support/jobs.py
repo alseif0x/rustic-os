@@ -19,6 +19,34 @@ from .process import command
 from boot_support.scenarios import MODES
 
 JOBS = ROOT / "artifacts/jobs"
+# One exact V7 volume image (terminal_support.oracle7.VOLUME_SECTORS sectors).
+# block-user exports three such regions verified by the reviewed runner.
+V7_REGION_BYTES = 131_282 * 512
+# Per-VM floors the reviewed runner applies (boot_support.runner.MODE_FLOOR);
+# the outer wall limit must not cancel a VM the runner still allows.
+VM_FLOOR_SECONDS = {"block-user": 90}
+VM_BOOTS = {"recovery-test": 16, "terminal-test": 4, "block-persist": 2, "block-user": 2}
+
+
+def boot_stage_seconds(mode, boot_timeout):
+    """Wall limit for the trusted boot worker: its VM budgets plus 30 s for packaging."""
+    return max(boot_timeout, VM_FLOOR_SECONDS.get(mode, 0)) * VM_BOOTS.get(mode, 1) + 30
+
+
+def boot_exports(mode):
+    """Fixed names and explicit byte limits for normal boot evidence."""
+    sizes = {**base_files(mode), "rustic-os.img": 67108864}
+    if mode == "recovery-test":
+        sizes["files.bin"] = 89088
+    if mode == "terminal-test":
+        sizes.update({"terminal.json": 65536, "files.bin": 89088})
+    if mode.startswith("block-"):
+        sizes.update({"block.json": 65536, "blocks.bin": 2048})
+    if mode == "block-user":
+        # Each file is exactly one V7 region; its trailing guard is checked, not exported.
+        sizes.update({name: V7_REGION_BYTES for name in
+                      ("publication.bin", "admission-terminal.bin", "admission-pending.bin")})
+    return sizes
 
 
 def write_state(directory, state):
@@ -111,7 +139,7 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
                 worker += [mode, str(boot_timeout)]
             else:
                 worker += [mode]
-            limit = build_timeout if phase == "build" else boot_timeout * (16 if mode == "recovery-test" else 4 if mode == "terminal-test" else 2 if mode in ("block-persist", "block-user") else 1) + 30
+            limit = build_timeout if phase == "build" else boot_stage_seconds(mode, boot_timeout)
             try:
                 with input_path.open("rb") as stream:
                     code = command(worker, directory / (phase + ".log"), timeout=limit, stdin=stream)
@@ -143,18 +171,7 @@ def _execute(revision, mode, build_timeout, boot_timeout, image, config):
                     state["artifacts"].append(collect(container, "/work/target/native/" + name,
                                                       directory / name, maximum))
             else:
-                sizes = {**base_files(mode), "rustic-os.img": 67108864}
-                if mode == "recovery-test":
-                    sizes["files.bin"] = 89088
-                if mode=="terminal-test":
-                    sizes.update({"terminal.json":65536,"files.bin":89088})
-                if mode.startswith("block-"):
-                    sizes.update({"block.json": 65536, "blocks.bin": 2048})
-                if mode == "block-user":
-                    sizes["publication.bin"] = 175 * 512
-                    sizes.update({"admission-terminal.bin": 175 * 512, "admission-pending.bin": 175 * 512,
-                                  "workspace.bin": 512 * 1024})
-                for name, maximum in sizes.items():
+                for name, maximum in boot_exports(mode).items():
                     state["artifacts"].append(collect(container, "/work/out/" + mode + "/" + name,
                                                       directory / name, maximum))
                 result = json.loads((directory / "result.json").read_text())

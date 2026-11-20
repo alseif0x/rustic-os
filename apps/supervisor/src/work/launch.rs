@@ -327,11 +327,16 @@ impl State {
             }
             // The two-scope role must name a second, distinct object; it is the only
             // role for which `other` is granted instead of merely forwarded. That
-            // object is also its recovery identity, so it may not be one of the
-            // reserved low identifiers: the owner subject `1` is the shell client's.
+            // object is also its recovery identity. V5 reserves subject 1; V7
+            // reserves subject 1 for host-seeded history and subject 2 for the shell.
+            let reserved_subject = if self.profile == FileProfile::V7 {
+                2
+            } else {
+                1
+            };
             if self.policy == 0
                 || scope == 0
-                || role == s::TASKS_OWNER && (other <= 1 || other == scope)
+                || role == s::TASKS_OWNER && (other <= reserved_subject || other == scope)
                 || if matches!(role, s::ADMISSION_SESSION | s::PRIVATE_ADMISSION_SESSION) {
                     rights == 0 || rights & !15 != 0
                 } else {

@@ -1,6 +1,6 @@
 ---
 name: rustic-orchestrator
-description: Coordinate nontrivial RusticOS development with Opus high orchestration, DeepSeek high implementation, and Astra low review. Use for bounded implementation, cross-module debugging, or independent review; skip trivial edits and simple questions.
+description: Coordinate nontrivial RusticOS development with native Kimi, Codex, or Claude profiles and independent review. Use for bounded implementation, cross-module debugging, or independent review; skip trivial edits and simple questions.
 ---
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
@@ -10,10 +10,10 @@ Apply AGENTS.md and the user's current scope. This skill changes development wor
 
 ## Select and delegate
 
-- Root owns decisions, integration and final verification. The configured root is claude-subscription/claude-opus-5 / high through the installed Codex Router; a running task may have a user override.
-- Worker uses deepseek/deepseek-v4.1-flash / high through Codex Router. Explorer, tester and researcher retain gpt-5.6-luna / max. Reviewer retains gpt-6-astra / low. If the worker route returns a concrete provider-quota/unavailable error, report it and use gpt-6-luna / max for the already-authorized bounded implementation; this is explicit manual fallback, not silent or automatic failover. Record the model that actually completed the work. Do not change the default worker route. Other fallback models require owner selection.
+- Root owns decisions, integration and final verification. Native Kimi Code uses its main agent as root and native `coder` subagents for complete bounded implementation blocks; they inherit the root model unless the owner selects another through `/secondary-model`. The configured Codex root is claude-subscription/claude-opus-5 / high through the installed Codex Router; a running task may have a user override.
+- Codex workers use deepseek/deepseek-v4.1-flash / high through Codex Router. Explorer, tester and researcher retain gpt-5.6-luna / max. Reviewer retains gpt-6-astra / low. If the Codex worker route returns a concrete provider-quota/unavailable error, report it and use gpt-6-luna / max for the already-authorized bounded implementation; this is explicit manual fallback, not silent or automatic failover. Record the model that actually completed the work. Do not change the default Codex worker route. Other fallback models require owner selection.
 - For nontrivial work, delegate a concrete implementation or independent evidence/review task when it has a useful boundary. Do not instantiate every role mechanically. Limit concurrent children to two.
-- Give each child one objective, exact ownership, relevant source references, constraints, acceptance commands and expected output. Start with fresh minimal context when supported; do not fork the complete project conversation by default.
+- Give each child one objective, exact ownership, relevant source references, constraints, acceptance commands and expected output. Start with fresh minimal context when supported; do not fork the complete project conversation by default. Resume the same native Kimi subagent within one block; use fresh minimal context for independent blocks.
 - For tools requiring explicit model/effort, pass the selected role values. A configuration file alone does not prove which model actually ran. If delegation is unavailable, report it and continue useful authorized work directly.
 
 ## Execute and verify

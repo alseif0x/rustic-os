@@ -5,13 +5,11 @@
 `seed7`, and `cargo test -p rustic-fs --test fs7_image` exports full-size images
 that hold every retained record state, a removal with a retained snapshot, an
 executed admission, a noncontiguous file and an advanced retry epoch. The same
-tool also builds three disposable v5 sources with `seed5-history` and converts
-each with `migrate7`, and `add7` adds files beside one migrated history. This suite reads each v7 image with
-`terminal_support.oracle7`, written from `docs/WORKSPACE-FORMAT7.md` rather than
-from the Rust code, checks the bytes against payload patterns it regenerates
-itself, compares the reader with the tool's own verified `report7`, compares
-every migrated image with the independent v5 reader's view of its source (whose
-digest must not change), and then damages copies of an image to record, case by
+tool's `add7` then adds files beside a second `seed7` image's application pair.
+This suite reads each v7 image with `terminal_support.oracle7`, written from
+`docs/WORKSPACE-FORMAT7.md` rather than from the Rust code, checks the bytes
+against payload patterns it regenerates itself, compares the reader with the
+tool's own verified `report7`, and then damages copies of an image to record, case by
 case, what the reader and the Rust mount each accept or refuse. Any
 disagreement between the two is a failure of this suite.
 """
@@ -28,16 +26,12 @@ from pathlib import Path
 
 import application
 import environment
-from terminal_support import oracle, oracle7
+from terminal_support import oracle7
 
 DEFAULT_OUTPUT = environment.ROOT / "artifacts/fs7"
 EXPORTS = ("v7-history.img", "v7-fragmented.img", "v7-maintained.img")
 SEED_LINEAGE = "7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f"
-MIGRATION_LINEAGE = "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e"
-MIGRATION_SETS = ("receipts", "admissions", "completed")
-# v5 record states as `terminal_support.oracle` names them, in v7 terms.
-V5_STATES = {None: "direct_committed", "admitted": "admitted", "cancelled": "cancelled",
-             "committed": "admitted_committed"}
+ADDITION_LINEAGE = "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e"
 FIXTURE_ELF_BYTES = 300_000
 SECTOR = oracle7.SECTOR
 
@@ -49,11 +43,6 @@ def pattern(seed, length):
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
-
-
-def shell_pattern(seed, size):
-    """The V7 shell's `replace-pattern-v7` bytes: s*31 + 7*i + i//509 mod 256."""
-    return bytes((seed * 31 + 7 * index + index // 509) & 0xFF for index in range(size))
 
 
 def file_sha(path):
@@ -243,86 +232,17 @@ def verify_images(output, images):
     return summary, history
 
 
-def compare_migration(source_view, state, seeded, label):
-    """A migrated image must hold exactly the v5 source's identity, files and history."""
-    if (state["lineage"], state["sequence"], state["epoch"]) != \
-            (source_view["lineage"], source_view["sequence"], source_view["epoch"]):
-        raise SystemExit(f"{label}: lineage, sequence or epoch differs from the v5 source")
-    # The v5 reader lists files only; directories are covered by report7's comparison.
-    if {item["id"]: item["version"] for item in state["files"]} != \
-            {identity: node["version"] for identity, node in source_view["nodes"].items()}:
-        raise SystemExit(f"{label}: live file identities or versions differ from the v5 source")
-    for item in state["files"]:
-        if item["sha256"] != sha(source_view["nodes"][item["id"]]["content"]):
-            raise SystemExit(f"{label}: {item['path']} bytes differ from the v5 source")
-    fields = ("subject", "workspace", "object", "instance", "epoch", "key", "previous", "committed",
-              "admission", "terminal", "state", "cause", "sha256")
-    ours = [tuple(record[field] for field in fields) for record in state["records"]]
-    theirs = [(record["subject"], record["workspace"], record["id"], record["instance"], record["epoch"],
-               record["key"], record["previous"], record["committed"], record.get("admission", 0),
-               record.get("terminal", record["committed"]), V5_STATES[record.get("state")],
-               record.get("prevention"), record["sha256"]) for record in source_view["records"]]
-    if ours != theirs:
-        raise SystemExit(f"{label}: retained records differ from the v5 source:\n{ours}\n!=\n{theirs}")
-    wanted = [(record["state"], record["cause"], record["subject"], record["key"],
-               sha(shell_pattern(record["seed"], record["size"]))) for record in seeded["records"]]
-    if [(record["state"], record["cause"], record["subject"], record["key"], record["sha256"])
-            for record in state["records"]] != wanted:
-        raise SystemExit(f"{label}: retained records are not the seeded shell patterns")
-
-
-def verify_migrations(output):
-    """Seed each v5 history set, migrate it and compare both readers' views."""
-    summary = {}
+def verify_additions(output):
+    """`add7` two files beside a seeded application pair; both readers must see the pair untouched."""
     volumes = output / "volumes"
     volumes.mkdir(parents=True, exist_ok=True)
-    for name in MIGRATION_SETS:
-        source, target = volumes / f"migrate-{name}.v5", volumes / f"migrate-{name}.v7"
-        source.unlink(missing_ok=True)
-        target.unlink(missing_ok=True)
-        seeded, refused = volume_tool("seed5-history", source, MIGRATION_LINEAGE, name)
-        if refused:
-            raise SystemExit(f"seed5-history {name} refused: {refused}")
-        before = file_sha(source)
-        _, source_view = oracle.snapshot(source)
-        migrated, refused = volume_tool("migrate7", source, target, MIGRATION_LINEAGE)
-        if refused:
-            raise SystemExit(f"migrate7 {name} refused: {refused}")
-        if (migrated["source_sha256_before"], migrated["source_sha256_after"], file_sha(source)) != (before,) * 3:
-            raise SystemExit(f"migrate7 {name}: the source digest changed")
-        _, state = read_image(target)
-        compare_migration(source_view, state, seeded, f"migrate7 {name}")
-        target_digest = file_sha(target)
-        again, refused = volume_tool("migrate7", source, target, MIGRATION_LINEAGE)
-        if again is not None or file_sha(target) != target_digest or file_sha(source) != before:
-            raise SystemExit(f"migrate7 {name}: an existing target was not refused untouched")
-        summary[name] = {"source_sha256": before, "sequence": state["sequence"], "epoch": state["epoch"],
-                         "recovered": state["recovered"], "files": state["files"],
-                         "records": [{key: record[key] for key in ("slot", "state", "cause", "subject", "object",
-                                                                   "key", "previous", "committed", "admission",
-                                                                   "terminal", "length", "aliases_live", "sha256")}
-                                     for record in state["records"]],
-                         "existing_target": refused}
-        source.unlink()
-        target.unlink()
-    return summary
-
-
-def verify_additions(output):
-    """`add7` two files beside a migrated history; both readers must see the history untouched."""
-    volumes = output / "volumes"
-    source, target = volumes / "add-receipts.v5", volumes / "add-receipts.v7"
-    for path in (source, target):
-        path.unlink(missing_ok=True)
-    seeded, refused = volume_tool("seed5-history", source, MIGRATION_LINEAGE, "receipts")
+    target = volumes / "add-seed7.img"
+    target.unlink(missing_ok=True)
+    seeded, refused = volume_tool("seed7", target, ADDITION_LINEAGE, *fixture_inputs(output / "inputs"))
     if refused:
-        raise SystemExit(f"seed5-history receipts refused: {refused}")
-    source_digest = file_sha(source)
-    _, refused = volume_tool("migrate7", source, target, MIGRATION_LINEAGE)
-    if refused:
-        raise SystemExit(f"migrate7 receipts refused: {refused}")
-    _, migrated = read_image(target)
-    workspace = "/workspaces/migrated"
+        raise SystemExit(f"seed7 refused the fixture: {refused}")
+    _, seeded_state = read_image(target)
+    workspace = "/workspaces/application"
     added = {}
     for index, (name, content) in enumerate((("tag.elf", pattern(21, 131_360)), ("tag.manifest", pattern(22, 128)))):
         path = volumes / f"add-input-{name}"
@@ -338,14 +258,15 @@ def verify_additions(output):
             raise SystemExit(f"add7 {name} answered another file: {answer}")
         added[f"{workspace}/{name}"] = (answer["file"]["version"], content)
     _, state = read_image(target)
-    expected = {entry["path"]: (entry["version"], migrated["contents"][entry["path"]]) for entry in migrated["files"]}
+    expected = {entry["path"]: (entry["version"], seeded_state["contents"][entry["path"]])
+                for entry in seeded_state["files"]}
     expect_files(state, {**expected, **added}, "add7")
     keep = ("slot", "state", "cause", "subject", "workspace", "object", "instance", "epoch", "key", "previous",
             "committed", "admission", "terminal", "length", "sha256")
-    before = [{key: record[key] for key in keep} for record in migrated["records"]]
+    before = [{key: record[key] for key in keep} for record in seeded_state["records"]]
     after = [{key: record[key] for key in keep} for record in state["records"]]
     if after[:len(before)] != before:
-        raise SystemExit("add7: a migrated record changed")
+        raise SystemExit("add7: a seeded record changed")
     fresh = [(record["state"], record["target"] and record["target"]["path"], record["sha256"])
              for record in state["records"][len(before):]]
     if fresh != [("direct_committed", path, sha(content)) for path, (_, content) in added.items()]:
@@ -357,11 +278,8 @@ def verify_additions(output):
     probe.unlink()
     if again is not None or file_sha(target) != digest:
         raise SystemExit("add7: an existing name was not refused with the image unchanged")
-    if file_sha(source) != source_digest:
-        raise SystemExit("add7: the v5 source changed")
-    summary = {"source_sha256": source_digest, "sequence": state["sequence"], "recovered": state["recovered"],
+    summary = {"sequence": state["sequence"], "recovered": state["recovered"],
                "files": state["files"], "records": after, "existing_name": existing}
-    source.unlink()
     target.unlink()
     return summary
 
@@ -649,7 +567,6 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     images = export(output)
     summary, history = verify_images(output, images)
-    migrations = verify_migrations(output)
     additions = verify_additions(output)
     damage = verify_damage(output, images / "v7-history.img", history)
     sweep = differential_sweep(output, images, arguments.sweep, arguments.seed)
@@ -657,7 +574,6 @@ def main():
         "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=environment.ROOT).decode().strip(),
         "worktree_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=environment.ROOT).decode(),
         "images": summary,
-        "migrations": migrations,
         "additions": additions,
         "damage": damage,
         "sweep": sweep,
@@ -667,8 +583,7 @@ def main():
     (output / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
     refused = sum(1 for case in damage if case["expected"] == "refused")
     print(f"V7 images verified independently: {len(summary)} images agree with report7; "
-          f"{len(migrations)} migrated v5 histories agree with the v5 reader and kept their source digest; "
-          f"add7 placed {len(additions['records']) - 2} files beside a migrated history without changing it; "
+          f"add7 placed {len(additions['records']) - 2} files beside a seeded pair without changing it; "
           f"{len(damage)} damaged copies: {refused} refused and {len(damage) - refused} accepted "
           f"by both oracle7 and the Rust mount; {sweep['accepted'] + sweep['refused']} resealed perturbations "
           f"agree ({sweep['refused']} refused, {sweep['accepted']} accepted)")

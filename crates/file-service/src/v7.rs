@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //! Explicitly selected V7 native service over one exclusively borrowed mounted
-//! volume: bounded range reads, profile-2 tracked replacement, profile-2 staged
-//! admission with explicit execution and cancellation, lookups of retained
-//! records and owner-requested retention maintenance.
+//! volume: bounded reads, plain replacement, existing profile-1 and profile-2
+//! tracked replacement and staged admission with explicit execution and cancellation,
+//! lookups of retained records and owner-requested retention maintenance.
 //!
 //! The composing [`Server7`] routes each request after the envelope and grant
 //! checks, and keeps the storage consequences of authority changes together:
@@ -11,17 +11,24 @@
 //! client packet: the serving layer calls [`Server7::maintain_retention`] only
 //! for its administrative channel. The v5 `Server` is unaffected.
 //!
-//! Admission publications (acceptance, execution, cancellation) are pollable.
+//! Tracked commits and admission publications are pollable.
 //! [`Server7::handle_with`] drives them over the caller's pollable disk and
 //! hands a [`Control7`] to the serving layer between polls, so the owner can
 //! revoke or detach clients while one is in flight, with the v5 consequences
 //! for the caller's publication (see the `control` module).
 //! [`Server7::handle`] settles them synchronously inside the request.
 mod admission;
+mod authority;
+mod capabilities;
 mod control;
 mod grants;
 mod lookup;
+mod namespace;
+mod negotiation;
+mod plain;
+mod profile;
 mod read;
+mod recovery;
 mod retention;
 mod scope;
 mod transfer;
@@ -34,10 +41,14 @@ pub use retention::Maintenance7;
 use rustic_abi::files::*;
 use rustic_fs::{Disk, PollDisk7, Volume7};
 
+const TRANSFER_LIMIT: usize = 2;
+
 pub struct Server7<'a> {
     volume: &'a mut Volume7,
     grants: grants::Grants,
     writes: write::Writes,
+    plain: plain::PlainTransfers,
+    scheduler: admission::scheduling::Scheduler7,
 }
 
 impl<'a> Server7<'a> {
@@ -47,6 +58,8 @@ impl<'a> Server7<'a> {
             volume,
             grants: grants::Grants::new(),
             writes,
+            plain: plain::PlainTransfers::new(),
+            scheduler: admission::scheduling::Scheduler7::new(),
         }
     }
 
@@ -55,40 +68,9 @@ impl<'a> Server7<'a> {
         self.volume
     }
 
-    /// Install one scope and return its endpoint/context binding. Replacing a
-    /// slot makes its previous context stale and aborts its open stage.
-    pub fn grant(&mut self, slot: usize, request: GrantRequest7) -> Result<Grant7, Error> {
-        let grant = self.grants.grant(self.volume, slot, request)?;
-        self.writes.reset(self.volume, slot);
-        Ok(grant)
-    }
-
-    /// Permanently revoke the current generation while retaining its endpoint
-    /// binding for the serving layer's close/detach bookkeeping. Any open
-    /// stage is aborted without I/O, so no later request can commit it.
-    pub fn revoke(&mut self, slot: usize) -> Result<(), Error> {
-        self.grants.revoke(slot)?;
-        self.writes.reset(self.volume, slot);
-        Ok(())
-    }
-
-    /// Forget the slot after the endpoint has detached. A later request has no
-    /// installed authority, and a future grant receives a different context.
-    pub fn detach(&mut self, slot: usize) {
-        self.grants.detach(slot);
-        self.writes.reset(self.volume, slot);
-    }
-
-    /// Mark expired slots revoked, abort their stages and return their bit
-    /// mask for endpoint cleanup.
-    pub fn expire(&mut self, now: u64) -> u8 {
-        let expired = self.grants.expire(now);
-        for slot in 0..CLIENTS7 {
-            if expired & (1 << slot) != 0 {
-                self.writes.reset(self.volume, slot);
-            }
-        }
-        expired
+    /// Number of staged and ordinary replacement candidates still owned by clients.
+    pub fn pending(&self) -> usize {
+        self.writes.transfer_count() + self.plain.transfer_count()
     }
 
     /// Owner-requested retention maintenance: drop every terminal retained
@@ -115,19 +97,18 @@ impl<'a> Server7<'a> {
     ///
     /// Only the administrative channel may reach this; no client packet does.
     pub fn maintain_retention(&mut self, disk: &mut impl Disk) -> Result<Maintenance7, Error> {
-        let result = retention::maintain(self.volume, disk, self.writes.transfers_open());
+        let result = retention::maintain(
+            self.volume,
+            disk,
+            self.writes.transfers_open() || self.plain.transfers_open(),
+        );
         if result.is_ok() || self.volume.header().is_err() {
             self.writes.forget_receipts();
         }
         result
     }
 
-    /// Read-only snapshot for endpoint lifecycle routing.
-    pub fn grant_at(&self, slot: usize) -> Option<Grant7> {
-        self.grants.grant_at(slot)
-    }
-
-    /// Serve one client request, settling any admission publication inside
+    /// Serve one client request, settling any controlled publication inside
     /// it with no owner control between its polls.
     pub fn handle(
         &mut self,
@@ -141,19 +122,19 @@ impl<'a> Server7<'a> {
         self.handle_with(&mut disk, slot, peer, request, now, |_| now)
     }
 
-    /// Serve one client request, driving an admission publication over the
+    /// Serve one client request, driving tracked and admission publication over the
     /// pollable `disk` and calling `control` before each of its polls. The
     /// callback returns the owner's clock and may revoke or detach slots
     /// through its [`Control7`]; it must not block indefinitely, and it is
     /// never called for requests without a publication.
     ///
     /// If the caller loses its authority before the publication's header is
-    /// submitted, nothing of it becomes durable: an execution is then
+    /// submitted, nothing of it becomes durable: an admission execution is then
     /// recorded cancelled with cause `AuthorityLost` by a second, unstoppable
     /// publication, and the reply is the authority error. Later losses let
     /// the publication settle: a new admission is then likewise cancelled
     /// with `AuthorityLost` before the authority error is returned, while a
-    /// settled execution or cancellation stands and is reported `Uncertain`.
+    /// settled tracked commit, execution or cancellation stands and is reported `Uncertain`.
     /// The caller's endpoint is normally gone by then, so the reply is only
     /// delivered when the binding survived.
     pub fn handle_with<D: Disk + PollDisk7>(
@@ -165,7 +146,14 @@ impl<'a> Server7<'a> {
         now: u64,
         mut control: impl FnMut(&mut Control7<'_>) -> u64,
     ) -> Packet {
-        match self.dispatch(disk, slot, peer, request, now, &mut control) {
+        let result = self.dispatch(disk, slot, peer, request, now, &mut control);
+        // Any publication or staging failure can fence the shared volume,
+        // including ordinary namespace operations outside owner control.
+        if matches!(result, Err(Error::Uncertain)) || self.volume.header().is_err() {
+            self.scheduler.clear();
+            self.writes.forget_receipts();
+        }
+        match result {
             Ok(reply) => reply,
             Err(error) => {
                 let mut response = Packet::new(request.op);
@@ -187,41 +175,154 @@ impl<'a> Server7<'a> {
     ) -> Result<Packet, Error> {
         crate::validation::envelope(&packet)?;
         let grant = self.grants.check(slot, peer, packet.context, now)?;
+        if admission::scheduling::is_lifecycle(packet.op) {
+            self.scheduler.refresh(self.volume, &self.grants)?;
+            return Ok(self
+                .scheduler
+                .request(&self.grants, None, slot, peer, packet, now));
+        }
         match packet.op {
-            REFERENCES | READ_OPEN | READ_CHUNK => {
+            CAPABILITIES => {
+                crate::validation::request(&packet)?;
+                capabilities::request(self.volume, packet)
+            }
+            rustic_abi::files::negotiation::DESCRIBE => negotiation::request(self.volume, packet),
+            LOOKUP | STAT | LIST => {
+                crate::validation::request(&packet)?;
+                namespace::request(self.volume, grant, packet)
+            }
+            READ | REFERENCES | READ_OPEN | READ_CHUNK => {
                 crate::validation::request(&packet)?;
                 read::request(self.volume, disk, grant, packet)
             }
-            _ if write::selected(&packet) => {
-                self.writes.request(self.volume, disk, slot, grant, packet)
-            }
-            _ if admission::selected(&packet) => {
-                let caller = control::Caller7 {
-                    slot,
-                    peer,
-                    context: packet.context,
-                };
-                let mut owner = control::Owner::new(&mut self.grants, caller, control);
-                let result = admission::request(
-                    &mut self.writes,
+            _ if recovery::selected(&packet, self.writes.transfer_open(slot)) => {
+                crate::validation::request(&packet)?;
+                if packet.op == COMMIT {
+                    return self.with_owner(disk, slot, grant, packet, control);
+                }
+                let profile_busy = self.writes.transfer_open(slot)
+                    || self.plain.transfer_open(slot)
+                    || self.plain.transfer_count() + self.writes.transfer_count() >= TRANSFER_LIMIT;
+                recovery::request(
                     self.volume,
                     disk,
+                    &mut self.writes,
                     slot,
                     grant,
                     packet,
-                    &mut owner,
-                );
-                // Slots that lost their grant during the publication drop
-                // their stages and receipts now that the volume is free.
-                let lost = owner.lost();
-                for index in 0..CLIENTS7 {
-                    if lost & (1 << index) != 0 {
-                        self.writes.reset(self.volume, index);
-                    }
+                    profile_busy,
+                )
+            }
+            _ if plain::selected(&packet) => {
+                crate::validation::request(&packet)?;
+                let profile_busy = self.writes.transfer_open(slot)
+                    || self.plain.transfer_count() + self.writes.transfer_count() >= TRANSFER_LIMIT;
+                self.plain
+                    .request(self.volume, disk, slot, grant, packet, profile_busy)
+            }
+            REPLACE_COMMIT => self.with_owner(disk, slot, grant, packet, control),
+            _ if write::selected(&packet) => {
+                if packet.op == REPLACE_OPEN {
+                    self.ensure_profile_open_available(slot, grant, &packet)?;
                 }
-                result
+                self.writes.request(self.volume, disk, slot, grant, packet)
+            }
+            _ if admission::selected(&packet) => {
+                if packet.op == rustic_abi::files::admission::OPEN {
+                    self.ensure_profile_open_available(slot, grant, &packet)?;
+                }
+                self.with_owner(disk, slot, grant, packet, control)
             }
             _ => Err(Error::Unsupported),
         }
+    }
+
+    /// Coordinate the shared authority lifetime around tracked or admission
+    /// publication. Each operation's own module decides its durable outcome.
+    fn with_owner<D: Disk + PollDisk7>(
+        &mut self,
+        disk: &mut D,
+        slot: usize,
+        grant: Grant7,
+        packet: Packet,
+        control: &mut dyn FnMut(&mut Control7<'_>) -> u64,
+    ) -> Result<Packet, Error> {
+        // A fenced mount supplies no live inventory. Keep each operation's
+        // existing validation precedence (for example NoTransfer after a
+        // failed CHUNK); it cannot begin publication on that mount.
+        if self.scheduler.refresh(self.volume, &self.grants).is_err() {
+            self.scheduler.clear();
+        }
+        let caller = control::Caller7 {
+            slot,
+            peer: grant.peer,
+            context: packet.context,
+        };
+        let mut transfers = 0;
+        for index in 0..CLIENTS7 {
+            if self.writes.transfer_open(index) || self.plain.transfer_open(index) {
+                transfers |= 1 << index;
+            }
+        }
+        let mut owner = control::Owner::new(
+            &mut self.grants,
+            &mut self.scheduler,
+            caller,
+            transfers,
+            control,
+        );
+        let result = if packet.op == COMMIT {
+            self.writes
+                .commit_legacy_with(self.volume, disk, slot, grant, packet, &mut owner)
+        } else if packet.op == REPLACE_COMMIT {
+            self.writes
+                .commit_with(self.volume, disk, slot, grant, packet, &mut owner)
+        } else {
+            admission::request(
+                &mut self.writes,
+                self.volume,
+                disk,
+                slot,
+                grant,
+                packet,
+                &mut owner,
+            )
+        };
+        // The publication has released the volume; drop lost candidates now.
+        let lost = owner.lost();
+        self.reset_lost(lost);
+        result
+    }
+
+    /// Check the plain/tracked/admission shared transfer limit after decoding and
+    /// validating the open request's authority, before its owner allocates a
+    /// V7 stage.
+    fn ensure_profile_open_available(
+        &self,
+        slot: usize,
+        grant: Grant7,
+        packet: &Packet,
+    ) -> Result<(), Error> {
+        let request = profile::decode_open(packet)?.request;
+        grant.holds(WRITE_RIGHT | INSPECT_RIGHT)?;
+        if grant.subject == 0 || slot >= CLIENTS7 {
+            return Err(Error::Denied);
+        }
+        scope::authorized_resource(
+            self.volume,
+            grant,
+            request.workspace.root(),
+            request.resource.object(),
+        )?;
+        let header = self.volume.header().map_err(crate::reply::error)?;
+        if header.lineage != request.workspace.lineage() {
+            return Err(Error::Denied);
+        }
+        if self.plain.transfer_open(slot)
+            || self.plain.transfer_count() + self.writes.transfer_count() >= TRANSFER_LIMIT
+        {
+            return Err(Error::Busy);
+        }
+        Ok(())
     }
 }

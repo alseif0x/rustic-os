@@ -119,33 +119,31 @@ impl Mount {
             2 => {
                 let rights = if profile == FileProfile::V5 { 7 } else { 1 };
                 let subject = if profile == FileProfile::V5 { 1 } else { 0 };
+                // The V7 owner stays read-only. Its private binding covers the
+                // mounted volume so it can verify /config/owner-policy as well
+                // as read workspace ELF and manifest bytes for staged launch.
+                let scope = 0;
                 if let Some(generation) =
-                    self.grant(state, [32, 1, me, self.owner[1], 0, rights, 0, subject])?
+                    self.grant(state, [32, 1, me, self.owner[1], scope, rights, 0, subject])?
                 {
                     state.owner = Client::new(self.owner[0], state.files, generation);
                     self.phase = 3;
                 }
             }
             3 => {
-                if profile == FileProfile::V7 {
-                    state.policy = 0;
-                    self.shell = connect(state.files, state.shell).map_err(|_| 3u64)?;
-                    self.phase = 4;
-                } else if let Some(policy) = self.policy.poll(&mut state.owner) {
+                if let Some(policy) = self
+                    .policy
+                    .poll(&mut state.owner, profile == FileProfile::V5)
+                {
                     state.policy = policy;
                     self.shell = connect(state.files, state.shell).map_err(|_| 3u64)?;
                     self.phase = 4;
                 }
             }
             4 => {
-                // V7 policy: the shell may read, make tracked replacements and
-                // admit, execute and cancel its own admissions as subject 2, a
-                // retry scope distinct from the host provisioner's subject 1
-                // records. The owner stays read-only.
-                let words = match profile {
-                    FileProfile::V5 => [32, 0, state.shell, self.shell[0], 0, 15, 0, 1],
-                    FileProfile::V7 => shell_binding::grant(state.shell, self.shell[0]),
-                };
+                // The chosen shell authority survives restart, adoption and
+                // rebind independently of the file-service format.
+                let words = shell_binding::grant(state.shell, self.shell[0], state.shell_policy);
                 if let Some(generation) = self.grant(state, words)? {
                     return Ok(Some([
                         0,

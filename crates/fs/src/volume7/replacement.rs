@@ -6,7 +6,7 @@ use crate::format7::{NEXT_MIN, Node7, Record7, RecordState};
 use crate::{Disk, Error, Kind};
 
 use super::payload::{PayloadPlan, plan_payload, release_run, reserve_plan};
-use super::poll::{Candidate7, validate_candidate};
+use super::poll::{Candidate7, PollDisk7, PollPublication7, validate_candidate};
 use super::stage::{Opening, Stage7, Stage7Kind, StageMode, StageSlot};
 use super::{Volume7, WriteIdentity7};
 
@@ -67,6 +67,35 @@ impl Volume7 {
         self.ready()?;
         let slot = self.take_finishable(stage, Stage7Kind::Tracked)?;
         self.finish_tracked_slot(disk, slot)
+    }
+
+    /// Finish a fully written tracked stage with owner control between polls.
+    /// Validation and retry behavior match [`Self::finish_tracked`]. A fresh
+    /// publication writes inactive metadata, flushes it with the staged payload,
+    /// keeps the selected generation unchanged before settlement, and can stop before its header
+    /// is submitted. A complete retry is already settled and performs no I/O.
+    pub fn finish_tracked_poll<'a, D: PollDisk7>(
+        &'a mut self,
+        disk: &'a mut D,
+        stage: &mut Stage7,
+    ) -> Result<PollPublication7<'a, D>, Error> {
+        self.ready()?;
+        let slot = self.take_finishable(stage, Stage7Kind::Tracked)?;
+        match slot.mode {
+            StageMode::Retry { record, matches } => {
+                if slot.payload_crc() != record.payload_crc32 {
+                    return Err(Error::Corrupt);
+                }
+                if !matches {
+                    return Err(Error::IdempotencyConflict);
+                }
+                Ok(PollPublication7::replay(self, disk, record))
+            }
+            StageMode::Fresh(plan) => {
+                let candidate = self.tracked_candidate(&slot, plan)?;
+                Ok(PollPublication7::publish(self, disk, candidate, None))
+            }
+        }
     }
 
     fn finish_tracked_slot(
@@ -158,14 +187,13 @@ impl Volume7 {
         })
     }
 
-    /// Recheck, validate and publish a fresh tracked stage whose payload is
-    /// already on disk in `plan`.
-    fn commit_tracked(
+    /// Recheck and validate the common publication delta for a fully written
+    /// fresh tracked stage. The blocking and pollable paths share this plan.
+    fn tracked_candidate(
         &mut self,
-        disk: &mut impl Disk,
         slot: &StageSlot,
         plan: PayloadPlan,
-    ) -> Result<Record7, Error> {
+    ) -> Result<Candidate7, Error> {
         let identity = slot.identity;
         if self.find_retry(identity).is_some() {
             return Err(Error::IdempotencyConflict);
@@ -206,6 +234,19 @@ impl Volume7 {
             }
         }
         validate_candidate(self, candidate)?;
+        Ok(candidate)
+    }
+
+    /// Publish a validated fresh tracked stage over a blocking disk.
+    fn commit_tracked(
+        &mut self,
+        disk: &mut impl Disk,
+        slot: &StageSlot,
+        plan: PayloadPlan,
+    ) -> Result<Record7, Error> {
+        let candidate = self.tracked_candidate(slot, plan)?;
+        let record = candidate.record;
+        let (index, next_node) = candidate.node_update.ok_or(Error::Corrupt)?;
 
         self.fenced = true;
         reserve_plan(&mut self.map, &plan);
@@ -215,8 +256,8 @@ impl Volume7 {
                 return Err(Error::Uncertain);
             }
         }
-        self.nodes[target.index] = next_node;
-        self.records[target.receipt_slot] = Some(record);
+        self.nodes[index] = next_node;
+        self.records[candidate.record_slot] = Some(record);
 
         match self.publish_candidate(disk) {
             Ok(header) => {

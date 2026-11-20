@@ -59,7 +59,7 @@ impl Disk for MemoryDisk {
     }
 }
 
-/// Sparse disk for the 64 MiB v6 payload region: only written sectors are kept,
+/// Sparse disk for the 64 MiB v7 payload region: only written sectors are kept,
 /// so an unused payload costs nothing. `durable` models flush and `fail_at`
 /// fails the write or flush with the given operation number.
 #[derive(Default)]

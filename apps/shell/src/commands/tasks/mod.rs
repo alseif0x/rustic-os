@@ -19,21 +19,14 @@ use rustic_tasks_contract::preview::Edit;
 const RECORD: Record<'static> = Record::path("/config", "tasks-intent");
 const CLIENT: Client<'static> = Client::new(RECORD);
 
-/// The object the shell's record occupies, when it already exists.
-///
-/// The record is never created to answer this question: a shell that has not
-/// retained an intent yet simply has no record object, and the caller treats
-/// that as nothing to collide with.
-pub(super) fn record_object(session: &mut Session) -> Result<Option<u32>, Error> {
-    let Record::Path { directory, name } = RECORD else {
-        return Ok(None);
+/// Test already-authorized metadata without requiring access to its parent.
+/// Canonical /config is immutable node 3 in both mounted formats. A workspace
+/// shell can therefore exclude its own record without a grant over /config.
+pub(super) fn is_record(metadata: &files::Metadata) -> bool {
+    let Record::Path { name, .. } = RECORD else {
+        return false;
     };
-    let directory = session.files.resolve(0, directory)?;
-    match session.files.lookup(directory, name) {
-        Ok(metadata) if !metadata.directory => Ok(Some(metadata.id)),
-        Ok(_) | Err(files::Error::NotFound) => Ok(None),
-        Err(error) => Err(error.into()),
-    }
+    !metadata.directory && metadata.parent == 3 && metadata.name() == name
 }
 
 pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Error> {
@@ -42,7 +35,14 @@ pub(super) fn execute(session: &mut Session, args: &Args<'_>) -> Result<(), Erro
             exact(args, 2)?;
             let reply = session.service([s::ENABLE_OPERATIONS, 0, 0, 0, 0, 0, 0, 0])?;
             files::Error::parse(reply[1] as u8)?;
-            output::text("Task writes enabled; persistent storage format is at least v3.\r\n");
+            if reply[3..].iter().any(|word| *word != 0) || !matches!(reply[2], 0 | 7) {
+                return Err(Error::Service(4));
+            }
+            output::text(if reply[2] == 7 {
+                "Task writes enabled; mounted format v7.\r\n"
+            } else {
+                "Task writes enabled; persistent storage format is at least v3.\r\n"
+            });
             Ok(())
         }
         "recover" => {

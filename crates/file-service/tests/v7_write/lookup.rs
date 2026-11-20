@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-//! Cold profile-2 lookups of retained records: the receipt is rebuilt from the
-//! record and a SHA-256 streamed from its snapshot, within the caller's
-//! subject and scope, with the v5 answers for missing records.
+//! Cold profile-1 and profile-2 lookups of retained records: receipts are
+//! rebuilt from the record and a SHA-256 streamed from its snapshot, within
+//! the caller's subject and scope, with the v5 answers for missing records.
 use super::*;
-use rustic_abi::files::{OPERATION_ID, OPERATION_RETRY};
 
 impl Writer {
     /// Look up one receipt and collect its remaining parts on this slot.
@@ -44,6 +43,20 @@ pub(super) fn by_retry(receipt: &Operation) -> operation::Lookup {
     operation::Lookup::Retry {
         workspace: receipt.workspace,
         retry: receipt.retry,
+    }
+}
+
+fn legacy_receipt(receipt: &Operation) -> operation::Operation {
+    operation::Operation {
+        id: receipt.id,
+        service_instance: receipt.service_instance,
+        workspace: receipt.workspace,
+        resource: receipt.resource,
+        previous_version: receipt.previous_version,
+        version: receipt.version,
+        size: u16::try_from(receipt.size).unwrap(),
+        retry: receipt.retry,
+        sha256: receipt.sha256,
     }
 }
 
@@ -183,15 +196,40 @@ fn missing_records_answer_like_v5_lookups() {
             "out of scope {query:?}"
         );
     }
-    // A profile-1 lookup (no marker) stays unsupported on V7.
-    for legacy in [by_id(&receipt), by_retry(&receipt)] {
-        let packet = legacy.packet(reader.context);
-        assert!(matches!(packet.op, OPERATION_ID | OPERATION_RETRY));
+    // Markerless profile-1 lookups preserve the original 104-byte receipt
+    // across cold ID and retry lookup, including every legacy part envelope.
+    let small = &writes[0].0;
+    let expected = legacy_receipt(small);
+    for query in [by_id(small), by_retry(small)] {
+        let first = reader.send(&mut server, &mut f.disk, query.packet(reader.context));
+        status(first).unwrap();
+        assert_eq!(first, expected.part(first.op, reader.context, 0).unwrap());
+        for offset in [40usize, 80] {
+            let mut part_query = operation::Lookup::Id(small.id).packet(reader.context);
+            part_query.op = OPERATION_PART;
+            part_query.arg = offset as u32;
+            let part = reader.send(&mut server, &mut f.disk, part_query);
+            status(part).unwrap();
+            assert_eq!(
+                part,
+                expected
+                    .part(OPERATION_PART, reader.context, offset)
+                    .unwrap()
+            );
+        }
+    }
+
+    // Profile 1 must refuse a larger retained profile-2 receipt after scope
+    // checks and before reading or allocating a snapshot digest buffer.
+    let large = &writes[1].0;
+    let reads = f.disk.reads;
+    for query in [by_id(large), by_retry(large)] {
         assert_eq!(
-            status(reader.send(&mut server, &mut f.disk, packet)),
-            Err(Error::Unsupported)
+            status(reader.send(&mut server, &mut f.disk, query.packet(reader.context),)),
+            Err(Error::Size)
         );
     }
+    assert_eq!(f.disk.reads, reads);
     // A part of a receipt this slot never looked up is not served.
     assert_eq!(
         reader.part(&mut server, &mut f.disk, receipt.id, 40),
@@ -228,6 +266,16 @@ fn lookups_are_bound_to_the_grant_subject_scope_and_inspect_right() {
             );
         }
     }
+    let large = &writes[1].0;
+    assert_eq!(
+        status(sibling_only.send(
+            &mut server,
+            &mut f.disk,
+            by_id(large).packet(sibling_only.context),
+        )),
+        Err(Error::OutcomeUnknown),
+        "scope filtering precedes the profile-1 size limit"
+    );
     // A read-only grant has neither the inspect right nor a subject.
     let reader = Writer::grant(&mut server, 3, f.workspace, READ_ONLY7, 0);
     for query in [by_id(&receipt), by_retry(&receipt)] {
@@ -238,6 +286,15 @@ fn lookups_are_bound_to_the_grant_subject_scope_and_inspect_right() {
         );
         assert_eq!(status(reply), Err(Error::Denied));
     }
+    assert_eq!(
+        status(reader.send(
+            &mut server,
+            &mut f.disk,
+            by_id(large).packet(reader.context),
+        )),
+        Err(Error::Denied),
+        "inspection authority precedes the profile-1 size limit"
+    );
     assert_eq!(f.disk.reads, reads, "refusals stream no snapshot");
 
     // The whole workspaces root and the object itself are both valid scopes.

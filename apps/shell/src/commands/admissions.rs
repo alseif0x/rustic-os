@@ -54,10 +54,21 @@ pub(super) fn execute(s: &mut Session, a: &Args<'_>) -> Result<(), Error> {
                 0,
             ])?;
             rustic_sdk::files::Error::parse(r[1] as u8)?;
+            if r[3..].iter().any(|word| *word != 0) || !matches!(r[2], 0 | 7) {
+                return Err(Error::Service(4));
+            }
             output::text(if reasons {
-                "Prevention reasons enabled; persistent format v5.\r\n"
+                if r[2] == 7 {
+                    "Prevention reasons enabled; mounted format v7.\r\n"
+                } else {
+                    "Prevention reasons enabled; persistent format v5.\r\n"
+                }
             } else {
-                "Explicit admissions enabled; persistent format v4 or later.\r\n"
+                if r[2] == 7 {
+                    "Explicit admissions enabled; mounted format v7.\r\n"
+                } else {
+                    "Explicit admissions enabled; persistent format v4 or later.\r\n"
+                }
             });
         }
         "admit-ref" => {

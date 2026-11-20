@@ -81,6 +81,7 @@ impl State {
         if self.files == 0
             || self.degraded
             || self.stopping
+            || self.takeover.pending()
             || self.admin.pending()
             || self.admin.failed()
             || self.admin_drain

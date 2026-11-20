@@ -76,6 +76,10 @@ def build(mode, memory=DEFAULT_MEMORY_MIB):
          "sdk-test", "--target", "x86_64-unknown-none", "--release", "--locked"],
         cwd=ROOT, env=env, check=True,
     )
+    if mode == "block-user":
+        # Its runner provisions V7 publication and admission volumes on the host.
+        subprocess.run(["cargo", "build", "-p", "rustic-volume", "--bin", "rustic-volume", "--locked"],
+                       cwd=ROOT, check=True)
     kernel = ROOT / "target/x86_64-unknown-none/release/rustic-os"
     provenance = {
         "tasks_acceptance": tasks_acceptance,

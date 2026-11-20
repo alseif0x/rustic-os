@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 import tempfile
 import time
-from boot_support.image import package
-from .machine import machine, disk
+from .machine import machine
+from .legacy_disk import disk as legacy_disk
 from .connection import Connection
 from .cases import exercise, transfer_measurement
 from .tasks_cases import exercise as tasks_exercise, after_reboot as tasks_after_reboot
@@ -35,13 +35,13 @@ def verify(image, timeout=60, output=None):
     if metadata.get("tasks_acceptance") is not True:
         raise ValueError("terminal acceptance requires the explicit tasks-acceptance build profile")
     # This second boot reuses the exact ELF; it never invokes candidate host code.
-    mount = package(image.parent / "kernel.elf", "terminal", metadata["build_id"], {})
+    mount = image  # Legacy fixture mounts first and initializes only empty media.
     cases, serials, logs = 0, [], []
     started = time.monotonic()
     try:
         with tempfile.TemporaryDirectory(prefix="rustic-terminal-test-") as temporary:
             temporary = Path(temporary)
-            with disk(temporary / "data.raw", True) as data, preserve_failure(data, output, "terminal", metadata):
+            with legacy_disk(temporary / "data.raw", True) as data, preserve_failure(data, output, "terminal", metadata):
                 for phase, boot in enumerate((image, mount), 1):
                     sock = temporary / f"uart-{phase}.sock"
                     transcript, log = output / f"serial-{phase}.log", output / f"qemu-{phase}.log"

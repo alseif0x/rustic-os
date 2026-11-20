@@ -109,7 +109,7 @@ python3 tools/terminal.py --initialize
 python3 tools/terminal.py
 ```
 
-Type help in the native terminal. Try write hello "Hello from RusticOS", cat hello, ps, services and mem; exit stops the VM. The dedicated disk stays in artifacts/terminal/data.raw. See [terminal syntax, permissions and recovery](docs/TERMINAL.md). Initialization refuses an existing disk.
+Type help in the native terminal. Try write hello "Hello from RusticOS", cat hello, ps, services and mem; exit stops the VM. The dedicated disk stays in artifacts/terminal/data.raw. See [terminal syntax, permissions and recovery](docs/TERMINAL.md). Initialization exclusively creates fresh V7 media on the sparse 4 GiB device and refuses an existing disk. Older-format disks are refused without conversion.
 
 For the complete VM suite:
 

@@ -29,6 +29,21 @@ class ControlContract(unittest.TestCase):
                     runtime.remove_owned("a" * 32, "build", Path(directory))
                 remove.assert_not_called()
 
+    def test_refused_removal_waits_for_a_concurrent_removal_but_not_forever(self):
+        owned = {"Config": {"Labels": {"rusticos.job": "a" * 32}}}
+        with tempfile.TemporaryDirectory() as directory:
+            # The container disappears shortly after the refused removal.
+            with patch.object(runtime, "inspect", side_effect=[owned, owned, None]), \
+                 patch.object(runtime, "command", return_value=1), \
+                 patch.object(runtime.time, "sleep"):
+                runtime.remove_owned("a" * 32, "build", Path(directory))
+            # It never disappears: the bounded wait ends in a cleanup failure.
+            with patch.object(runtime, "inspect", return_value=owned), \
+                 patch.object(runtime, "command", return_value=1), \
+                 patch.object(runtime, "REMOVAL_WAIT_SECONDS", 0), \
+                 self.assertRaisesRegex(RuntimeError, "container cleanup failed"):
+                runtime.remove_owned("a" * 32, "build", Path(directory))
+
     def test_missing_container_and_broken_daemon_are_distinct(self):
         for message in ("Error: No such object: test", "error: no such object: test"):
             with patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], 1, "", message)):

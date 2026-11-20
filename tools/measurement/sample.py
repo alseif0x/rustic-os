@@ -8,7 +8,8 @@ import time
 import environment
 from boot_support.runner import run_once
 from boot_support.scenarios import reached, records
-from terminal_support.machine import disk, machine
+from terminal_support.legacy_disk import disk as legacy_disk
+from terminal_support.machine import machine
 from terminal_support.connection import Connection
 from terminal_support.oracle import snapshot
 from . import provenance, workload
@@ -39,7 +40,7 @@ def collect(images, output, warmup, injected_ticks):
                        kernel_load_bytes=provenance.load_bytes(images["terminal"].parent / "kernel.elf"))
         with tempfile.TemporaryDirectory(prefix="rustic-measure-") as temporary:
             temporary = Path(temporary)
-            with disk(temporary / "data.raw", True) as data:
+            with legacy_disk(temporary / "data.raw", True) as data:
                 sock = temporary / "uart.sock"
                 started = time.perf_counter()
                 with machine(images["terminal"], data, f"unix:{sock},server=on,wait=off", output / "qemu.log") as vm:

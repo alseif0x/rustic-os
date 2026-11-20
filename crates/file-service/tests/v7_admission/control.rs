@@ -117,6 +117,7 @@ enum When {
 #[derive(Clone, Copy)]
 enum Act {
     Revoke(usize),
+    RevokeRoot(u32),
     Detach(usize),
     /// Advance the owner's clock to this time.
     Clock(u64),
@@ -129,6 +130,7 @@ struct Seen {
     pending: usize,
     acted: Option<Publication7Phase>,
     after_act: usize,
+    released: usize,
 }
 
 /// Send `p` from `client` through `handle_with` over the polled disk; the
@@ -179,11 +181,22 @@ fn driven_failing(
             };
             if due {
                 seen.acted = Some(control.phase());
+                let before = control.transfer_count();
                 match act {
-                    Act::Revoke(slot) => control.revoke(slot).unwrap(),
-                    Act::Detach(slot) => control.detach(slot),
-                    Act::Clock(now) => clock = now,
+                    Act::Revoke(slot) => {
+                        control.revoke(slot).unwrap();
+                    }
+                    Act::RevokeRoot(root) => {
+                        control.revoke_root(root);
+                    }
+                    Act::Detach(slot) => {
+                        control.detach(slot);
+                    }
+                    Act::Clock(now) => {
+                        clock = now;
+                    }
                 }
+                seen.released = before.saturating_sub(control.transfer_count());
             }
             clock
         },
@@ -278,6 +291,61 @@ fn revocation_before_the_header_stops_execution_and_records_authority_lost() {
     assert_eq!(read_all(&volume, &mut f.disk, file), before);
     let mut server = Server7::new(&mut volume);
     assert_eq!(prevention(&mut server, &mut f.disk, accepted.id), view);
+}
+
+#[test]
+fn root_group_revocation_during_helper_publication_fences_every_member() {
+    let mut f = fixture();
+    let mut server = Server7::new(&mut f.volume);
+    let root = Client::grant(&mut server, 0, f.workspace, ADMISSION7, SUBJECT);
+    let helper_grant = server
+        .derive(
+            1,
+            root.context,
+            GrantRequest7 {
+                peer: PEER,
+                endpoint: 91,
+                scope: f.workspace,
+                rights: ADMISSION7,
+                subject: SUBJECT + 99,
+                expires: 0,
+            },
+            0,
+        )
+        .unwrap();
+    let helper = Client {
+        slot: 1,
+        context: helper_grant.context,
+    };
+    let admission_request = request(server.volume(), f.workspace, f.file, 0x75);
+    let admitted = helper
+        .admit(
+            &mut server,
+            &mut f.disk,
+            admission_request,
+            &pattern(7, 3000),
+        )
+        .unwrap();
+    assert_eq!(admitted.state, State::Admitted);
+
+    let execute = admitted.id.packet(a::EXECUTE, 0).unwrap();
+    let (reply, seen) = driven(
+        &mut server,
+        &mut f.disk,
+        &helper,
+        execute,
+        When::BeforeHeader,
+        Act::RevokeRoot(root.context),
+    );
+    assert_eq!(status(reply), Err(Error::Revoked));
+    assert_eq!(seen.acted, Some(Publication7Phase::Preparing));
+    assert_eq!(server.grant_at(0).unwrap().rights, 0);
+    assert_eq!(server.grant_at(1).unwrap().rights, 0);
+    assert_eq!(server.volume().open_stages(), 0);
+    assert_eq!(
+        retained_state(server.volume(), 0x75),
+        Some(RecordState::Cancelled)
+    );
 }
 
 #[test]
@@ -524,6 +592,7 @@ fn another_slot_revoked_mid_publication_loses_its_stage_after_settlement() {
         Act::Revoke(1),
     );
     assert!(seen.acted.is_some());
+    assert_eq!(seen.released, 1);
     // The caller kept its authority: execution commits and is reported.
     let executed = Status::decode(&status(reply).unwrap()).unwrap();
     assert_eq!(executed.state, State::Committed);

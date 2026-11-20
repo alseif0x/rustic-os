@@ -9,6 +9,9 @@ use rustic_fs::{
 };
 use std::collections::HashMap;
 
+#[path = "stage/tracked_poll.rs"]
+mod tracked_poll;
+
 const BEFORE: &[u8] = b"before";
 /// Free holes left by the fragmented seed, largest last.
 const HOLES: [(u64, u64); 3] = [(100, 2), (200, 3), (300, 4)];

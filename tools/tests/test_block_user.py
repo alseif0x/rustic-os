@@ -6,29 +6,17 @@ import tempfile
 import unittest
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from boot_support import admission_evidence, publication_evidence
 from boot_support.block_evidence import verified
-from boot_support.block_runner import SECTORS, pattern, run
+from boot_support.block_runner import SECTORS, SIZE, pattern, run
 from boot_support.scenarios import records
-
-
-class StubWorkspace:
-    """The workspace fixture needs the host tool; these tests own runner wiring."""
-
-    def provision(self, disk):
-        return None
-
-    def inspect(self, disk, output, phase):
-        return {"guest_verified": True, "phase": "write" if phase == 1 else "replay",
-                "volume_sha256": "stub"}
-
-
-def offline():
-    return patch("boot_support.block_runner.workspace_evidence", StubWorkspace())
+from terminal_support import oracle7
+from v7_provision_fixture import provision
 
 
 def marker(phase):
     faults = phase == "faults"
-    line = (f"RUSTIC BLOCK_USER verified=1 phase={phase} ring=3 applications={14 if faults else 5} "
+    line = (f"RUSTIC BLOCK_USER verified=1 phase={phase} ring=3 applications={14 if faults else 4} "
             f"rejected={53 if faults else 0} lifecycle={6 if faults else 0} control_preemptions=4 "
             "max_bytes=512 queue_slots=2 handle_slots=4 dma_frames=3 peak_frames=79 metadata_bytes=5232 free_before=90 free_after=90")
     if not faults:
@@ -36,12 +24,17 @@ def marker(phase):
                  f"cancelled={16 if phase == 'write' else 0} too_late=1 committed=1")
         line += (f"\nRUSTIC ADMISSION verified=1 phase={'write' if phase == 'write' else 'replay'} "
                  "admitted=1 cancelled=1 committed=1 replay_writes=0 service_control=1 fresh_authority=1")
-        line += (f"\nRUSTIC WORKSPACE verified=1 phase={'write' if phase == 'write' else 'replay'} "
-                 f"receipt=1 replay={0 if phase == 'write' else 1} volume=v6 length=16384 ranges=4 nodes=256")
     return line
 
 
 class BlockUserEvidence(unittest.TestCase):
+    def setUp(self):
+        # Host tests own evidence handling, not the Rust volume tool: provision
+        # through the independent genesis double instead of a built binary.
+        patcher = patch.object(publication_evidence.subprocess, "run", side_effect=provision)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_requires_distinct_native_boots_and_resource_recovery(self):
         good = marker("write") + "\n" + marker("read")
         self.assertTrue(verified("block-user", good, records))
@@ -56,11 +49,7 @@ class BlockUserEvidence(unittest.TestCase):
                     good.replace("RUSTIC ADMISSION ", "MISSING "),
                     good.replace("service_control=1", "service_control=0"),
                     good.replace("fresh_authority=1", "fresh_authority=0"),
-                    good.replace(" service_control=1", ""), good.replace(" fresh_authority=1", ""),
-                    good.replace("RUSTIC WORKSPACE ", "MISSING "),
-                    good.replace("length=16384", "length=200000"), good.replace("ranges=4", "ranges=49"),
-                    good.replace("volume=v6", "volume=v5"), good.replace("receipt=1", "receipt=0"),
-                    good.replace("phase=write receipt=1 replay=0", "phase=write receipt=1 replay=1")]:
+                    good.replace(" service_control=1", ""), good.replace(" fresh_authority=1", "")]:
             self.assertFalse(verified("block-user", bad, records))
 
     def test_fault_evidence_cannot_omit_denials_or_lifecycle_cases(self):
@@ -82,7 +71,7 @@ class BlockUserEvidence(unittest.TestCase):
                 (output / "serial.log").write_text(marker("write" if len(calls) == 1 else "read"))
                 (output / "qemu.log").write_text("")
                 return {"outcome": "success", "elapsed_seconds": 0}
-            with offline(), self.assertRaises(RuntimeError):
+            with self.assertRaises(RuntimeError):
                 run(image, 1, fake_boot)
             self.assertEqual(len(calls), 1)  # Host rejects missing writes before the second boot.
 
@@ -105,7 +94,7 @@ class BlockUserEvidence(unittest.TestCase):
                 (output / "qemu.log").write_text("")
                 return {"outcome": "success" if calls == 1 else "timeout", "elapsed_seconds": 0}
             # This test owns second-VM failure propagation, not volume decoding.
-            with offline(), patch("boot_support.block_runner.publication_evidence.inspect", return_value={}), \
+            with patch("boot_support.block_runner.publication_evidence.inspect", return_value={}), \
                  patch("boot_support.block_runner.admission_evidence.inspect", return_value=[]):
                 result = run(image, 1, fake_boot)
             self.assertEqual(calls, 2)
@@ -126,5 +115,26 @@ class BlockUserEvidence(unittest.TestCase):
                 (output / "serial.log").write_text(marker("write"))
                 (output / "qemu.log").write_text("")
                 return {"outcome": "success", "elapsed_seconds": 0}
-            with offline(), self.assertRaisesRegex(AssertionError, "no committed filesystem metadata"):
+            with self.assertRaisesRegex(RuntimeError, "native V7 publication files differ"):
                 run(image, 1, fake_boot)
+
+    def test_v7_provisioning_has_disjoint_regions_and_zero_guards(self):
+        regions = [(publication_evidence.OFFSET, publication_evidence.SIZE)]
+        regions += [(base, admission_evidence.SIZE) for base in admission_evidence.BASES]
+        self.assertEqual(publication_evidence.SIZE, oracle7.VOLUME_SECTORS)
+        for (base, sectors), (next_base, _) in zip(regions, regions[1:]):
+            self.assertEqual(base + sectors + 1, next_base)
+        self.assertTrue(all(base + sectors + 1 not in SECTORS for base, sectors in regions))
+        with tempfile.TemporaryDirectory() as temporary:
+            disk = Path(temporary) / "disk.raw"
+            with disk.open("xb") as output:
+                output.truncate(SIZE)
+            publication_evidence.provision(disk)
+            admission_evidence.provision(disk)
+            with disk.open("rb") as source:
+                for base, sectors in regions:
+                    source.seek(base * 512)
+                    state = oracle7.snapshot(source.read(sectors * 512))
+                    self.assertEqual(state["format"], 7)
+                    self.assertEqual(state["records"], [])
+                    self.assertEqual(source.read(512), bytes(512))

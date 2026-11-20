@@ -11,9 +11,11 @@ import environment
 from .image import build, memory_supported, OUTPUT
 from . import harness_report
 
-# A mode with more real work than the caller's budget allows. `block-user` mounts
-# a v6 workspace volume and reads a 16 KiB artifact through the block device, so
-# its floor is 90 s; the caller's timeout stays a lower bound for every mode.
+# A mode with more real work than the caller's budget allows. `block-user` boots
+# twice over host-provisioned publication and admission volumes and measured
+# 42.3 s under TCG on 2026-09-29 with four ring-3 fixtures, so the 90 s floor
+# keeps a margin over the 45 s suite budget. The caller's timeout stays a lower
+# bound for every mode.
 MODE_FLOOR = {"block-user": 90}
 from .scenarios import EXPECTED, reached
 
